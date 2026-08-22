@@ -1,0 +1,50 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "cause": "expired_card",
+      "actions": ["retry_payment", "send_payment_link", "send_sms_reminder", "escalate_to_human"],
+      "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxEscalate": true }
+    },
+    {
+      "cause": "insufficient_funds",
+      "actions": ["retry_payment", "send_payment_link", "send_sms_reminder", "escalate_to_human"],
+      "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxEscalate": true }
+    },
+    {
+      "cause": "gateway_timeout",
+      "actions": ["retry_payment_immediate", "retry_payment_delayed"],
+      "stopping": { "maxAttempts": 2, "windowHours": 1, "onMaxEscalate": false, "onMaxAction": "hard_decline" }
+    },
+    {
+      "cause": "price_friction",
+      "actions": ["send_reminder_email", "send_discount_offer"],
+      "stopping": { "maxDiscountsPer90Days": 1 }
+    },
+    {
+      "cause": "no_reason_signal",
+      "actions": ["send_reminder_email"],
+      "stopping": { "noResponseWithinHours": 48, "onTimeoutAction": "stop" }
+    },
+    {
+      "cause": "subscription_renewal_failed",
+      "actions": ["send_dunning_email_1", "send_dunning_email_2", "send_dunning_email_3", "pause_subscription", "send_winback_offer"],
+      "stopping": { "hardStopDays": 21, "onHardStopAction": "auto_cancel" }
+    },
+    {
+      "cause": "invoice_overdue",
+      "actions": ["send_reminder", "send_soft_chase_email", "escalate_to_human", "start_promise_to_pay_tracking"],
+      "stopping": { "escalateAtDays": 30, "always": true }
+    },
+    {
+      "cause": "invoice_disputed",
+      "actions": ["escalate_to_human"],
+      "stopping": { "freezeWorkflow": true, "overridesAll": true }
+    },
+    {
+      "cause": "dnc",
+      "actions": [],
+      "stopping": { "skipAndLog": true, "overridesAll": true, "checkedFirst": true }
+    }
+  ]
+}

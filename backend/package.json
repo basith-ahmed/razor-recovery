@@ -30,6 +30,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@swc/core": "^1.16.1",
+    "@swc/jest": "^0.2.39",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
@@ -48,6 +50,7 @@
     "prisma@7.9.1": true,
     "@prisma/engines@7.9.1": true,
     "unrs-resolver@1.12.2": true,
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "@swc/core@1.16.1": true
   }
 }
