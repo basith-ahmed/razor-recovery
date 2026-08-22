@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "healthcheck": "tsx src/scripts/healthcheck.ts",
+    "test:integrations": "tsx src/scripts/testIntegrations.ts",
     "migrate": "prisma migrate dev",
     "generate": "prisma generate",
     "studio": "prisma studio",

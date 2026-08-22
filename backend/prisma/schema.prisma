@@ -187,3 +187,11 @@ model Batch {
 
   events RevenueEvent[]
 }
+
+model Ticket {
+  id        String   @id @default(uuid())
+  entityId  String
+  reason    String
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+}
