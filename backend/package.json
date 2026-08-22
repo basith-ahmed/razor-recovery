@@ -1,0 +1,53 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "healthcheck": "tsx src/scripts/healthcheck.ts",
+    "migrate": "prisma migrate dev",
+    "generate": "prisma generate",
+    "studio": "prisma studio",
+    "test": "jest"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "ioredis": "^6.0.0",
+    "kafkajs": "^2.2.4",
+    "nodemailer": "^9.0.5",
+    "pg": "^8.23.0",
+    "razorpay": "^2.9.8",
+    "socket.io": "^4.8.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.2.0",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.23.1",
+    "jest": "^30.4.2",
+    "prisma": "^7.9.1",
+    "ts-jest": "^29.4.12",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "prisma@7.9.1": true,
+    "@prisma/engines@7.9.1": true,
+    "unrs-resolver@1.12.2": true,
+    "esbuild@0.28.2": true
+  }
+}

@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum EntityType {
+  CUSTOMER
+  CART
+  INVOICE
+  SUBSCRIPTION
+}
+
+enum EventType {
+  PAYMENT_FAILED
+  CHECKOUT_ABANDONED
+  INVOICE_OVERDUE
+  SUBSCRIPTION_FAILED
+}
+
+enum WorkflowState {
+  DETECTED
+  CONTACTED
+  RETRYING
+  COOLING_DOWN
+  ESCALATED
+  RECOVERED
+  WRITTEN_OFF
+  DO_NOT_CONTACT
+}
+
+enum DiagnosisMethod {
+  RULE
+  LLM
+}
+
+enum ActionIntegration {
+  RAZORPAY
+  EMAIL
+  MOCK
+}
+
+model Customer {
+  id            String    @id @default(uuid())
+  name          String
+  email         String
+  phone         String?
+  dncFlag       Boolean   @default(false)
+  riskTier      String    @default("standard")
+  lifetimeValue Float     @default(0)
+  createdAt     DateTime  @default(now())
+
+  invoices      Invoice[]
+  carts         Cart[]
+  subscriptions Subscription[]
+  events        RevenueEvent[]
+  workflowStates EntityWorkflowState[]
+}
+
+model Invoice {
+  id          String   @id @default(uuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  amount      Float
+  dueDate     DateTime
+  status      String   @default("open")
+  disputeFlag Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Cart {
+  id          String   @id @default(uuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  amount      Float
+  abandonedAt DateTime
+  items       Json
+  createdAt   DateTime @default(now())
+}
+
+model Subscription {
+  id                     String   @id @default(uuid())
+  customerId             String
+  customer               Customer @relation(fields: [customerId], references: [id])
+  razorpaySubscriptionId String?
+  mrr                    Float
+  nextBillDate           DateTime
+  status                 String   @default("active")
+  createdAt              DateTime @default(now())
+}
+
+model RevenueEvent {
+  id                String     @id @default(uuid())
+  batchId           String
+  batch             Batch      @relation(fields: [batchId], references: [id])
+  entityType        EntityType
+  entityId          String
+  customerId        String
+  customer          Customer   @relation(fields: [customerId], references: [id])
+  eventType         EventType
+  amount            Float
+  currency          String     @default("INR")
+  occurredAt        DateTime   @default(now())
+  razorpayPaymentId String?
+  razorpayOrderId   String?
+  errorCode         String?
+  errorReason       String?
+  rawPayload        Json
+  riskScore         Float?
+  urgency           Float?
+
+  diagnosis    Diagnosis?
+  decision     Decision?
+  action       Action?
+  auditEntries AuditEntry[]
+}
+
+model Diagnosis {
+  id         String          @id @default(uuid())
+  eventId    String          @unique
+  event      RevenueEvent    @relation(fields: [eventId], references: [id])
+  causeLabel String
+  confidence Float
+  method     DiagnosisMethod
+  reasoning  String?
+  createdAt  DateTime        @default(now())
+}
+
+model Decision {
+  id            String       @id @default(uuid())
+  eventId       String       @unique
+  event         RevenueEvent @relation(fields: [eventId], references: [id])
+  legalActions  Json
+  chosenAction  String
+  reasoning     String
+  policyVersion String
+  createdAt     DateTime     @default(now())
+}
+
+model Action {
+  id                    String             @id @default(uuid())
+  eventId               String             @unique
+  event                 RevenueEvent       @relation(fields: [eventId], references: [id])
+  actionType            String
+  executedAt            DateTime           @default(now())
+  result                String
+  integration           ActionIntegration
+  razorpayPaymentLinkId String?
+  emailMessageId        String?
+}
+
+model AuditEntry {
+  id               String       @id @default(uuid())
+  eventId          String
+  event            RevenueEvent @relation(fields: [eventId], references: [id])
+  entityId         String
+  actor            String
+  inputSnapshot    Json
+  decisionSnapshot Json?
+  actionSnapshot   Json?
+  outcome          String
+  timestamp        DateTime     @default(now())
+}
+
+model EntityWorkflowState {
+  id              String        @id @default(uuid())
+  entityId        String        @unique
+  customerId      String?
+  customer        Customer?     @relation(fields: [customerId], references: [id])
+  state           WorkflowState @default(DETECTED)
+  attemptCount    Int           @default(0)
+  lastContactedAt DateTime?
+  cooldownUntil   DateTime?
+  updatedAt       DateTime      @updatedAt
+}
+
+model Batch {
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now())
+  status          String   @default("running")
+  eventCount      Int
+  amountAtRisk    Float
+  amountRecovered Float    @default(0)
+  summaryJson     Json?
+
+  events RevenueEvent[]
+}

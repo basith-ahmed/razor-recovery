@@ -1,5 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+backend/dist/
+frontend/.next/
+frontend/out/
+
+# Environment
+.env
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+backend/prisma/migrations/**/migration_lock.toml
+
+# Markdown
 *.md
 !README.md
-.env
-.env.*
-# !.env.example
