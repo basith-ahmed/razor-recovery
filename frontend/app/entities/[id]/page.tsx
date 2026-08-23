@@ -46,13 +46,13 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
 
   const STATE_BADGE_STYLES: Record<string, string> = {
     DETECTED: "bg-gray-800 text-gray-300 border-gray-700",
-    CONTACTED: "bg-blue-950 text-blue-400 border-blue-800",
-    RETRYING: "bg-blue-950 text-blue-400 border-blue-800",
-    COOLING_DOWN: "bg-amber-950 text-amber-400 border-amber-800",
-    ESCALATED: "bg-purple-950 text-purple-400 border-purple-800",
-    RECOVERED: "bg-emerald-950 text-emerald-400 border-emerald-800",
-    WRITTEN_OFF: "bg-red-950 text-red-400 border-red-800",
-    DO_NOT_CONTACT: "bg-slate-900 text-slate-500 border-slate-700",
+    CONTACTED: "bg-blue-50 text-blue-700 border-blue-200",
+    RETRYING: "bg-blue-50 text-blue-700 border-blue-200",
+    COOLING_DOWN: "bg-amber-50 text-amber-700 border-amber-200",
+    ESCALATED: "bg-purple-50 text-purple-700 border-purple-200",
+    RECOVERED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    WRITTEN_OFF: "bg-red-50 text-red-700 border-red-200",
+    DO_NOT_CONTACT: "bg-white text-slate-500 border-slate-300",
   };
 
   return (
@@ -61,34 +61,34 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
       <div className="mb-4">
         <Link
           href="/entities"
-          className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+          className="text-xs text-slate-400 hover:text-slate-900 flex items-center gap-1 transition-colors"
         >
           ← Back to Entities List
         </Link>
       </div>
 
       {loading ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-12 text-center text-slate-500">
+        <div className="bg-white border border-slate-200 rounded-lg p-12 text-center text-slate-500">
           Loading audit trail...
         </div>
       ) : error ? (
-        <div className="bg-red-950 border border-red-800 text-red-300 p-6 rounded-lg text-sm">
+        <div className="bg-red-50 border border-red-200 text-red-800 p-6 rounded-lg text-sm">
           {error}
         </div>
       ) : (
         <div>
           {/* Header Block with Customer Info & Flags */}
-          <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 mb-6">
+          <div className="bg-white border border-slate-200 rounded-lg p-6 mb-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <h1 className="text-2xl font-bold text-white">
+                  <h1 className="text-2xl font-bold text-slate-900">
                     {customer?.name || "Customer Entity"}
                   </h1>
                   <span className={`text-xs px-2.5 py-1 rounded font-mono font-semibold border ${STATE_BADGE_STYLES[currentState.toUpperCase()] || STATE_BADGE_STYLES.DETECTED}`}>
                     {currentState}
                   </span>
-                  <span className="bg-slate-800 text-slate-300 text-xs px-2.5 py-1 rounded font-mono">
+                  <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded font-mono">
                     {event?.eventType || "EVENT"}
                   </span>
                 </div>
@@ -102,7 +102,7 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
               <div className="flex flex-col items-end gap-2">
                 <div className="text-right">
                   <span className="text-xs text-slate-400 block mb-0.5">Amount at Risk</span>
-                  <span className="text-xl font-bold font-mono text-emerald-400">
+                  <span className="text-xl font-bold font-mono text-emerald-700">
                     ₹{event?.amount ? event.amount.toLocaleString("en-IN") : "0"} {event?.currency || "INR"}
                   </span>
                 </div>
@@ -110,8 +110,8 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
                 {/* DNC & Dispute Flags */}
                 <div className="flex items-center gap-2 mt-1">
                   {customer?.dncFlag && (
-                    <span className="bg-red-950 border border-red-800 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                      ⛔ Do Not Contact (DNC)
+                    <span className="bg-red-50 border border-red-200 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                       Do Not Contact (DNC)
                     </span>
                   )}
 
@@ -122,7 +122,7 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
 
           {/* Audit Timeline Section */}
           <div className="mb-4">
-            <h2 className="text-lg font-semibold text-white mb-1">Audit Trail & Decision Sequence</h2>
+            <h2 className="text-lg font-semibold text-slate-900 mb-1">Audit Trail & Decision Sequence</h2>
             <p className="text-xs text-slate-400 mb-4">
               Immutable step-by-step history of detection, diagnosis, AI reasoning, and executed dunning actions.
             </p>

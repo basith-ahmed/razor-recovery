@@ -61,36 +61,36 @@ export function HeroMetrics({ metrics }: HeroMetricsProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       {/* 1. Amount At Risk */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
+      <div className="bg-white border border-slate-200 rounded-lg p-5">
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Amount At Risk</p>
-        <div className="text-2xl font-bold font-mono text-amber-400">
+        <div className="text-2xl font-bold font-mono text-amber-700">
           <AnimatedNumber value={amountAtRisk} prefix="₹" decimals={2} />
         </div>
         <p className="text-xs text-slate-500 mt-1">Total revenue value flagged</p>
       </div>
 
       {/* 2. Amount Recovered */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
+      <div className="bg-white border border-slate-200 rounded-lg p-5">
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Amount Recovered</p>
-        <div className="text-2xl font-bold font-mono text-emerald-400">
+        <div className="text-2xl font-bold font-mono text-emerald-700">
           <AnimatedNumber value={amountRecovered} prefix="₹" decimals={2} />
         </div>
         <p className="text-xs text-slate-500 mt-1">Successfully rescued funds</p>
       </div>
 
       {/* 3. Recovery Rate */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
+      <div className="bg-white border border-slate-200 rounded-lg p-5">
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Recovery Rate</p>
-        <div className="text-2xl font-bold font-mono text-blue-400">
+        <div className="text-2xl font-bold font-mono text-blue-700">
           <AnimatedNumber value={recoveryRate} suffix="%" decimals={1} />
         </div>
         <p className="text-xs text-slate-500 mt-1">Conversion efficiency</p>
       </div>
 
       {/* 4. Events Processed / Total */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
+      <div className="bg-white border border-slate-200 rounded-lg p-5">
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Events Processed</p>
-        <div className="text-2xl font-bold font-mono text-purple-400 flex items-baseline gap-1">
+        <div className="text-2xl font-bold font-mono text-purple-700 flex items-baseline gap-1">
           <AnimatedNumber value={eventsProcessed} decimals={0} />
           <span className="text-slate-500 text-sm font-normal">/ {eventsTotal}</span>
         </div>

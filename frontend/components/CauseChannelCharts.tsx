@@ -24,8 +24,8 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
       {/* 1. Failure Cause Breakdown */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
-        <h3 className="text-md font-semibold text-white mb-1">Failure Cause Distribution</h3>
+      <div className="bg-white border border-slate-200 rounded-lg p-5">
+        <h3 className="text-md font-semibold text-slate-900 mb-1">Failure Cause Distribution</h3>
         <p className="text-xs text-slate-400 mb-4">Breakdown of failure reasons across current batch/metrics</p>
 
         <div className="h-64 w-full">
@@ -67,8 +67,8 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
       </div>
 
       {/* 2. Channel Performance */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
-        <h3 className="text-md font-semibold text-white mb-1">Recovery Channel Efficiency</h3>
+      <div className="bg-white border border-slate-200 rounded-lg p-5">
+        <h3 className="text-md font-semibold text-slate-900 mb-1">Recovery Channel Efficiency</h3>
         <p className="text-xs text-slate-400 mb-4">Total events vs recovered revenue per communication channel</p>
 
         <div className="h-64 w-full">

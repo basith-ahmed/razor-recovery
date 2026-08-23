@@ -16,7 +16,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
 
   if (entries.length === 0) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500 text-sm">
+      <div className="bg-white border border-slate-200 rounded-lg p-8 text-center text-slate-500 text-sm">
         No audit entries recorded for this entity yet.
       </div>
     );
@@ -51,19 +51,19 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
         return (
           <div
             key={entry.id}
-            className="bg-slate-900 border border-slate-800 rounded-lg p-5 transition-colors"
+            className="bg-white border border-slate-200 rounded-lg p-5 transition-colors"
           >
             {/* Header / Summary row */}
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-3">
-                <span className="w-6 h-6 rounded-full bg-blue-900 text-blue-300 font-mono text-xs flex items-center justify-center font-bold">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-mono text-xs flex items-center justify-center font-bold">
                   {idx + 1}
                 </span>
                 <div>
-                  <div className="text-sm font-semibold text-white flex items-center gap-2">
+                  <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                     <span>Actor: {entry.actor}</span>
                     <span className="text-xs font-mono text-slate-400">→</span>
-                    <span className="text-xs font-mono uppercase bg-slate-800 px-2 py-0.5 rounded text-slate-300">
+                    <span className="text-xs font-mono uppercase bg-slate-100 px-2 py-0.5 rounded text-slate-700">
                       {entry.outcome}
                     </span>
                   </div>
@@ -78,7 +78,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
 
               <button
                 onClick={() => toggleExpand(idx)}
-                className="text-xs font-medium text-blue-400 hover:text-blue-300 bg-slate-800 hover:bg-slate-700/80 px-3 py-1.5 rounded transition-colors"
+                className="text-xs font-medium text-blue-700 hover:text-blue-800 bg-slate-100 hover:bg-slate-200/80 px-3 py-1.5 rounded transition-colors"
               >
                 {isExpanded ? "Hide Raw JSON ▲" : "View Raw Snapshots ▼"}
               </button>
@@ -86,14 +86,14 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
 
             {/* PROMINENT REASONING CALLOUT - Primary design requirement */}
             {reasoning && (
-              <div className="my-3 bg-blue-950/60 border-l-4 border-blue-500 p-4 rounded-r-lg">
-                <div className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <div className="my-3 bg-blue-50/60 border-l-4 border-blue-500 p-4 rounded-r-lg">
+                <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   AI Diagnosis & Decision Reasoning
                 </div>
-                <p className="text-sm text-slate-200 italic font-serif leading-relaxed">
+                <p className="text-sm text-slate-800 italic font-serif leading-relaxed">
                   &quot;{reasoning}&quot;
                 </p>
               </div>
@@ -101,29 +101,29 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
 
             {/* Razorpay Payment Link if generated */}
             {paymentLinkUrl && (
-              <div className="my-3 bg-emerald-950/70 border border-emerald-800/80 p-3 rounded-lg flex items-center justify-between">
-                <div className="text-xs text-emerald-300 flex items-center gap-2">
+              <div className="my-3 bg-emerald-50/70 border border-emerald-200/80 p-3 rounded-lg flex items-center justify-between">
+                <div className="text-xs text-emerald-800 flex items-center gap-2">
                   <span className="font-semibold">Razorpay Payment Link Generated:</span>
-                  <span className="font-mono text-emerald-400 truncate max-w-xs">{paymentLinkUrl}</span>
+                  <span className="font-mono text-emerald-700 truncate max-w-xs">{paymentLinkUrl}</span>
                 </div>
                 <a
                   href={paymentLinkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1 rounded transition-colors"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-slate-900 text-xs font-medium px-3 py-1 rounded transition-colors"
                 >
-                  Open Link ↗
+                  Open Link 
                 </a>
               </div>
             )}
 
             {/* EXPANDABLE RAW JSON VIEWER */}
             {isExpanded && (
-              <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
+              <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
                 {entry.inputSnapshot && (
                   <div>
                     <h5 className="text-xs font-mono font-semibold text-slate-400 mb-1">inputSnapshot:</h5>
-                    <pre className="bg-slate-950 p-3 rounded text-[11px] font-mono text-emerald-300 overflow-x-auto border border-slate-800">
+                    <pre className="bg-slate-50 p-3 rounded text-[11px] font-mono text-emerald-800 overflow-x-auto border border-slate-200">
                       {JSON.stringify(entry.inputSnapshot, null, 2)}
                     </pre>
                   </div>
@@ -131,7 +131,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 {entry.decisionSnapshot && (
                   <div>
                     <h5 className="text-xs font-mono font-semibold text-slate-400 mb-1">decisionSnapshot:</h5>
-                    <pre className="bg-slate-950 p-3 rounded text-[11px] font-mono text-purple-300 overflow-x-auto border border-slate-800">
+                    <pre className="bg-slate-50 p-3 rounded text-[11px] font-mono text-purple-800 overflow-x-auto border border-slate-200">
                       {JSON.stringify(entry.decisionSnapshot, null, 2)}
                     </pre>
                   </div>
@@ -139,7 +139,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 {entry.actionSnapshot && (
                   <div>
                     <h5 className="text-xs font-mono font-semibold text-slate-400 mb-1">actionSnapshot:</h5>
-                    <pre className="bg-slate-950 p-3 rounded text-[11px] font-mono text-blue-300 overflow-x-auto border border-slate-800">
+                    <pre className="bg-slate-50 p-3 rounded text-[11px] font-mono text-blue-800 overflow-x-auto border border-slate-200">
                       {JSON.stringify(entry.actionSnapshot, null, 2)}
                     </pre>
                   </div>

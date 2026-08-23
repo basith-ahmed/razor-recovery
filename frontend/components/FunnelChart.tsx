@@ -33,8 +33,8 @@ export function FunnelChart({ data = [] }: FunnelChartProps) {
   }));
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 mb-6">
-      <h3 className="text-md font-semibold text-white mb-1">Recovery Conversion Funnel</h3>
+    <div className="bg-white border border-slate-200 rounded-lg p-5 mb-6">
+      <h3 className="text-md font-semibold text-slate-900 mb-1">Recovery Conversion Funnel</h3>
       <p className="text-xs text-slate-400 mb-4">Volume of revenue entities passing through workflow stages</p>
 
       <div className="h-64 w-full">

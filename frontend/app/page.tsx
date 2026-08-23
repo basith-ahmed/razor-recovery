@@ -40,7 +40,7 @@ export default function OverviewPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Overview & Operations Center</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Overview & Operations Center</h1>
         <p className="text-sm text-slate-400">
           Monitor real-time revenue failure detection, AI diagnosis, and autonomous dunning workflows.
         </p>

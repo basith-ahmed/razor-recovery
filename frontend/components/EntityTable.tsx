@@ -11,14 +11,14 @@ interface EntityTableProps {
 }
 
 const STATE_BADGES: Record<string, string> = {
-  DETECTED: "bg-slate-800 text-slate-300 border-slate-700",
-  CONTACTED: "bg-blue-950 text-blue-400 border-blue-800",
-  RETRYING: "bg-blue-950 text-blue-400 border-blue-800",
-  COOLING_DOWN: "bg-amber-950 text-amber-400 border-amber-800",
-  ESCALATED: "bg-purple-950 text-purple-400 border-purple-800",
-  RECOVERED: "bg-emerald-950 text-emerald-400 border-emerald-800",
-  WRITTEN_OFF: "bg-red-950 text-red-400 border-red-800",
-  DO_NOT_CONTACT: "bg-slate-900 text-slate-500 border-slate-700",
+  DETECTED: "bg-slate-100 text-slate-700 border-slate-300",
+  CONTACTED: "bg-blue-50 text-blue-700 border-blue-200",
+  RETRYING: "bg-blue-50 text-blue-700 border-blue-200",
+  COOLING_DOWN: "bg-amber-50 text-amber-700 border-amber-200",
+  ESCALATED: "bg-purple-50 text-purple-700 border-purple-200",
+  RECOVERED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  WRITTEN_OFF: "bg-red-50 text-red-700 border-red-200",
+  DO_NOT_CONTACT: "bg-white text-slate-500 border-slate-300",
 };
 
 export function EntityTable({ entities, filters, onFilterChange, loading }: EntityTableProps) {
@@ -33,7 +33,7 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
+    <div className="bg-white border border-slate-200 rounded-lg p-5">
       {/* Filter Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-5">
         {/* Search */}
@@ -44,7 +44,7 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
             placeholder="Name, email, ID..."
             value={filters.search || ""}
             onChange={(e) => onFilterChange({ search: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
           />
         </div>
 
@@ -54,7 +54,7 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
           <select
             value={filters.state || ""}
             onChange={(e) => onFilterChange({ state: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
           >
             <option value="">All States</option>
             <option value="DETECTED">DETECTED</option>
@@ -74,7 +74,7 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
           <select
             value={filters.cause || ""}
             onChange={(e) => onFilterChange({ cause: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
           >
             <option value="">All Causes</option>
             <option value="expired_card">Expired Card</option>
@@ -95,7 +95,7 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
           <select
             value={filters.eventType || ""}
             onChange={(e) => onFilterChange({ eventType: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
           >
             <option value="">All Event Types</option>
             <option value="PAYMENT_FAILED">PAYMENT_FAILED</option>
@@ -113,7 +113,7 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
             placeholder="0"
             value={filters.minAmount || ""}
             onChange={(e) => onFilterChange({ minAmount: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
           />
         </div>
 
@@ -125,7 +125,7 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
             placeholder="100000"
             value={filters.maxAmount || ""}
             onChange={(e) => onFilterChange({ maxAmount: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
           />
         </div>
       </div>
@@ -134,11 +134,11 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className="bg-slate-950 text-slate-400 border-b border-slate-800">
+            <tr className="bg-slate-50 text-slate-400 border-b border-slate-200">
               <th className="p-3 font-medium">Customer / Entity</th>
               <th className="p-3 font-medium">Event Type</th>
               <th
-                className="p-3 font-medium cursor-pointer hover:text-white"
+                className="p-3 font-medium cursor-pointer hover:text-slate-900"
                 onClick={() => handleSortToggle("amount")}
               >
                 Amount {filters.sort?.startsWith("amount") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
@@ -146,14 +146,14 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
               <th className="p-3 font-medium">State</th>
               <th className="p-3 font-medium">Diagnosis Cause</th>
               <th
-                className="p-3 font-medium cursor-pointer hover:text-white"
+                className="p-3 font-medium cursor-pointer hover:text-slate-900"
                 onClick={() => handleSortToggle("riskScore")}
               >
                 Risk Score {filters.sort?.startsWith("riskScore") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
               </th>
               <th className="p-3 font-medium">Attempts</th>
               <th
-                className="p-3 font-medium cursor-pointer hover:text-white"
+                className="p-3 font-medium cursor-pointer hover:text-slate-900"
                 onClick={() => handleSortToggle("occurredAt")}
               >
                 Occurred At {filters.sort?.startsWith("occurredAt") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
@@ -161,7 +161,7 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
               <th className="p-3 font-medium text-right">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/60">
+          <tbody className="divide-y divide-slate-200/60">
             {loading ? (
               <tr>
                 <td colSpan={9} className="text-center py-8 text-slate-500">
@@ -176,17 +176,17 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
               </tr>
             ) : (
               entities.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-800/50 transition-colors">
+                <tr key={item.id} className="hover:bg-slate-100/50 transition-colors">
                   <td className="p-3">
-                    <div className="font-semibold text-white">{item.customerName}</div>
+                    <div className="font-semibold text-slate-900">{item.customerName}</div>
                     <div className="text-slate-400 text-[11px] font-mono">{item.customerEmail}</div>
                   </td>
                   <td className="p-3">
-                    <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono text-[10px]">
+                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono text-[10px]">
                       {item.eventType}
                     </span>
                   </td>
-                  <td className="p-3 font-mono font-semibold text-emerald-400">
+                  <td className="p-3 font-mono font-semibold text-emerald-700">
                     ₹{item.amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                   </td>
                   <td className="p-3">
@@ -194,26 +194,26 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
                       {item.state}
                     </span>
                   </td>
-                  <td className="p-3 text-slate-300">
+                  <td className="p-3 text-slate-700">
                     {item.causeLabel || <span className="text-slate-500 font-italic">Unassigned</span>}
                   </td>
                   <td className="p-3 font-mono">
                     {item.riskScore !== null ? (
-                      <span className={item.riskScore > 0.7 ? "text-red-400" : item.riskScore > 0.4 ? "text-amber-400" : "text-emerald-400"}>
+                      <span className={item.riskScore > 0.7 ? "text-red-700" : item.riskScore > 0.4 ? "text-amber-700" : "text-emerald-700"}>
                         {(item.riskScore * 100).toFixed(0)}%
                       </span>
                     ) : (
                       <span className="text-slate-500">N/A</span>
                     )}
                   </td>
-                  <td className="p-3 font-mono text-slate-300">{item.attemptCount}</td>
+                  <td className="p-3 font-mono text-slate-700">{item.attemptCount}</td>
                   <td className="p-3 text-slate-400 font-mono">
                     {new Date(item.occurredAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
                   </td>
                   <td className="p-3 text-right">
                     <Link
                       href={`/entities/${item.id}`}
-                      className="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium px-2.5 py-1 rounded transition-colors"
+                      className="bg-blue-600 hover:bg-blue-500 text-slate-900 text-[11px] font-medium px-2.5 py-1 rounded transition-colors"
                     >
                       Audit Trail →
                     </Link>

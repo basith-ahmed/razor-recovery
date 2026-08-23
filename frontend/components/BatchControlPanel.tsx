@@ -63,40 +63,40 @@ export function BatchControlPanel({ onBatchRun, onReset, activeBatchId }: BatchC
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 mb-6">
+    <div className="bg-white border border-slate-200 rounded-lg p-5 mb-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-semibold text-white">Batch Simulation Control</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Batch Simulation Control</h2>
           <p className="text-xs text-slate-400">Configure event mix and trigger an autonomous recovery batch run</p>
         </div>
         {activeBatchId && (
-          <div className="text-xs font-mono bg-blue-950 border border-blue-800 text-blue-300 px-3 py-1 rounded-md">
+          <div className="text-xs font-mono bg-blue-50 border border-blue-200 text-blue-800 px-3 py-1 rounded-md">
             Active Batch: {activeBatchId}
           </div>
         )}
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-950/80 border border-red-800 text-red-300 text-xs p-3 rounded-md">
+        <div className="mb-4 bg-red-50/80 border border-red-200 text-red-800 text-xs p-3 rounded-md">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">Batch Size</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Batch Size</label>
           <input
             type="number"
             min={1}
             max={500}
             value={size}
             onChange={(e) => setSize(parseInt(e.target.value, 10) || 1)}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">Payment Failed</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Payment Failed</label>
           <input
             type="number"
             step="0.05"
@@ -104,12 +104,12 @@ export function BatchControlPanel({ onBatchRun, onReset, activeBatchId }: BatchC
             max={1}
             value={paymentFailed}
             onChange={(e) => setPaymentFailed(parseFloat(e.target.value) || 0)}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">Checkout Abandoned</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Checkout Abandoned</label>
           <input
             type="number"
             step="0.05"
@@ -117,12 +117,12 @@ export function BatchControlPanel({ onBatchRun, onReset, activeBatchId }: BatchC
             max={1}
             value={checkoutAbandoned}
             onChange={(e) => setCheckoutAbandoned(parseFloat(e.target.value) || 0)}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">Invoice Overdue</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Invoice Overdue</label>
           <input
             type="number"
             step="0.05"
@@ -130,12 +130,12 @@ export function BatchControlPanel({ onBatchRun, onReset, activeBatchId }: BatchC
             max={1}
             value={invoiceOverdue}
             onChange={(e) => setInvoiceOverdue(parseFloat(e.target.value) || 0)}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">Sub Renew Failed</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Sub Renew Failed</label>
           <input
             type="number"
             step="0.05"
@@ -143,7 +143,7 @@ export function BatchControlPanel({ onBatchRun, onReset, activeBatchId }: BatchC
             max={1}
             value={subscriptionFailed}
             onChange={(e) => setSubscriptionFailed(parseFloat(e.target.value) || 0)}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500"
           />
         </div>
 
@@ -151,7 +151,7 @@ export function BatchControlPanel({ onBatchRun, onReset, activeBatchId }: BatchC
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm py-1.5 px-4 rounded transition-colors disabled:opacity-50"
+            className="flex-1 bg-blue-600 hover:bg-blue-500 text-slate-900 font-medium text-sm py-1.5 px-4 rounded transition-colors disabled:opacity-50"
           >
             {loading ? "Running..." : "Run Batch"}
           </button>
@@ -161,7 +161,7 @@ export function BatchControlPanel({ onBatchRun, onReset, activeBatchId }: BatchC
               onReset();
               setError(null);
             }}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm py-1.5 px-3 rounded transition-colors"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm py-1.5 px-3 rounded transition-colors"
           >
             Reset
           </button>

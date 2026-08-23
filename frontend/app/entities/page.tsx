@@ -40,12 +40,12 @@ export default function EntitiesPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Revenue Entities</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Revenue Entities</h1>
           <p className="text-sm text-slate-400">
             Query and inspect failed payment & recovery entities with real-time server-side filtering.
           </p>
         </div>
-        <div className="text-xs font-mono bg-slate-900 border border-slate-800 text-slate-300 px-3 py-1.5 rounded-md">
+        <div className="text-xs font-mono bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-md">
           Total Found: {entities.length}
         </div>
       </div>
