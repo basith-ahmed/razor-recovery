@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useLiveBatch } from "../lib/socket";
 import { getMetricsSummary } from "../lib/api";
 import { MetricsSummary } from "../types";
-import { BatchControlPanel } from "../components/BatchControlPanel";
 import { HeroMetrics } from "../components/HeroMetrics";
 import { LiveActivityFeed } from "../components/LiveActivityFeed";
 import { FunnelChart } from "../components/FunnelChart";
@@ -12,30 +11,18 @@ import { CauseChannelCharts } from "../components/CauseChannelCharts";
 import { ComplianceStrip } from "../components/ComplianceStrip";
 
 export default function OverviewPage() {
-  const [activeBatchId, setActiveBatchId] = useState<string | undefined>(undefined);
   const [initialMetrics, setInitialMetrics] = useState<MetricsSummary | null>(null);
 
-  const { activityFeed, metrics: socketMetrics } = useLiveBatch(activeBatchId);
+  const { activityFeed, metrics: socketMetrics } = useLiveBatch();
 
   // Fetch initial summary on mount
   useEffect(() => {
-    getMetricsSummary(activeBatchId)
-      .then((data) => setInitialMetrics(data))
-      .catch((err) => console.error("Failed to load initial metrics summary:", err));
-  }, [activeBatchId]);
-
-  const effectiveMetrics = socketMetrics || initialMetrics;
-
-  const handleBatchRun = (batchId: string) => {
-    setActiveBatchId(batchId);
-  };
-
-  const handleReset = () => {
-    setActiveBatchId(undefined);
     getMetricsSummary()
       .then((data) => setInitialMetrics(data))
-      .catch((err) => console.error("Failed to reset metrics:", err));
-  };
+      .catch((err) => console.error("Failed to load initial metrics summary:", err));
+  }, []);
+
+  const effectiveMetrics = socketMetrics || initialMetrics;
 
   return (
     <div>
@@ -45,12 +32,6 @@ export default function OverviewPage() {
           Monitor real-time revenue failure detection, AI diagnosis, and autonomous dunning workflows.
         </p>
       </div>
-
-      <BatchControlPanel
-        onBatchRun={handleBatchRun}
-        onReset={handleReset}
-        activeBatchId={activeBatchId}
-      />
 
       <HeroMetrics metrics={effectiveMetrics} />
 

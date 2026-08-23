@@ -77,7 +77,7 @@ export function BatchControlPanel({ onBatchRun, onReset, activeBatchId }: BatchC
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-50/80 border border-red-200 text-red-800 text-xs p-3 rounded-md">
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-800 text-xs p-3 rounded-md">
           {error}
         </div>
       )}
@@ -151,7 +151,7 @@ export function BatchControlPanel({ onBatchRun, onReset, activeBatchId }: BatchC
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 bg-blue-600 hover:bg-blue-500 text-slate-900 font-medium text-sm py-1.5 px-4 rounded transition-colors disabled:opacity-50"
+            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm py-1.5 px-4 rounded transition-colors disabled:opacity-50"
           >
             {loading ? "Running..." : "Run Batch"}
           </button>
