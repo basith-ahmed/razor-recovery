@@ -1,0 +1,229 @@
+"use client";
+
+import Link from "next/link";
+import { EntityItem, EntityFilters } from "../types";
+
+interface EntityTableProps {
+  entities: EntityItem[];
+  filters: EntityFilters;
+  onFilterChange: (newFilters: Partial<EntityFilters>) => void;
+  loading: boolean;
+}
+
+const STATE_BADGES: Record<string, string> = {
+  DETECTED: "bg-slate-800 text-slate-300 border-slate-700",
+  CONTACTED: "bg-blue-950 text-blue-400 border-blue-800",
+  RETRYING: "bg-blue-950 text-blue-400 border-blue-800",
+  COOLING_DOWN: "bg-amber-950 text-amber-400 border-amber-800",
+  ESCALATED: "bg-purple-950 text-purple-400 border-purple-800",
+  RECOVERED: "bg-emerald-950 text-emerald-400 border-emerald-800",
+  WRITTEN_OFF: "bg-red-950 text-red-400 border-red-800",
+  DO_NOT_CONTACT: "bg-slate-900 text-slate-500 border-slate-700",
+};
+
+export function EntityTable({ entities, filters, onFilterChange, loading }: EntityTableProps) {
+  const handleSortToggle = (field: string) => {
+    let newSort = `${field}_desc`;
+    if (filters.sort === `${field}_desc`) {
+      newSort = `${field}_asc`;
+    } else if (filters.sort === `${field}_asc`) {
+      newSort = "";
+    }
+    onFilterChange({ sort: newSort });
+  };
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
+      {/* Filter Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-5">
+        {/* Search */}
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Search</label>
+          <input
+            type="text"
+            placeholder="Name, email, ID..."
+            value={filters.search || ""}
+            onChange={(e) => onFilterChange({ search: e.target.value })}
+            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        {/* State */}
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">State</label>
+          <select
+            value={filters.state || ""}
+            onChange={(e) => onFilterChange({ state: e.target.value })}
+            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+          >
+            <option value="">All States</option>
+            <option value="DETECTED">DETECTED</option>
+            <option value="CONTACTED">CONTACTED</option>
+            <option value="RETRYING">RETRYING</option>
+            <option value="COOLING_DOWN">COOLING_DOWN</option>
+            <option value="ESCALATED">ESCALATED</option>
+            <option value="RECOVERED">RECOVERED</option>
+            <option value="WRITTEN_OFF">WRITTEN_OFF</option>
+            <option value="DO_NOT_CONTACT">DO_NOT_CONTACT</option>
+          </select>
+        </div>
+
+        {/* Cause */}
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Cause</label>
+          <select
+            value={filters.cause || ""}
+            onChange={(e) => onFilterChange({ cause: e.target.value })}
+            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+          >
+            <option value="">All Causes</option>
+            <option value="expired_card">Expired Card</option>
+            <option value="insufficient_funds">Insufficient Funds</option>
+            <option value="gateway_timeout">Gateway Timeout</option>
+            <option value="price_friction">Price Friction</option>
+            <option value="no_reason_signal">No Reason Signal</option>
+            <option value="subscription_renewal_failed">Sub Renewal Failed</option>
+            <option value="invoice_overdue">Invoice Overdue</option>
+            <option value="invoice_disputed">Invoice Disputed</option>
+            <option value="dnc">Do Not Contact</option>
+          </select>
+        </div>
+
+        {/* Event Type */}
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Event Type</label>
+          <select
+            value={filters.eventType || ""}
+            onChange={(e) => onFilterChange({ eventType: e.target.value })}
+            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+          >
+            <option value="">All Event Types</option>
+            <option value="PAYMENT_FAILED">PAYMENT_FAILED</option>
+            <option value="SUBSCRIPTION_FAILED">SUBSCRIPTION_FAILED</option>
+            <option value="INVOICE_OVERDUE">INVOICE_OVERDUE</option>
+            <option value="CHECKOUT_ABANDONED">CHECKOUT_ABANDONED</option>
+          </select>
+        </div>
+
+        {/* Min Amount */}
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Min Amount (₹)</label>
+          <input
+            type="number"
+            placeholder="0"
+            value={filters.minAmount || ""}
+            onChange={(e) => onFilterChange({ minAmount: e.target.value })}
+            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        {/* Max Amount */}
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Max Amount (₹)</label>
+          <input
+            type="number"
+            placeholder="100000"
+            value={filters.maxAmount || ""}
+            onChange={(e) => onFilterChange({ maxAmount: e.target.value })}
+            className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+          />
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr className="bg-slate-950 text-slate-400 border-b border-slate-800">
+              <th className="p-3 font-medium">Customer / Entity</th>
+              <th className="p-3 font-medium">Event Type</th>
+              <th
+                className="p-3 font-medium cursor-pointer hover:text-white"
+                onClick={() => handleSortToggle("amount")}
+              >
+                Amount {filters.sort?.startsWith("amount") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
+              </th>
+              <th className="p-3 font-medium">State</th>
+              <th className="p-3 font-medium">Diagnosis Cause</th>
+              <th
+                className="p-3 font-medium cursor-pointer hover:text-white"
+                onClick={() => handleSortToggle("riskScore")}
+              >
+                Risk Score {filters.sort?.startsWith("riskScore") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
+              </th>
+              <th className="p-3 font-medium">Attempts</th>
+              <th
+                className="p-3 font-medium cursor-pointer hover:text-white"
+                onClick={() => handleSortToggle("occurredAt")}
+              >
+                Occurred At {filters.sort?.startsWith("occurredAt") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
+              </th>
+              <th className="p-3 font-medium text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/60">
+            {loading ? (
+              <tr>
+                <td colSpan={9} className="text-center py-8 text-slate-500">
+                  Loading entities...
+                </td>
+              </tr>
+            ) : entities.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="text-center py-8 text-slate-500">
+                  No revenue entities found matching filters.
+                </td>
+              </tr>
+            ) : (
+              entities.map((item) => (
+                <tr key={item.id} className="hover:bg-slate-800/50 transition-colors">
+                  <td className="p-3">
+                    <div className="font-semibold text-white">{item.customerName}</div>
+                    <div className="text-slate-400 text-[11px] font-mono">{item.customerEmail}</div>
+                  </td>
+                  <td className="p-3">
+                    <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono text-[10px]">
+                      {item.eventType}
+                    </span>
+                  </td>
+                  <td className="p-3 font-mono font-semibold text-emerald-400">
+                    ₹{item.amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="p-3">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${STATE_BADGES[item.state] || STATE_BADGES.DETECTED}`}>
+                      {item.state}
+                    </span>
+                  </td>
+                  <td className="p-3 text-slate-300">
+                    {item.causeLabel || <span className="text-slate-500 font-italic">Unassigned</span>}
+                  </td>
+                  <td className="p-3 font-mono">
+                    {item.riskScore !== null ? (
+                      <span className={item.riskScore > 0.7 ? "text-red-400" : item.riskScore > 0.4 ? "text-amber-400" : "text-emerald-400"}>
+                        {(item.riskScore * 100).toFixed(0)}%
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">N/A</span>
+                    )}
+                  </td>
+                  <td className="p-3 font-mono text-slate-300">{item.attemptCount}</td>
+                  <td className="p-3 text-slate-400 font-mono">
+                    {new Date(item.occurredAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
+                  </td>
+                  <td className="p-3 text-right">
+                    <Link
+                      href={`/entities/${item.id}`}
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium px-2.5 py-1 rounded transition-colors"
+                    >
+                      Audit Trail →
+                    </Link>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

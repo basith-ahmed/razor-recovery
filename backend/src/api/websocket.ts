@@ -92,6 +92,7 @@ export async function emitLiveUpdate(
 
     if (latestAudit && latestAudit.event) {
       ioInstance.to(batchId).emit("activity:new", {
+        entityId: latestAudit.entityId,
         timestamp: latestAudit.timestamp.toISOString(),
         customerName: latestAudit.event.customer?.name ?? "Unknown Customer",
         eventType: latestAudit.event.eventType,

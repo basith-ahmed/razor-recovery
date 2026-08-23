@@ -32,7 +32,7 @@ demoRouter.post("/run-batch", async (req: Request, res: Response) => {
       checkoutAbandoned < 0 ||
       invoiceOverdue < 0 ||
       subscriptionFailed < 0 ||
-      Math.abs(total - 1.0) > 0.000001
+      Math.abs(total - 1.0) > 0.01
     ) {
       return res.status(400).json({ error: "Batch mix proportions must be non-negative and sum to 1.0." });
     }

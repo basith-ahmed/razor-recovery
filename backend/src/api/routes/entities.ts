@@ -53,6 +53,8 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
       orderBy = { amount: "asc" };
     } else if (sort === "occurredAt_asc") {
       orderBy = { occurredAt: "asc" };
+    } else if (sort === "occurredAt_desc") {
+      orderBy = { occurredAt: "desc" };
     } else if (sort === "riskScore_desc") {
       orderBy = { riskScore: "desc" };
     } else if (sort === "riskScore_asc") {
@@ -84,8 +86,8 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         entityType: event.entityType,
         entityId: event.entityId,
         customerId: event.customerId,
-        customerName: event.customer.name,
-        customerEmail: event.customer.email,
+        customerName: event.customer?.name ?? "Unknown Customer",
+        customerEmail: event.customer?.email ?? "N/A",
         eventType: event.eventType,
         amount: event.amount,
         currency: event.currency,
@@ -128,7 +130,18 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).json(auditEntries);
+    const targetEntityIds = Array.from(new Set(auditEntries.map((a) => a.entityId)));
+    const states = await prisma.entityWorkflowState.findMany({
+      where: { entityId: { in: targetEntityIds } },
+    });
+    const stateMap = new Map(states.map((s) => [s.entityId, s.state]));
+
+    const result = auditEntries.map((entry) => ({
+      ...entry,
+      workflowState: stateMap.get(entry.entityId) ?? "DETECTED",
+    }));
+
+    return res.status(200).json(result);
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "Failed to fetch audit entries";
     console.error("[entitiesRouter] Error fetching audit entries:", error);
