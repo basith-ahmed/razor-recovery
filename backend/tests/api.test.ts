@@ -214,7 +214,7 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
         expect(Array.isArray(data.byChannel)).toBe(true);
 
         const channelNames = data.byChannel.map((c) => c.channel);
-        expect(channelNames).toEqual(["razorpay", "email", "discount", "human"]);
+        expect(channelNames).toEqual(["razorpay", "email", "human"]);
 
         expect(typeof data.medianTimeToRecoveryHours).toBe("number");
         expect(data.compliance).toHaveProperty("dncBlocked");

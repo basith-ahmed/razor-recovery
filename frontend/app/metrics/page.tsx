@@ -7,8 +7,6 @@ import { MetricsSummary, BatchItem } from "../../types";
 const CHANNEL_COST_MAP: Record<string, number> = {
   email: 0.5,
   sms: 1.5,
-  whatsapp: 2.0,
-  discount: 50.0,
   human: 200.0,
   razorpay_link: 1.0,
   default: 1.0,

@@ -163,7 +163,7 @@ export interface FullMetricsSummaryResponse {
   eventsTotal: number;
   funnel: { stage: "detected" | "diagnosed" | "contacted" | "recovered"; count: number }[];
   byCause: { cause: string; recovered: number; atRisk: number }[];
-  byChannel: { channel: "razorpay" | "email" | "discount" | "human"; count: number; recoveredAmount: number }[];
+  byChannel: { channel: "razorpay" | "email" | "human"; count: number; recoveredAmount: number }[];
   medianTimeToRecoveryHours: number;
   compliance: { dncBlocked: number; autoEscalated: number; cooldownStopped: number };
 }
@@ -200,7 +200,6 @@ export async function getFullMetricsSummary(
       byChannel: [
         { channel: "razorpay", count: 0, recoveredAmount: 0 },
         { channel: "email", count: 0, recoveredAmount: 0 },
-        { channel: "discount", count: 0, recoveredAmount: 0 },
         { channel: "human", count: 0, recoveredAmount: 0 },
       ],
       medianTimeToRecoveryHours: 0,
@@ -226,26 +225,24 @@ export async function getFullMetricsSummary(
     atRisk: Number(data.amountAtRisk.toFixed(2)),
   }));
 
-  const channelMap: Record<"razorpay" | "email" | "discount" | "human", { count: number; recoveredAmount: number }> = {
+  const channelMap: Record<"razorpay" | "email" | "human", { count: number; recoveredAmount: number }> = {
     razorpay: { count: 0, recoveredAmount: 0 },
     email: { count: 0, recoveredAmount: 0 },
-    discount: { count: 0, recoveredAmount: 0 },
     human: { count: 0, recoveredAmount: 0 },
   };
 
   for (const [integrationKey, data] of Object.entries(summary.byChannel)) {
     const keyLower = integrationKey.toLowerCase();
-    let normKey: "razorpay" | "email" | "discount" | "human" = "email";
+    let normKey: "razorpay" | "email" | "human" = "email";
     if (keyLower === "razorpay") normKey = "razorpay";
     else if (keyLower === "email") normKey = "email";
-    else if (keyLower === "discount") normKey = "discount";
     else normKey = "human";
 
     channelMap[normKey].count += data.count;
     channelMap[normKey].recoveredAmount += data.amountRecovered;
   }
 
-  const byChannelArray = (["razorpay", "email", "discount", "human"] as const).map((channel) => ({
+  const byChannelArray = (["razorpay", "email", "human"] as const).map((channel) => ({
     channel,
     count: channelMap[channel].count,
     recoveredAmount: Number(channelMap[channel].recoveredAmount.toFixed(2)),
