@@ -16,7 +16,7 @@ import { env } from "../config/env";
 
 async function checkPostgres(): Promise<void> {
   const result = await prisma.$queryRaw<{ now: Date }[]>`SELECT NOW() as now`;
-  console.log(`✅ Postgres  — connected (server time: ${result[0].now})`);
+  console.log(`[OK] Postgres  — connected (server time: ${result[0].now})`);
 }
 
 async function checkRedis(): Promise<void> {
@@ -24,7 +24,7 @@ async function checkRedis(): Promise<void> {
   if (pong !== "PONG") {
     throw new Error(`Expected PONG, got: ${pong}`);
   }
-  console.log("✅ Redis     — connected (PONG received)");
+  console.log("[OK] Redis     — connected (PONG received)");
 }
 
 async function checkKafka(): Promise<void> {
@@ -44,7 +44,7 @@ async function checkKafka(): Promise<void> {
   });
   await producer.disconnect();
   console.log(
-    '✅ Kafka     — connected (message sent to "healthcheck" topic)'
+    '[OK] Kafka     — connected (message sent to "healthcheck" topic)'
   );
 }
 
@@ -55,11 +55,11 @@ async function checkMailhog(): Promise<void> {
     subject: "RazorRecovery Healthcheck",
     text: `Healthcheck email sent at ${new Date().toISOString()}`,
   });
-  console.log(`✅ Mailhog   — connected (message id: ${info.messageId})`);
+  console.log(`[OK] Mailhog   — connected (message id: ${info.messageId})`);
 }
 
 async function main(): Promise<void> {
-  console.log("\n🔍 RazorRecovery Infrastructure Healthcheck\n");
+  console.log("\nRazorRecovery Infrastructure Healthcheck\n");
 
   const checks = [
     { name: "Postgres", fn: checkPostgres },
@@ -76,7 +76,7 @@ async function main(): Promise<void> {
     } catch (error) {
       allOk = false;
       console.error(
-        `❌ ${check.name.padEnd(9)} — FAILED: ${error instanceof Error ? error.message : String(error)}`
+        `[FAIL] ${check.name.padEnd(9)} — FAILED: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -84,9 +84,9 @@ async function main(): Promise<void> {
   console.log("");
 
   if (allOk) {
-    console.log("🎉 All infrastructure services are healthy!\n");
+    console.log("All infrastructure services are healthy!\n");
   } else {
-    console.error("⚠️  Some services failed. Check the errors above.\n");
+    console.error("Some services failed. Check the errors above.\n");
     process.exitCode = 1;
   }
 

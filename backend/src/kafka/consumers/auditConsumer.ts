@@ -23,6 +23,7 @@ import {
 } from "../../domain/types";
 import { publish } from "../producer";
 import { TOPICS } from "../topics";
+import { emitLiveUpdate } from "../../api/websocket";
 
 const CONSUMER_GROUP = "audit-service";
 const STAGE = "audit";
@@ -62,6 +63,9 @@ export async function startAuditConsumer(): Promise<void> {
 
         // Record the audit entry (also transitions workflow state + Redis counters)
         await recordAuditEntry({ event, diagnosis, decision, action });
+
+        // Trigger live WebSocket updates for progress, activity feed, and metrics counters
+        await emitLiveUpdate(event.batchId, event.id);
 
         // Publish to AUDIT topic for metrics + WebSocket consumers
         await publish(TOPICS.AUDIT, event.id, payload);

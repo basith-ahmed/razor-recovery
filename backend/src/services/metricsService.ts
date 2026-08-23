@@ -153,3 +153,142 @@ export async function recoveryFunnel(
     { stage: "recovered", count: recovered },
   ];
 }
+
+export interface FullMetricsSummaryResponse {
+  batchId: string;
+  amountAtRisk: number;
+  amountRecovered: number;
+  recoveryRate: number; // 0..1
+  eventsProcessed: number;
+  eventsTotal: number;
+  funnel: { stage: "detected" | "diagnosed" | "contacted" | "recovered"; count: number }[];
+  byCause: { cause: string; recovered: number; atRisk: number }[];
+  byChannel: { channel: "razorpay" | "email" | "discount" | "human"; count: number; recoveredAmount: number }[];
+  medianTimeToRecoveryHours: number;
+  compliance: { dncBlocked: number; autoEscalated: number; cooldownStopped: number };
+}
+
+/**
+ * Returns the exact full metrics/summary shape required by §8.4 for the frontend.
+ */
+export async function getFullMetricsSummary(
+  batchId?: string,
+): Promise<FullMetricsSummaryResponse> {
+  let targetBatchId = batchId;
+  if (!targetBatchId) {
+    const latestBatch = await prisma.batch.findFirst({
+      orderBy: { createdAt: "desc" },
+    });
+    targetBatchId = latestBatch?.id;
+  }
+
+  if (!targetBatchId) {
+    return {
+      batchId: "",
+      amountAtRisk: 0,
+      amountRecovered: 0,
+      recoveryRate: 0,
+      eventsProcessed: 0,
+      eventsTotal: 0,
+      funnel: [
+        { stage: "detected", count: 0 },
+        { stage: "diagnosed", count: 0 },
+        { stage: "contacted", count: 0 },
+        { stage: "recovered", count: 0 },
+      ],
+      byCause: [],
+      byChannel: [
+        { channel: "razorpay", count: 0, recoveredAmount: 0 },
+        { channel: "email", count: 0, recoveredAmount: 0 },
+        { channel: "discount", count: 0, recoveredAmount: 0 },
+        { channel: "human", count: 0, recoveredAmount: 0 },
+      ],
+      medianTimeToRecoveryHours: 0,
+      compliance: { dncBlocked: 0, autoEscalated: 0, cooldownStopped: 0 },
+    };
+  }
+
+  const summary = await computeBatchSummary(targetBatchId);
+  const funnel = await recoveryFunnel(targetBatchId);
+
+  const eventsTotal = funnel.find((f) => f.stage === "detected")?.count ?? 0;
+
+  const processedAudits = await prisma.auditEntry.findMany({
+    where: { event: { batchId: targetBatchId } },
+    select: { eventId: true, outcome: true, decisionSnapshot: true },
+    distinct: ["eventId"],
+  });
+  const eventsProcessed = processedAudits.length;
+
+  const byCauseArray = Object.entries(summary.byCause).map(([cause, data]) => ({
+    cause,
+    recovered: Number(data.amountRecovered.toFixed(2)),
+    atRisk: Number(data.amountAtRisk.toFixed(2)),
+  }));
+
+  const channelMap: Record<"razorpay" | "email" | "discount" | "human", { count: number; recoveredAmount: number }> = {
+    razorpay: { count: 0, recoveredAmount: 0 },
+    email: { count: 0, recoveredAmount: 0 },
+    discount: { count: 0, recoveredAmount: 0 },
+    human: { count: 0, recoveredAmount: 0 },
+  };
+
+  for (const [integrationKey, data] of Object.entries(summary.byChannel)) {
+    const keyLower = integrationKey.toLowerCase();
+    let normKey: "razorpay" | "email" | "discount" | "human" = "email";
+    if (keyLower === "razorpay") normKey = "razorpay";
+    else if (keyLower === "email") normKey = "email";
+    else if (keyLower === "discount") normKey = "discount";
+    else normKey = "human";
+
+    channelMap[normKey].count += data.count;
+    channelMap[normKey].recoveredAmount += data.amountRecovered;
+  }
+
+  const byChannelArray = (["razorpay", "email", "discount", "human"] as const).map((channel) => ({
+    channel,
+    count: channelMap[channel].count,
+    recoveredAmount: Number(channelMap[channel].recoveredAmount.toFixed(2)),
+  }));
+
+  const allAuditsForBatch = await prisma.auditEntry.findMany({
+    where: { event: { batchId: targetBatchId } },
+    select: { outcome: true, decisionSnapshot: true },
+  });
+
+  let dncBlocked = 0;
+  let autoEscalated = 0;
+  let cooldownStopped = 0;
+
+  for (const entry of allAuditsForBatch) {
+    if (entry.outcome === "escalated") {
+      autoEscalated++;
+    } else if (entry.outcome === "skipped") {
+      const reasoning = String((entry.decisionSnapshot as Record<string, unknown> | null)?.reasoning ?? "");
+      if (reasoning.toLowerCase().includes("cooldown")) {
+        cooldownStopped++;
+      } else {
+        dncBlocked++;
+      }
+    }
+  }
+
+  const medianHours = summary.medianTimeToRecoveryMs
+    ? Number((summary.medianTimeToRecoveryMs / (1000 * 60 * 60)).toFixed(2))
+    : 0;
+
+  return {
+    batchId: targetBatchId,
+    amountAtRisk: summary.totalAmountAtRisk,
+    amountRecovered: summary.totalRecovered,
+    recoveryRate: summary.recoveryRate,
+    eventsProcessed,
+    eventsTotal,
+    funnel,
+    byCause: byCauseArray,
+    byChannel: byChannelArray,
+    medianTimeToRecoveryHours: medianHours,
+    compliance: { dncBlocked, autoEscalated, cooldownStopped },
+  };
+}
+

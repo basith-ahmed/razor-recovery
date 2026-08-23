@@ -67,7 +67,7 @@ export interface BatchSummary {
 }
 
 export interface FunnelStage {
-  stage: string;
+  stage: "detected" | "diagnosed" | "contacted" | "recovered";
   count: number;
 }
 

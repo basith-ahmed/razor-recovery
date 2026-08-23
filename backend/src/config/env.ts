@@ -46,7 +46,7 @@ function loadEnv(): Env {
       .map((issue) => `  • ${issue.path.join(".")}: ${issue.message}`)
       .join("\n");
     console.error(
-      `\n❌ Missing or invalid environment variables:\n${formatted}\n`
+      `\nMissing or invalid environment variables:\n${formatted}\n`
     );
     console.error("Hint: copy .env.example to .env and fill in the values.\n");
     process.exit(1);
