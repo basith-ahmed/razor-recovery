@@ -70,7 +70,20 @@ export async function decide(
   }
 
   const payload = JSON.stringify({ diagnosis, legal_actions: legalActions, entity_context: entityContext });
-  const output = parseDecision(await requestDecision(payload));
+  let rawResponse = "";
+  try {
+    rawResponse = await requestDecision(payload);
+  } catch (err) {
+    console.error("Gemini decision request failed; using deterministic fallback.", err);
+    return {
+      legalActions,
+      chosenAction: legalActions[0],
+      reasoning: "LLM rate limited or unavailable; selected first legal action.",
+      policyVersion,
+    };
+  }
+
+  const output = parseDecision(rawResponse);
   const chosenAction =
     typeof output.chosen_action === "string" && legalActions.includes(output.chosen_action)
       ? output.chosen_action

@@ -1,6 +1,8 @@
 import { prisma } from "../config/prisma";
 import { injectFailure, SyntheticFailureType } from "./injectFailure";
 import { seedEntities } from "./seedEntities";
+import { connectProducer, publish } from "../kafka/producer";
+import { TOPICS } from "../kafka/topics";
 
 export interface ReplayBatchConfig {
   size: number;
@@ -55,6 +57,10 @@ export async function replayBatch(
   const plannedEvents = eventPlan(config);
   if ((await prisma.customer.count()) === 0)
     await seedEntities({ customers: Math.max(50, config.size) });
+
+  // Ensure the shared producer is connected before publishing
+  await connectProducer();
+
   const batch = await prisma.batch.create({
     data: { eventCount: config.size, amountAtRisk: 0 },
   });
@@ -83,7 +89,9 @@ export async function replayBatch(
       eligibleCustomers[Math.floor(Math.random() * eligibleCustomers.length)];
     const event = await injectFailure(batch.id, type, customer.id);
     amountAtRisk += event.amount;
-    // TODO Phase 9: publish event to the revenue.events.raw Kafka topic.
+
+    // Publish to Kafka for the pipeline consumers to pick up
+    await publish(TOPICS.EVENTS_RAW, event.id, event);
   }
   await prisma.batch.update({
     where: { id: batch.id },

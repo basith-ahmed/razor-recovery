@@ -4,6 +4,7 @@
  * Redis counters (attempts, cooldown, lastContact).
  */
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
 import { getRuleForCause } from "../domain/policy";
@@ -104,9 +105,9 @@ export async function recordAuditEntry(params: {
       eventId: event.id,
       entityId: event.entityId,
       actor: "system",
-      inputSnapshot: event as unknown as Record<string, unknown>,
-      decisionSnapshot: decision as unknown as Record<string, unknown>,
-      actionSnapshot: action as unknown as Record<string, unknown>,
+      inputSnapshot: event as unknown as Prisma.InputJsonValue,
+      decisionSnapshot: decision as unknown as Prisma.InputJsonValue,
+      actionSnapshot: action as unknown as Prisma.InputJsonValue,
       outcome,
       timestamp: now,
     },

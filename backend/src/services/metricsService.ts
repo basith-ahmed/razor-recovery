@@ -3,6 +3,7 @@
  * and recovery funnel metrics.
  */
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { BatchSummary, FunnelStage } from "../domain/types";
 
@@ -102,7 +103,7 @@ export async function computeBatchSummary(
     where: { id: batchId },
     data: {
       amountRecovered: totalRecovered,
-      summaryJson: summary as unknown as Record<string, unknown>,
+      summaryJson: summary as unknown as Prisma.InputJsonValue,
     },
   });
 
