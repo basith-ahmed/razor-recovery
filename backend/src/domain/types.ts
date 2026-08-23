@@ -56,6 +56,21 @@ export interface ActionResult {
   detail?: string;
 }
 
+export interface BatchSummary {
+  batchId: string;
+  totalAmountAtRisk: number;
+  totalRecovered: number;
+  recoveryRate: number;
+  byCause: Record<string, { count: number; amountAtRisk: number; amountRecovered: number }>;
+  byChannel: Record<string, { count: number; amountRecovered: number }>;
+  medianTimeToRecoveryMs: number | null;
+}
+
+export interface FunnelStage {
+  stage: string;
+  count: number;
+}
+
 export class DomainError extends Error {
   constructor(
     message: string,
