@@ -2,8 +2,8 @@ import OpenAI from "openai";
 import { env } from "./env";
 
 const openai = new OpenAI({
-  apiKey: env.GEMINI_API_KEY,
-  baseURL: env.GEMINI_BASE_URL,
+  apiKey: env.LLM_API_KEY,
+  baseURL: env.LLM_BASE_URL,
 });
 
 export interface JsonRequest {
@@ -22,7 +22,7 @@ export async function requestJson(request: JsonRequest, retries = 3): Promise<st
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const response = await openai.chat.completions.create({
-        model: env.GEMINI_MODEL,
+        model: env.LLM_MODEL,
         messages: [
           { role: "system", content: request.instructions },
           { role: "user", content: request.input },
@@ -41,10 +41,10 @@ export async function requestJson(request: JsonRequest, retries = 3): Promise<st
       if (typeof content !== "string") {
         throw new Error("Gemini returned no text content.");
       }
-      return content;
+      return content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
     } catch (err: any) {
       if ((err?.status === 429 || err?.code === 429 || err?.message?.includes("429")) && attempt < retries) {
-        console.warn(`[Gemini] Rate limited (429). Retrying attempt ${attempt}/${retries} after delay...`);
+        console.warn(`[LLM] Rate limited (429). Retrying attempt ${attempt}/${retries} after delay...`);
         await new Promise((r) => setTimeout(r, 2000 * attempt));
         continue;
       }

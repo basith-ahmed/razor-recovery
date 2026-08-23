@@ -1,7 +1,18 @@
 import { z } from "zod";
 import dotenv from "dotenv";
 
-dotenv.config({ path: "../.env" });
+dotenv.config({
+  path: "../.env",
+  override: true,
+});
+
+console.log({
+  cwd: process.cwd(),
+  hasKey: !!process.env.LLM_API_KEY,
+  keyPrefix: process.env.LLM_API_KEY?.slice(0, 10),
+  baseUrl: process.env.LLM_BASE_URL,
+  model: process.env.LLM_MODEL,
+});
 
 const envSchema = z.object({
   // Database
@@ -20,9 +31,9 @@ const envSchema = z.object({
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1),
 
   // Gemini API, accessed through the OpenAI-compatible SDK endpoint
-  GEMINI_API_KEY: z.string().min(1),
-  GEMINI_MODEL: z.string().default("gemini-3.7-flash"),
-  GEMINI_BASE_URL: z
+  LLM_API_KEY: z.string().min(1),
+  LLM_MODEL: z.string().default("gemini-3.7-flash"),
+  LLM_BASE_URL: z
     .string()
     .url()
     .default("https://generativelanguage.googleapis.com/v1beta/openai/"),

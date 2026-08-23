@@ -44,9 +44,9 @@ jest.mock("../src/config/mailer", () => ({
 jest.mock("../src/config/env", () => ({
   env: {
     SMTP_FROM: "billing@test.demo",
-    GEMINI_API_KEY: "test-key",
-    GEMINI_MODEL: "gemini-test",
-    GEMINI_BASE_URL: "https://test.example.com",
+    LLM_API_KEY: "test-key",
+    LLM_MODEL: "gemini-test",
+    LLM_BASE_URL: "https://test.example.com",
     DATABASE_URL: "postgresql://test",
     REDIS_URL: "redis://test",
     RAZORPAY_KEY_ID: "rzp_test",
@@ -714,5 +714,31 @@ describe("Definition of Done — DNC Compliance", () => {
     // Verify: outcome is 'skipped'
     const auditCall = (mockedPrisma.auditEntry.create as jest.Mock).mock.calls[0][0];
     expect(auditCall.data.outcome).toBe("skipped");
+  });
+
+  describe("draftRecoveryEmail", () => {
+    it("handles raw JSON responses", async () => {
+      mockedRequestJson.mockResolvedValueOnce(
+        JSON.stringify({ subject: "Action Required", html: "<p>Please update payment.</p>" }),
+      );
+
+      const result = await draftRecoveryEmail("Alice", "expired_card", 1000);
+      expect(result).toEqual({
+        subject: "Action Required",
+        html: "<p>Please update payment.</p>",
+      });
+    });
+
+    it("strips markdown code blocks (```json ... ```) from Gemini responses", async () => {
+      mockedRequestJson.mockResolvedValueOnce(
+        "```json\n{\n  \"subject\": \"Markdown Subject\",\n  \"html\": \"<p>Markdown Body</p>\"\n}\n```",
+      );
+
+      const result = await draftRecoveryEmail("Bob", "insufficient_funds", 500);
+      expect(result).toEqual({
+        subject: "Markdown Subject",
+        html: "<p>Markdown Body</p>",
+      });
+    });
   });
 });

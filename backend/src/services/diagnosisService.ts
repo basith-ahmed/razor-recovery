@@ -94,7 +94,7 @@ async function requestDiagnosis(input: string): Promise<string> {
     });
   } catch (cause) {
     console.error("Gemini diagnosis request failed.", cause);
-    throw new DomainError("Unable to diagnose revenue event.", "GEMINI_DIAGNOSIS_FAILED", cause);
+    throw new DomainError("Unable to diagnose revenue event.", "LLM_DIAGNOSIS_FAILED", cause);
   }
 }
 

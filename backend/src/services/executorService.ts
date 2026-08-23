@@ -70,7 +70,8 @@ export async function draftRecoveryEmail(
       schema: emailDraftSchema,
     });
 
-    const parsed: unknown = JSON.parse(raw);
+    const normalized = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    const parsed: unknown = JSON.parse(normalized);
     if (
       parsed !== null &&
       typeof parsed === "object" &&

@@ -40,7 +40,7 @@ async function requestDecision(input: string): Promise<string> {
     });
   } catch (cause) {
     console.error("Gemini decision request failed.", cause);
-    throw new DomainError("Unable to select a recovery action.", "GEMINI_DECISION_FAILED", cause);
+    throw new DomainError("Unable to select a recovery action.", "LLM_DECISION_FAILED", cause);
   }
 }
 
