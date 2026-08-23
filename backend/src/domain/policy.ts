@@ -12,7 +12,6 @@ export interface StoppingConfig {
   windowHours?: number;
   onMaxEscalate?: boolean;
   onMaxAction?: string;
-  maxDiscountsPer90Days?: number;
   noResponseWithinHours?: number;
   onTimeoutAction?: string;
   hardStopDays?: number;

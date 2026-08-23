@@ -41,9 +41,6 @@ function toStateMachineOutcome(action: ActionResult): string | null {
     return "dnc_skip";
   }
 
-  // Skipped discount — no state transition
-  if (action.result === "skipped") return null;
-
   // Successful actions
   switch (action.actionType) {
     case "retry_payment":
@@ -62,8 +59,6 @@ function toStateMachineOutcome(action: ActionResult): string | null {
       return "payment_link_sent";
     case "escalate_to_human":
       return "escalation_triggered";
-    case "send_discount_offer":
-      return "discount_sent";
     default:
       return null;
   }

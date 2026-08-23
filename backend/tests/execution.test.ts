@@ -270,16 +270,6 @@ describe("executorService", () => {
       expect(result.actionType).toBe("none");
     });
 
-    it("returns skipped for send_discount_offer", async () => {
-      const result = await executeAction(
-        makeDecision({ chosenAction: "send_discount_offer" }),
-        makeEvent(),
-      );
-
-      expect(result.result).toBe("skipped");
-      expect(result.integration).toBe("MOCK");
-    });
-
     it("throws DomainError for unrecognized action", async () => {
       await expect(
         executeAction(

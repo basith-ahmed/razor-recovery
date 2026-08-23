@@ -182,19 +182,18 @@ describe("filterLegalActions", () => {
   });
 
   describe("price_friction", () => {
-    it("returns both actions when no discounts sent yet", () => {
+    it("returns send_reminder_email when under maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({ causeLabel: "price_friction", attemptCount: 0 })
       );
-      expect(result).toEqual(["send_reminder_email", "send_discount_offer"]);
+      expect(result).toEqual(["send_reminder_email"]);
     });
 
-    it("prunes discount offer when maxDiscountsPer90Days reached", () => {
+    it("escalates when maxAttempts reached", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "price_friction", attemptCount: 1 })
+        makeCtx({ causeLabel: "price_friction", attemptCount: 2 })
       );
-      expect(result).toEqual(["send_reminder_email"]);
-      expect(result).not.toContain("send_discount_offer");
+      expect(result).toEqual(["escalate_to_human"]);
     });
   });
 

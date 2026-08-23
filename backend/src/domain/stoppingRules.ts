@@ -105,15 +105,6 @@ function applyStoppingConditions(
     }
   }
 
-  // maxDiscountsPer90Days: prune discount offers if attempt count meets the cap
-  // (attemptCount here represents discount offers sent within the window)
-  if (
-    stopping.maxDiscountsPer90Days !== undefined &&
-    ctx.attemptCount >= stopping.maxDiscountsPer90Days
-  ) {
-    actions = actions.filter((a) => !a.includes("discount"));
-  }
-
   // freezeWorkflow: only escalation allowed
   if (stopping.freezeWorkflow) {
     return actions.filter((a) => a === "escalate_to_human");

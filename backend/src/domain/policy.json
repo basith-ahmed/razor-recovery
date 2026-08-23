@@ -18,8 +18,8 @@
     },
     {
       "cause": "price_friction",
-      "actions": ["send_reminder_email", "send_discount_offer"],
-      "stopping": { "maxDiscountsPer90Days": 1 }
+      "actions": ["send_reminder_email"],
+      "stopping": { "maxAttempts": 2, "windowDays": 7, "onMaxEscalate": true }
     },
     {
       "cause": "no_reason_signal",

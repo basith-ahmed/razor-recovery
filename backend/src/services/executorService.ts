@@ -174,13 +174,6 @@ export async function executeAction(
       html,
     });
     actionResult = { ...actionResult, actionType: chosenAction };
-  } else if (chosenAction === "send_discount_offer") {
-    actionResult = {
-      actionType: "send_discount_offer",
-      result: "skipped",
-      integration: "MOCK",
-      detail: "Discount mock not implemented.",
-    };
   } else if (chosenAction === "escalate_to_human") {
     actionResult = await ticketMock.escalateToHuman(
       event.entityId,

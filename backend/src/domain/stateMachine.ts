@@ -79,8 +79,6 @@ function outcomeToState(outcome: string): WorkflowState {
       return "CONTACTED";
     case "dunning_sent":
       return "CONTACTED";
-    case "discount_sent":
-      return "CONTACTED";
     case "cooldown_started":
       return "COOLING_DOWN";
     case "cooldown_ended":
