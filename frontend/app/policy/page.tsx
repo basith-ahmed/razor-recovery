@@ -7,12 +7,15 @@ import { PolicyTable } from "../../components/PolicyTable";
 
 export default function PolicyPage() {
   const [data, setData] = useState<PolicyResponse | null>(null);
-  const [page, setPage] = useState<number>(1);
+  const [logPage, setLogPage] = useState<number>(1);
+  const [logLimit, setLogLimit] = useState<number>(15);
+  const [dncPage, setDncPage] = useState<number>(1);
+  const [dncLimit, setDncLimit] = useState<number>(10);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     let ignore = false;
-    getPolicy(page, 15)
+    getPolicy(logPage, logLimit, dncPage, dncLimit)
       .then((res) => {
         if (!ignore) {
           setData(res);
@@ -29,7 +32,7 @@ export default function PolicyPage() {
     return () => {
       ignore = true;
     };
-  }, [page]);
+  }, [logPage, logLimit, dncPage, dncLimit]);
 
   return (
     <div>
@@ -57,7 +60,7 @@ export default function PolicyPage() {
                 <p className="text-xs text-slate-400">Entities registered in Redis / Database to halt dunning communications</p>
               </div>
               <span className="text-xs font-mono bg-red-50 border border-red-200 text-red-800 px-3 py-1 rounded-md">
-                {data.dncList.length} DNC Customers
+                {data.dncList.total} DNC Customers
               </span>
             </div>
 
@@ -71,14 +74,14 @@ export default function PolicyPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200/60">
-                  {data.dncList.length === 0 ? (
+                  {data.dncList.entries.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="text-center py-6 text-slate-500">
                         No active DNC records.
                       </td>
                     </tr>
                   ) : (
-                    data.dncList.map((c) => (
+                    data.dncList.entries.map((c) => (
                       <tr key={c.id} className="hover:bg-slate-100/40">
                         <td className="p-3 font-mono text-slate-400">{c.id}</td>
                         <td className="p-3 font-semibold text-slate-900">{c.name || "N/A"}</td>
@@ -88,6 +91,46 @@ export default function PolicyPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* DNC Pagination Controls */}
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span>Per page:</span>
+                <select
+                  value={dncLimit}
+                  onChange={(e) => {
+                    setDncLimit(parseInt(e.target.value, 10));
+                    setDncPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-mono">
+                  Page {data.dncList.page} of {data.dncList.totalPages}
+                </span>
+                <button
+                  disabled={dncPage <= 1}
+                  onClick={() => setDncPage((p) => Math.max(1, p - 1))}
+                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={dncPage >= data.dncList.totalPages}
+                  onClick={() => setDncPage((p) => p + 1)}
+                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
 
@@ -142,30 +185,45 @@ export default function PolicyPage() {
               </table>
             </div>
 
-            {/* Pagination controls */}
-            {data.complianceLog.total > 15 && (
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200">
-                <span className="text-xs text-slate-400 font-mono">
-                  Page {data.complianceLog.page} of {Math.ceil(data.complianceLog.total / 15)}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 text-xs px-3 py-1 rounded transition-colors"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    disabled={page >= Math.ceil(data.complianceLog.total / 15)}
-                    onClick={() => setPage((p) => p + 1)}
-                    className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 text-xs px-3 py-1 rounded transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
+            {/* Compliance Log Pagination controls */}
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span>Per page:</span>
+                <select
+                  value={logLimit}
+                  onChange={(e) => {
+                    setLogLimit(parseInt(e.target.value, 10));
+                    setLogPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
               </div>
-            )}
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-mono">
+                  Page {data.complianceLog.page} of {data.complianceLog.totalPages}
+                </span>
+                <button
+                  disabled={logPage <= 1}
+                  onClick={() => setLogPage((p) => Math.max(1, p - 1))}
+                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={logPage >= data.complianceLog.totalPages}
+                  onClick={() => setLogPage((p) => p + 1)}
+                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

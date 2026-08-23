@@ -6,6 +6,7 @@ import { EntityItem, EntityFilters } from "../types";
 interface EntityTableProps {
   entities: EntityItem[];
   filters: EntityFilters;
+  pagination?: { total: number; page: number; limit: number; totalPages: number };
   onFilterChange: (newFilters: Partial<EntityFilters>) => void;
   loading: boolean;
 }
@@ -21,7 +22,7 @@ const STATE_BADGES: Record<string, string> = {
   DO_NOT_CONTACT: "bg-white text-slate-500 border-slate-300",
 };
 
-export function EntityTable({ entities, filters, onFilterChange, loading }: EntityTableProps) {
+export function EntityTable({ entities, filters, pagination, onFilterChange, loading }: EntityTableProps) {
   const handleSortToggle = (field: string) => {
     let newSort = `${field}_desc`;
     if (filters.sort === `${field}_desc`) {
@@ -31,6 +32,13 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
     }
     onFilterChange({ sort: newSort });
   };
+
+  const page = pagination?.page ?? 1;
+  const limit = pagination?.limit ?? 20;
+  const totalPages = pagination?.totalPages ?? 1;
+  const total = pagination?.total ?? entities.length;
+  const startItem = total === 0 ? 0 : (page - 1) * limit + 1;
+  const endItem = Math.min(page * limit, total);
 
   return (
     <div className="bg-white border border-slate-200 rounded-lg p-5">
@@ -223,6 +231,48 @@ export function EntityTable({ entities, filters, onFilterChange, loading }: Enti
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination Controls */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-3 border-t border-slate-200">
+        <div className="flex items-center gap-3 text-xs text-slate-500">
+          <span>
+            Showing <strong className="text-slate-700">{startItem}</strong>–<strong className="text-slate-700">{endItem}</strong> of <strong className="text-slate-700">{total}</strong> items
+          </span>
+          <div className="flex items-center gap-1.5 ml-2">
+            <span>Per page:</span>
+            <select
+              value={limit}
+              onChange={(e) => onFilterChange({ limit: parseInt(e.target.value, 10), page: 1 })}
+              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 font-mono mr-1">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            disabled={page <= 1 || loading}
+            onClick={() => onFilterChange({ page: Math.max(1, page - 1) })}
+            className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+          >
+            Previous
+          </button>
+          <button
+            disabled={page >= totalPages || loading}
+            onClick={() => onFilterChange({ page: page + 1 })}
+            className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );

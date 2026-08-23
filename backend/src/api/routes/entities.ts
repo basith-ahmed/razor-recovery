@@ -4,10 +4,14 @@ import { prisma } from "../../config/prisma";
 
 export const entitiesRouter = Router();
 
-// GET /entities?state=&cause=&eventType=&minAmount=&maxAmount=&search=&sort=
+// GET /entities?state=&cause=&eventType=&minAmount=&maxAmount=&search=&sort=&page=&limit=
 entitiesRouter.get("/", async (req: Request, res: Response) => {
   try {
     const { state, cause, eventType, minAmount, maxAmount, search, sort } = req.query;
+
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 20));
+    const skip = (page - 1) * limit;
 
     const where: Prisma.RevenueEventWhereInput = {};
 
@@ -61,16 +65,21 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
       orderBy = { riskScore: "asc" };
     }
 
-    const events = await prisma.revenueEvent.findMany({
-      where,
-      orderBy,
-      include: {
-        customer: true,
-        diagnosis: true,
-        decision: true,
-        action: true,
-      },
-    });
+    const [total, events] = await Promise.all([
+      prisma.revenueEvent.count({ where }),
+      prisma.revenueEvent.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limit,
+        include: {
+          customer: true,
+          diagnosis: true,
+          decision: true,
+          action: true,
+        },
+      }),
+    ]);
 
     const entityIds = Array.from(new Set(events.map((e) => e.entityId)));
     const workflowStates = await prisma.entityWorkflowState.findMany({
@@ -106,7 +115,13 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
       };
     });
 
-    return res.status(200).json(result);
+    return res.status(200).json({
+      items: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    });
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "Failed to query entities";
     console.error("[entitiesRouter] Error fetching entities:", error);

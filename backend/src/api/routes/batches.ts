@@ -3,13 +3,29 @@ import { prisma } from "../../config/prisma";
 
 export const batchesRouter = Router();
 
-// GET /batches — list past batches with summaryJson
-batchesRouter.get("/", async (_req: Request, res: Response) => {
+// GET /batches?page=&limit= — list past batches with summaryJson
+batchesRouter.get("/", async (req: Request, res: Response) => {
   try {
-    const batches = await prisma.batch.findMany({
-      orderBy: { createdAt: "desc" },
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 20));
+    const skip = (page - 1) * limit;
+
+    const [total, batches] = await Promise.all([
+      prisma.batch.count(),
+      prisma.batch.findMany({
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return res.status(200).json({
+      items: batches,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
     });
-    return res.status(200).json(batches);
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "Failed to fetch batches";
     console.error("[batchesRouter] Error fetching batches:", error);

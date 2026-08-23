@@ -37,6 +37,14 @@ export interface EntityItem {
   attemptCount: number;
 }
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export interface EntityFilters {
   state?: string;
   cause?: string;
@@ -45,6 +53,8 @@ export interface EntityFilters {
   maxAmount?: string | number;
   search?: string;
   sort?: string;
+  page?: number;
+  limit?: number;
 }
 
 export interface AuditEntry {
@@ -105,12 +115,19 @@ export interface PolicyResponse {
     version: string;
     rules: PolicyRule[];
   };
-  dncList: { id: string; name?: string; email?: string }[];
+  dncList: {
+    entries: { id: string; name?: string; email?: string }[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
   complianceLog: {
     entries: AuditEntry[];
     total: number;
     page: number;
     limit: number;
+    totalPages: number;
   };
 }
 

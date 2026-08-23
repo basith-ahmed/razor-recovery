@@ -12,6 +12,10 @@ policyRouter.get("/", async (req: Request, res: Response) => {
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 20));
     const skip = (page - 1) * limit;
 
+    const dncPage = Math.max(1, parseInt(req.query.dncPage as string, 10) || 1);
+    const dncLimit = Math.max(1, Math.min(100, parseInt(req.query.dncLimit as string, 10) || 10));
+    const dncSkip = (dncPage - 1) * dncLimit;
+
     // Fetch DNC list from Redis
     const redisDncIds = await redis.smembers("razorrecovery:dnc:set");
 
@@ -31,6 +35,8 @@ policyRouter.get("/", async (req: Request, res: Response) => {
       }
     }
     const dncList = Array.from(dncSet.values());
+    const dncTotal = dncList.length;
+    const paginatedDncList = dncList.slice(dncSkip, dncSkip + dncLimit);
 
     // Fetch policy-blocked compliance audit entries
     const [total, entries] = await Promise.all([
@@ -52,12 +58,19 @@ policyRouter.get("/", async (req: Request, res: Response) => {
 
     return res.status(200).json({
       policy: policyJson,
-      dncList,
+      dncList: {
+        entries: paginatedDncList,
+        total: dncTotal,
+        page: dncPage,
+        limit: dncLimit,
+        totalPages: Math.ceil(dncTotal / dncLimit) || 1,
+      },
       complianceLog: {
         entries,
         total,
         page,
         limit,
+        totalPages: Math.ceil(total / limit) || 1,
       },
     });
   } catch (error: unknown) {

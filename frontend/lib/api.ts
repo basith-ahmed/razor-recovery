@@ -7,6 +7,7 @@ import {
   PolicyResponse,
   BatchItem,
   RunBatchParams,
+  PaginatedResponse,
 } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -24,8 +25,8 @@ export async function getMetricsSummary(batchId?: string): Promise<MetricsSummar
   return response.data;
 }
 
-export async function listEntities(filters?: EntityFilters): Promise<EntityItem[]> {
-  const response = await apiClient.get<EntityItem[]>("/entities", { params: filters });
+export async function listEntities(filters?: EntityFilters): Promise<PaginatedResponse<EntityItem>> {
+  const response = await apiClient.get<PaginatedResponse<EntityItem>>("/entities", { params: filters });
   return response.data;
 }
 
@@ -34,13 +35,22 @@ export async function getEntityAudit(id: string): Promise<AuditEntry[]> {
   return response.data;
 }
 
-export async function getPolicy(page: number = 1, limit: number = 20): Promise<PolicyResponse> {
-  const response = await apiClient.get<PolicyResponse>("/policy", { params: { page, limit } });
+export async function getPolicy(
+  page: number = 1,
+  limit: number = 20,
+  dncPage: number = 1,
+  dncLimit: number = 10
+): Promise<PolicyResponse> {
+  const response = await apiClient.get<PolicyResponse>("/policy", {
+    params: { page, limit, dncPage, dncLimit },
+  });
   return response.data;
 }
 
-export async function listBatches(): Promise<BatchItem[]> {
-  const response = await apiClient.get<BatchItem[]>("/batches");
+export async function listBatches(page: number = 1, limit: number = 20): Promise<PaginatedResponse<BatchItem>> {
+  const response = await apiClient.get<PaginatedResponse<BatchItem>>("/batches", {
+    params: { page, limit },
+  });
   return response.data;
 }
 

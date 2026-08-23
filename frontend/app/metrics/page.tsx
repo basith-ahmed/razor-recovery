@@ -17,16 +17,23 @@ const CHANNEL_COST_MAP: Record<string, number> = {
 export default function MetricsPage() {
   const [metrics, setMetrics] = useState<MetricsSummary | null>(null);
   const [batches, setBatches] = useState<BatchItem[]>([]);
+  const [batchPage, setBatchPage] = useState<number>(1);
+  const [batchLimit, setBatchLimit] = useState<number>(10);
+  const [batchPagination, setBatchPagination] = useState({ total: 0, totalPages: 1 });
   const [loading, setLoading] = useState<boolean>(true);
   const [causeSort, setCauseSort] = useState<"rate_desc" | "count_desc" | "recovered_desc">("rate_desc");
 
   useEffect(() => {
     let ignore = false;
-    Promise.all([getMetricsSummary(), listBatches()])
+    Promise.all([getMetricsSummary(), listBatches(batchPage, batchLimit)])
       .then(([metricsData, batchesData]) => {
         if (!ignore) {
           setMetrics(metricsData);
-          setBatches(batchesData);
+          setBatches(batchesData.items);
+          setBatchPagination({
+            total: batchesData.total,
+            totalPages: batchesData.totalPages,
+          });
           setLoading(false);
         }
       })
@@ -40,7 +47,7 @@ export default function MetricsPage() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [batchPage, batchLimit]);
 
   const handleExportJSON = () => {
     if (!metrics) return;
@@ -101,13 +108,13 @@ export default function MetricsPage() {
             onClick={handleExportJSON}
             className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-3 py-2 rounded border border-slate-300 transition-colors"
           >
-            Export JSON 
+            Export JSON
           </button>
           <button
             onClick={handleExportCSV}
             className="bg-blue-600 hover:bg-blue-500 text-slate-900 text-xs font-semibold px-3 py-2 rounded transition-colors"
           >
-            Export CSV 
+            Export CSV
           </button>
         </div>
       </div>
@@ -245,8 +252,15 @@ export default function MetricsPage() {
 
           {/* Past Batches Table */}
           <div className="bg-white border border-slate-200 rounded-lg p-5">
-            <h3 className="text-md font-semibold text-slate-900 mb-1">Past Batch Simulation Audit</h3>
-            <p className="text-xs text-slate-400 mb-4">Historical record of triggered batch runs</p>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-md font-semibold text-slate-900">Past Batch Simulation Audit</h3>
+                <p className="text-xs text-slate-400">Historical record of triggered batch runs</p>
+              </div>
+              <span className="text-xs font-mono bg-blue-50 border border-blue-200 text-blue-800 px-3 py-1 rounded-md">
+                {batchPagination.total} Total Batches
+              </span>
+            </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
@@ -281,6 +295,46 @@ export default function MetricsPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Batch Pagination Controls */}
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span>Per page:</span>
+                <select
+                  value={batchLimit}
+                  onChange={(e) => {
+                    setBatchLimit(parseInt(e.target.value, 10));
+                    setBatchPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-mono">
+                  Page {batchPage} of {batchPagination.totalPages}
+                </span>
+                <button
+                  disabled={batchPage <= 1}
+                  onClick={() => setBatchPage((p) => Math.max(1, p - 1))}
+                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={batchPage >= batchPagination.totalPages}
+                  onClick={() => setBatchPage((p) => p + 1)}
+                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </div>
