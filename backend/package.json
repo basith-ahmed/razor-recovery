@@ -17,7 +17,6 @@
   "keywords": [],
   "type": "commonjs",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.120.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "cors": "^2.8.6",
@@ -26,6 +25,7 @@
     "ioredis": "^6.0.0",
     "kafkajs": "^2.2.4",
     "nodemailer": "^9.0.5",
+    "openai": "^7.5.0",
     "pg": "^8.23.0",
     "razorpay": "^2.9.8",
     "socket.io": "^4.8.3",
