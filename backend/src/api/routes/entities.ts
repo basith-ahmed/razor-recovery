@@ -1,19 +1,31 @@
 import { Router, Request, Response } from "express";
 import { Prisma, EventType, WorkflowState } from "@prisma/client";
 import { prisma } from "../../config/prisma";
+import { eventWindowFilter } from "../../services/metricsService";
+import { Window } from "../../domain/types";
 
 export const entitiesRouter = Router();
 
-// GET /entities?state=&cause=&eventType=&minAmount=&maxAmount=&search=&sort=&page=&limit=
+const WINDOWS: Window[] = ["1h", "24h", "7d", "all"];
+
+// GET /entities?state=&cause=&eventType=&minAmount=&maxAmount=&search=&sort=&window=&page=&limit=
 entitiesRouter.get("/", async (req: Request, res: Response) => {
   try {
     const { state, cause, eventType, minAmount, maxAmount, search, sort } = req.query;
+
+    // Optional time-window filter; defaults to no time filter (show everything)
+    let window: Window | undefined;
+    if (typeof req.query.window === "string" && WINDOWS.includes(req.query.window as Window)) {
+      window = req.query.window as Window;
+    }
 
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 20));
     const skip = (page - 1) * limit;
 
-    const where: Prisma.RevenueEventWhereInput = {};
+    const where: Prisma.RevenueEventWhereInput = {
+      ...(window ? eventWindowFilter(window) : {}),
+    };
 
     if (eventType && typeof eventType === "string" && Object.values(EventType).includes(eventType as EventType)) {
       where.eventType = eventType as EventType;
@@ -91,7 +103,7 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
       const stateRow = stateMap.get(event.entityId);
       return {
         id: event.id,
-        batchId: event.batchId,
+        sourceRunId: event.sourceRunId,
         entityType: event.entityType,
         entityId: event.entityId,
         customerId: event.customerId,

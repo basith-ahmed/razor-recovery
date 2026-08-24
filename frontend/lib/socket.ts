@@ -6,15 +6,20 @@ import { ActivityItem, MetricsSummary } from "../types";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
-export interface BatchProgress {
-  batchId: string;
-  processed: number;
+export interface StreamProgress {
+  runId: string;
+  sent: number;
   total: number;
 }
 
-export function useLiveBatch(batchId?: string) {
+/**
+ * Live global channel hook — no parameter and no subscribe step. Every
+ * connected client receives every broadcast because the pipeline itself has
+ * no run scope.
+ */
+export function useLiveStream() {
   const [isConnected, setIsConnected] = useState(false);
-  const [progress, setProgress] = useState<BatchProgress | null>(null);
+  const [injectionProgress, setInjectionProgress] = useState<StreamProgress | null>(null);
   const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
   const [metrics, setMetrics] = useState<MetricsSummary | null>(null);
 
@@ -30,17 +35,15 @@ export function useLiveBatch(batchId?: string) {
 
     socket.on("connect", () => {
       setIsConnected(true);
-      if (batchId) {
-        socket.emit("subscribe", batchId);
-      }
     });
 
     socket.on("disconnect", () => {
       setIsConnected(false);
     });
 
-    socket.on("batch:progress", (data: BatchProgress) => {
-      setProgress(data);
+    // DEMO-ONLY signal; a client only cares while an injection is in flight
+    socket.on("stream:progress", (data: StreamProgress) => {
+      setInjectionProgress(data);
     });
 
     socket.on("activity:new", (item: ActivityItem) => {
@@ -54,22 +57,16 @@ export function useLiveBatch(batchId?: string) {
     return () => {
       socket.off("connect");
       socket.off("disconnect");
-      socket.off("batch:progress");
+      socket.off("stream:progress");
       socket.off("activity:new");
       socket.off("metrics:update");
       socket.disconnect();
     };
-  }, [batchId]);
-
-  useEffect(() => {
-    if (socketRef.current && isConnected && batchId) {
-      socketRef.current.emit("subscribe", batchId);
-    }
-  }, [batchId, isConnected]);
+  }, []);
 
   return {
     isConnected,
-    progress,
+    injectionProgress,
     activityFeed,
     metrics,
   };

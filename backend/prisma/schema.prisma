@@ -93,8 +93,7 @@ model Subscription {
 
 model RevenueEvent {
   id                String     @id @default(uuid())
-  batchId           String
-  batch             Batch      @relation(fields: [batchId], references: [id])
+  sourceRunId       String?
   entityType        EntityType
   entityId          String
   customerId        String
@@ -115,6 +114,8 @@ model RevenueEvent {
   decision     Decision?
   action       Action?
   auditEntries AuditEntry[]
+
+  @@index([sourceRunId])
 }
 
 model Diagnosis {
@@ -174,18 +175,6 @@ model EntityWorkflowState {
   lastContactedAt DateTime?
   cooldownUntil   DateTime?
   updatedAt       DateTime      @updatedAt
-}
-
-model Batch {
-  id              String   @id @default(uuid())
-  createdAt       DateTime @default(now())
-  status          String   @default("running")
-  eventCount      Int
-  amountAtRisk    Float
-  amountRecovered Float    @default(0)
-  summaryJson     Json?
-
-  events RevenueEvent[]
 }
 
 model Ticket {

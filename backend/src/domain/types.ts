@@ -12,7 +12,11 @@ export type EventType =
 
 export interface RawRevenueEvent {
   id: string;
-  batchId: string;
+  /**
+   * Optional demo-only tag grouping events injected by one stream-injector
+   * run. Never used by core pipeline logic; a real production event has none.
+   */
+  sourceRunId?: string;
   entityType: "CUSTOMER" | "CART" | "INVOICE" | "SUBSCRIPTION";
   entityId: string;
   customerId: string;
@@ -56,14 +60,32 @@ export interface ActionResult {
   detail?: string;
 }
 
-export interface BatchSummary {
-  batchId: string;
-  totalAmountAtRisk: number;
-  totalRecovered: number;
+export type Window = "1h" | "24h" | "7d" | "all";
+
+export interface MetricsSummary {
+  window: Window;
+  /** Present only when the query was scoped to a demo stream-injection run. */
+  sourceRunId?: string;
+  amountAtRisk: number;
+  amountRecovered: number;
   recoveryRate: number;
-  byCause: Record<string, { count: number; amountAtRisk: number; amountRecovered: number }>;
-  byChannel: Record<string, { count: number; amountRecovered: number }>;
-  medianTimeToRecoveryMs: number | null;
+  eventsProcessed: number;
+  funnel: FunnelStage[];
+  byCause: { cause: string; recovered: number; atRisk: number }[];
+  byChannel: {
+    channel: "razorpay" | "email" | "human";
+    count: number;
+    recoveredAmount: number;
+  }[];
+  medianTimeToRecoveryHours: number;
+  compliance: { dncBlocked: number; autoEscalated: number; cooldownStopped: number };
+}
+
+export interface TrendPoint {
+  /** ISO 8601 start of the bucket. */
+  bucketStart: string;
+  eventsProcessed: number;
+  amountRecovered: number;
 }
 
 export interface FunnelStage {

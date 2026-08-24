@@ -56,7 +56,6 @@ export function HeroMetrics({ metrics }: HeroMetricsProps) {
   const amountRecovered = metrics?.amountRecovered ?? 0;
   const recoveryRate = (metrics?.recoveryRate ?? 0) * 100;
   const eventsProcessed = metrics?.eventsProcessed ?? 0;
-  const eventsTotal = metrics?.eventsTotal ?? 0;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -87,12 +86,11 @@ export function HeroMetrics({ metrics }: HeroMetricsProps) {
         <p className="text-xs text-slate-500 mt-1">Conversion efficiency</p>
       </div>
 
-      {/* 4. Events Processed / Total */}
+      {/* 4. Events Processed — no fixed total exists in a continuous stream */}
       <div className="bg-white border border-slate-200 rounded-lg p-5">
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Events Processed</p>
-        <div className="text-2xl font-bold font-mono text-purple-700 flex items-baseline gap-1">
+        <div className="text-2xl font-bold font-mono text-purple-700">
           <AnimatedNumber value={eventsProcessed} decimals={0} />
-          <span className="text-slate-500 text-sm font-normal">/ {eventsTotal}</span>
         </div>
         <p className="text-xs text-slate-500 mt-1">Audit pipeline throughput</p>
       </div>

@@ -21,6 +21,11 @@ import { TOPICS } from "../topics";
 const CONSUMER_GROUP = "detection-service";
 const STAGE = "detection";
 const DEDUP_TTL = 3600; // 1 hour
+// Rolling normalization reference for risk scoring. There is no "batch" to
+// take a max over in a continuous stream, so this value stands in for it.
+// A 24h TTL gives it a natural daily reset so it doesn't grow unbounded.
+const RISK_NORM_KEY = "razorrecovery:riskNorm:recentMaxAmount";
+const RISK_NORM_TTL = 86400; // 24 hours
 
 const consumer = kafka.consumer({ groupId: CONSUMER_GROUP });
 
@@ -60,12 +65,11 @@ export async function startDetectionConsumer(): Promise<void> {
           },
         });
 
-        // Compute the batch max amount for normalisation
-        const batchAgg = await prisma.revenueEvent.aggregate({
-          where: { batchId: event.batchId },
-          _max: { amount: true },
-        });
-        const batchMaxAmount = batchAgg._max.amount ?? event.amount;
+        // Rolling amount reference for normalisation (Redis-backed)
+        const recentMaxRaw = await redis.get(RISK_NORM_KEY);
+        const recentMaxAmount = recentMaxRaw
+          ? Number(recentMaxRaw)
+          : event.amount;
 
         // Extract urgency-related data from rawPayload
         const payload = event.rawPayload as Record<string, unknown>;
@@ -93,9 +97,17 @@ export async function startDetectionConsumer(): Promise<void> {
             lifetimeValue: customer.lifetimeValue,
             tenureDays,
           },
-          batchMaxAmount,
+          recentMaxAmount,
           daysOverdue,
           hoursSinceAbandon,
+        );
+
+        // Update the rolling max: MAX(current, event.amount), with a daily reset
+        await redis.set(
+          RISK_NORM_KEY,
+          String(Math.max(Number(recentMaxRaw ?? 0), event.amount)),
+          "EX",
+          RISK_NORM_TTL,
         );
 
         // Write riskScore + urgency back onto the RevenueEvent row

@@ -22,7 +22,7 @@ function randomInteger(min: number, max: number): number {
 
 function toRawEvent(event: {
   id: string;
-  batchId: string;
+  sourceRunId: string | null;
   entityType: EntityType;
   entityId: string;
   customerId: string;
@@ -36,8 +36,9 @@ function toRawEvent(event: {
   errorReason: string | null;
   rawPayload: Prisma.JsonValue;
 }): RawRevenueEvent {
-  return {
-    ...event,
+  const { sourceRunId, ...rest } = event;
+  const result: RawRevenueEvent = {
+    ...rest,
     occurredAt: event.occurredAt.toISOString(),
     razorpayPaymentId: event.razorpayPaymentId ?? undefined,
     razorpayOrderId: event.razorpayOrderId ?? undefined,
@@ -45,13 +46,17 @@ function toRawEvent(event: {
     errorReason: event.errorReason ?? undefined,
     rawPayload: event.rawPayload as Record<string, unknown>,
   };
+  if (sourceRunId !== null) {
+    result.sourceRunId = sourceRunId;
+  }
+  return result;
 }
 
 /** Persists one offline, webhook-shaped revenue event. It never calls Razorpay. */
 export async function injectFailure(
-  batchId: string,
   type: SyntheticFailureType,
   customerId: string,
+  sourceRunId?: string,
 ): Promise<RawRevenueEvent> {
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
@@ -195,7 +200,7 @@ export async function injectFailure(
   const saved = await prisma.revenueEvent.create({
     data: {
       id,
-      batchId,
+      sourceRunId,
       entityType,
       entityId,
       customerId,

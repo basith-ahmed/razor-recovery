@@ -4,7 +4,7 @@
  * Checks:
  * 1. Creates/verifies all 6 Kafka topics.
  * 2. Starts all 5 consumers in background.
- * 3. Replays a synthetic batch of 10 events via `replayBatch`.
+ * 3. Injects a paced synthetic stream of 10 events via `startStreamInjection`.
  * 4. Polls Prisma until all 10 events have matching `AuditEntry` rows.
  * 5. Verifies Redis dedup keys were created for each stage.
  * 6. Tests deduplication behavior by attempting duplicate processing.
@@ -38,8 +38,8 @@ import {
   startAuditConsumer,
   stopAuditConsumer,
 } from "../kafka/consumers/auditConsumer";
-import { replayBatch } from "../simulator";
-import { computeBatchSummary } from "../services/metricsService";
+import { startStreamInjection } from "../simulator/streamInjector";
+import { computeLiveMetrics } from "../services/metricsService";
 
 async function runPipelineTest() {
   console.log("==================================================");
@@ -80,18 +80,19 @@ async function runPipelineTest() {
   ]);
   console.log("   All 5 consumers running!");
 
-  // Step 3: Trigger batch replay
-  console.log("\n3. Replaying batch of 10 events via Kafka...");
-  const { batchId } = await replayBatch({
-    size: 10,
+  // Step 3: Trigger stream injection
+  console.log("\n3. Injecting a paced stream of 10 events via Kafka...");
+  const { runId } = await startStreamInjection({
+    count: 10,
     mix: {
       paymentFailed: 0.4,
       checkoutAbandoned: 0.2,
       invoiceOverdue: 0.2,
       subscriptionFailed: 0.2,
     },
+    intervalMs: 200,
   });
-  console.log(`   Batch created: ${batchId}`);
+  console.log(`   Stream injection started: ${runId}`);
 
   // Step 4: Poll DB until all 10 events reach audit stage
   console.log("\n4. Waiting for event pipeline to process all 10 events...");
@@ -102,27 +103,27 @@ async function runPipelineTest() {
 
   while (Date.now() - startTime < maxWaitMs) {
     auditCount = await prisma.auditEntry.count({
-      where: { event: { batchId } },
+      where: { event: { sourceRunId: runId } },
     });
     console.log(`   Progress: ${auditCount}/10 events processed through audit stage...`);
     if (auditCount >= 10) {
-      summary = await computeBatchSummary(batchId);
+      summary = await computeLiveMetrics("all", runId);
       break;
     }
     await new Promise((r) => setTimeout(r, 1500));
   }
 
   if (auditCount < 10) {
-    console.error(`Pipeline timed out after 30s. Only ${auditCount}/10 events reached audit stage.`);
+    console.error(`Pipeline timed out after 60s. Only ${auditCount}/10 events reached audit stage.`);
   } else {
     console.log(`Success! All ${auditCount}/10 events fully processed through Kafka pipeline!`);
-    console.log(`   Batch Summary:`, JSON.stringify(summary, null, 2));
+    console.log(`   Live metrics for this run:`, JSON.stringify(summary, null, 2));
   }
 
   // Step 5: Verify Dedup Redis Keys
   console.log("\n5. Verifying Redis Idempotency / Dedup Keys...");
   const events = await prisma.revenueEvent.findMany({
-    where: { batchId },
+    where: { sourceRunId: runId },
     select: { id: true },
   });
   let totalDedupKeysFound = 0;

@@ -5,14 +5,26 @@ import { server } from "../src/api/server";
 import { env } from "../src/config/env";
 import { prisma } from "../src/config/prisma";
 import { seedEntities } from "../src/simulator/seedEntities";
-import { replayBatch } from "../src/simulator";
+import { startStreamInjection } from "../src/simulator/streamInjector";
 import { verifyWebhookSignature } from "../src/api/webhooks/razorpayWebhook";
 import { emitLiveUpdate } from "../src/api/websocket";
+
+async function waitFor(
+  predicate: () => Promise<boolean>,
+  timeoutMs = 15000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("waitFor: condition not met within timeout");
+}
 
 describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
   let baseUrl: string;
   let port: number;
-  let testBatchId: string;
+  let testRunId: string;
 
   beforeAll(async () => {
     // Seed test entities if DB is empty
@@ -21,17 +33,23 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       await seedEntities({ customers: 20 });
     }
 
-    // Generate a test batch
-    const batchResult = await replayBatch({
-      size: 5,
+    // Generate a test stream injection
+    const result = await startStreamInjection({
+      count: 5,
       mix: {
         paymentFailed: 0.4,
         checkoutAbandoned: 0.4,
         invoiceOverdue: 0.2,
         subscriptionFailed: 0,
       },
+      intervalMs: 10,
     });
-    testBatchId = batchResult.batchId;
+    testRunId = result.runId;
+    await waitFor(async () =>
+      (await prisma.revenueEvent.count({
+        where: { sourceRunId: testRunId },
+      })) === 5,
+    );
 
     // Start server on an ephemeral port
     await new Promise<void>((resolve) => {
@@ -61,13 +79,14 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
   });
 
   describe("8.2 — Routes", () => {
-    describe("POST /demo/run-batch", () => {
-      it("creates a new batch and returns batchId immediately", async () => {
-        const res = await fetch(`${baseUrl}/demo/run-batch`, {
+    describe("POST /demo/inject-stream", () => {
+      it("starts a stream injection and returns runId immediately", async () => {
+        const res = await fetch(`${baseUrl}/demo/inject-stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            size: 4,
+            count: 4,
+            intervalMs: 10,
             mix: {
               paymentFailed: 0.5,
               checkoutAbandoned: 0.5,
@@ -78,16 +97,16 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
         });
 
         expect(res.status).toBe(200);
-        const data = (await res.json()) as { batchId: string };
-        expect(data.batchId).toBeDefined();
-        expect(typeof data.batchId).toBe("string");
+        const data = (await res.json()) as { runId: string };
+        expect(data.runId).toBeDefined();
+        expect(typeof data.runId).toBe("string");
       });
 
-      it("returns HTTP 400 for invalid batch size", async () => {
-        const res = await fetch(`${baseUrl}/demo/run-batch`, {
+      it("returns HTTP 400 for invalid count", async () => {
+        const res = await fetch(`${baseUrl}/demo/inject-stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ size: -5 }),
+          body: JSON.stringify({ count: -5 }),
         });
 
         expect(res.status).toBe(400);
@@ -96,11 +115,11 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       });
 
       it("returns HTTP 400 if mix proportions do not sum to 1", async () => {
-        const res = await fetch(`${baseUrl}/demo/run-batch`, {
+        const res = await fetch(`${baseUrl}/demo/inject-stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            size: 5,
+            count: 5,
             mix: {
               paymentFailed: 0.2,
               checkoutAbandoned: 0.2,
@@ -113,43 +132,6 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
         expect(res.status).toBe(400);
         const data = (await res.json()) as { error: string };
         expect(data.error).toContain("sum to 1.0");
-      });
-    });
-
-    describe("GET /batches & GET /batches/:id", () => {
-      it("returns a paginated list of past batches", async () => {
-        const res = await fetch(`${baseUrl}/batches`);
-        expect(res.status).toBe(200);
-        const data = (await res.json()) as {
-          items: Array<{ id: string; eventCount: number }>;
-          total: number;
-          page: number;
-          limit: number;
-          totalPages: number;
-        };
-
-        expect(Array.isArray(data.items)).toBe(true);
-        expect(data.items.length).toBeGreaterThan(0);
-        expect(typeof data.total).toBe("number");
-        expect(data.total).toBeGreaterThanOrEqual(data.items.length);
-        expect(typeof data.page).toBe("number");
-        expect(typeof data.limit).toBe("number");
-        expect(typeof data.totalPages).toBe("number");
-      });
-
-      it("returns detail for a specific batch", async () => {
-        const res = await fetch(`${baseUrl}/batches/${testBatchId}`);
-        expect(res.status).toBe(200);
-        const data = (await res.json()) as { id: string; events: unknown[] };
-        expect(data.id).toBe(testBatchId);
-        expect(Array.isArray(data.events)).toBe(true);
-      });
-
-      it("returns HTTP 404 for a non-existent batch ID", async () => {
-        const res = await fetch(`${baseUrl}/batches/00000000-0000-0000-0000-000000000000`);
-        expect(res.status).toBe(404);
-        const data = (await res.json()) as { error: string };
-        expect(data.error).toBe("Batch not found");
       });
     });
 
@@ -175,8 +157,10 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
         }
       });
 
-      it("supports filtering by eventType and search term", async () => {
-        const res = await fetch(`${baseUrl}/entities?eventType=PAYMENT_FAILED`);
+      it("supports filtering by eventType, search term, and window", async () => {
+        const res = await fetch(
+          `${baseUrl}/entities?eventType=PAYMENT_FAILED&window=all`,
+        );
         expect(res.status).toBe(200);
         const data = (await res.json()) as { items: Array<{ eventType: string }> };
         expect(Array.isArray(data.items)).toBe(true);
@@ -194,17 +178,16 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       });
     });
 
-    describe("GET /metrics/summary", () => {
-      it("returns exact §8.4 metrics summary shape", async () => {
-        const res = await fetch(`${baseUrl}/metrics/summary?batchId=${testBatchId}`);
+    describe("GET /metrics/summary & GET /metrics/trend", () => {
+      it("returns exact §8.4 metrics summary shape for a window", async () => {
+        const res = await fetch(`${baseUrl}/metrics/summary?window=all`);
         expect(res.status).toBe(200);
         const data = (await res.json()) as {
-          batchId: string;
+          window: string;
           amountAtRisk: number;
           amountRecovered: number;
           recoveryRate: number;
           eventsProcessed: number;
-          eventsTotal: number;
           funnel: Array<{ stage: string; count: number }>;
           byCause: Array<{ cause: string; recovered: number; atRisk: number }>;
           byChannel: Array<{ channel: string; count: number; recoveredAmount: number }>;
@@ -212,12 +195,13 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
           compliance: { dncBlocked: number; autoEscalated: number; cooldownStopped: number };
         };
 
-        expect(data.batchId).toBe(testBatchId);
+        expect(data.window).toBe("all");
+        expect(data).not.toHaveProperty("batchId");
+        expect(data).not.toHaveProperty("eventsTotal");
         expect(typeof data.amountAtRisk).toBe("number");
         expect(typeof data.amountRecovered).toBe("number");
         expect(typeof data.recoveryRate).toBe("number");
         expect(typeof data.eventsProcessed).toBe("number");
-        expect(typeof data.eventsTotal).toBe("number");
 
         expect(Array.isArray(data.funnel)).toBe(true);
         expect(data.funnel.map((f) => f.stage)).toEqual([
@@ -237,6 +221,34 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
         expect(data.compliance).toHaveProperty("dncBlocked");
         expect(data.compliance).toHaveProperty("autoEscalated");
         expect(data.compliance).toHaveProperty("cooldownStopped");
+      });
+
+      it("scopes the summary to a sourceRunId when one is passed", async () => {
+        const res = await fetch(
+          `${baseUrl}/metrics/summary?window=all&sourceRunId=${testRunId}`,
+        );
+        expect(res.status).toBe(200);
+        const data = (await res.json()) as {
+          sourceRunId?: string;
+          amountAtRisk: number;
+        };
+        expect(data.sourceRunId).toBe(testRunId);
+      });
+
+      it("returns trend points from GET /metrics/trend", async () => {
+        const res = await fetch(`${baseUrl}/metrics/trend?window=24h&bucket=hour`);
+        expect(res.status).toBe(200);
+        const data = (await res.json()) as Array<{
+          bucketStart: string;
+          eventsProcessed: number;
+          amountRecovered: number;
+        }>;
+        expect(Array.isArray(data)).toBe(true);
+        if (data.length > 0) {
+          expect(typeof data[0].bucketStart).toBe("string");
+          expect(typeof data[0].eventsProcessed).toBe("number");
+          expect(typeof data[0].amountRecovered).toBe("number");
+        }
       });
     });
 
@@ -338,7 +350,7 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
 
   describe("8.4 — WebSockets & emitLiveUpdate", () => {
     it("can invoke emitLiveUpdate without errors", async () => {
-      await expect(emitLiveUpdate(testBatchId)).resolves.not.toThrow();
+      await expect(emitLiveUpdate()).resolves.not.toThrow();
     });
   });
 });

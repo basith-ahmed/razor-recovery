@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getMetricsSummary, listBatches } from "../../lib/api";
-import { MetricsSummary, BatchItem } from "../../types";
+import { getMetricsSummary, getMetricsTrend } from "../../lib/api";
+import { MetricsSummary, MetricsWindow, TrendPoint } from "../../types";
+import { WindowSelector } from "../../components/WindowSelector";
 
 const CHANNEL_COST_MAP: Record<string, number> = {
   email: 0.5,
@@ -14,30 +15,24 @@ const CHANNEL_COST_MAP: Record<string, number> = {
 
 export default function MetricsPage() {
   const [metrics, setMetrics] = useState<MetricsSummary | null>(null);
-  const [batches, setBatches] = useState<BatchItem[]>([]);
-  const [batchPage, setBatchPage] = useState<number>(1);
-  const [batchLimit, setBatchLimit] = useState<number>(10);
-  const [batchPagination, setBatchPagination] = useState({ total: 0, totalPages: 1 });
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [window, setWindow] = useState<MetricsWindow>("24h");
   const [loading, setLoading] = useState<boolean>(true);
   const [causeSort, setCauseSort] = useState<"rate_desc" | "count_desc" | "recovered_desc">("rate_desc");
 
   useEffect(() => {
     let ignore = false;
-    Promise.all([getMetricsSummary(), listBatches(batchPage, batchLimit)])
-      .then(([metricsData, batchesData]) => {
+    Promise.all([getMetricsSummary(window), getMetricsTrend(window, "hour")])
+      .then(([metricsData, trendData]) => {
         if (!ignore) {
           setMetrics(metricsData);
-          setBatches(batchesData.items);
-          setBatchPagination({
-            total: batchesData.total,
-            totalPages: batchesData.totalPages,
-          });
+          setTrend(trendData);
           setLoading(false);
         }
       })
       .catch((err) => {
         if (!ignore) {
-          console.error("Failed to load metrics or batches:", err);
+          console.error("Failed to load metrics or trend:", err);
           setLoading(false);
         }
       });
@@ -45,7 +40,7 @@ export default function MetricsPage() {
     return () => {
       ignore = true;
     };
-  }, [batchPage, batchLimit]);
+  }, [window]);
 
   const handleExportJSON = () => {
     if (!metrics) return;
@@ -61,11 +56,11 @@ export default function MetricsPage() {
   const handleExportCSV = () => {
     if (!metrics) return;
     let csv = "Category,Metric,Value\n";
+    csv += `Overview,Window,${metrics.window}\n`;
     csv += `Overview,Amount At Risk,${metrics.amountAtRisk}\n`;
     csv += `Overview,Amount Recovered,${metrics.amountRecovered}\n`;
     csv += `Overview,Recovery Rate %,${metrics.recoveryRate}\n`;
-    csv += `Overview,Events Processed,${metrics.eventsProcessed}\n`;
-    csv += `Overview,Events Total,${metrics.eventsTotal}\n\n`;
+    csv += `Overview,Events Processed,${metrics.eventsProcessed}\n\n`;
 
     csv += "Cause,At Risk,Recovered,Recovery Rate %\n";
     metrics.byCause.forEach((c) => {
@@ -91,17 +86,20 @@ export default function MetricsPage() {
     return 0;
   }) : [];
 
+  const maxTrendEvents = Math.max(1, ...trend.map((t) => t.eventsProcessed));
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Analytics & Performance Metrics</h1>
           <p className="text-sm text-slate-400">
-            Deep recovery efficiency, financial unit economics, and past batch performance audit.
+            Deep recovery efficiency and financial unit economics over the live event stream.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          <WindowSelector value={window} onChange={setWindow} />
           <button
             onClick={handleExportJSON}
             className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-3 py-2 rounded border border-slate-300 transition-colors"
@@ -110,7 +108,7 @@ export default function MetricsPage() {
           </button>
           <button
             onClick={handleExportCSV}
-            className="bg-blue-600 hover:bg-blue-500 text-slate-900 text-xs font-semibold px-3 py-2 rounded transition-colors"
+            className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-2 rounded transition-colors"
           >
             Export CSV
           </button>
@@ -123,6 +121,43 @@ export default function MetricsPage() {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Stream Throughput Trend */}
+          <div className="bg-white border border-slate-200 rounded-lg p-5">
+            <h3 className="text-md font-semibold text-slate-900 mb-1">Stream Throughput Trend</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              Events processed per hour across the live stream (recovered amount in ₹)
+            </p>
+
+            {trend.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">No events in this window yet.</p>
+            ) : (
+              <div className="space-y-1">
+                {trend.map((point) => (
+                  <div key={point.bucketStart} className="flex items-center gap-3 text-xs">
+                    <span className="w-36 shrink-0 font-mono text-slate-500">
+                      {new Date(point.bucketStart).toLocaleString("en-IN", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    <div className="flex-1 bg-slate-100 rounded overflow-hidden h-4">
+                      <div
+                        className="h-full bg-blue-500"
+                        style={{ width: `${(point.eventsProcessed / maxTrendEvents) * 100}%` }}
+                      />
+                    </div>
+                    <span className="w-10 text-right font-mono text-slate-700">{point.eventsProcessed}</span>
+                    <span className="w-28 text-right font-mono text-emerald-700">
+                      ₹{point.amountRecovered.toLocaleString("en-IN", { maximumFractionDigits: 0 })} rec.
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Recovery Rate by Cause Table */}
           <div className="bg-white border border-slate-200 rounded-lg p-5">
             <div className="flex items-center justify-between mb-4">
@@ -227,7 +262,7 @@ export default function MetricsPage() {
               <div className="bg-slate-50 p-4 rounded border border-slate-200">
                 <span className="text-xs text-slate-400 block mb-1">Median Time to Recovery</span>
                 <span className="text-xl font-bold font-mono text-emerald-700">
-                  {metrics?.medianTimeToRecoveryHours != null
+                  {metrics?.medianTimeToRecoveryHours != null && metrics.medianTimeToRecoveryHours > 0
                     ? `${metrics.medianTimeToRecoveryHours.toFixed(2)} hrs`
                     : "N/A"}
                 </span>
@@ -236,7 +271,6 @@ export default function MetricsPage() {
                 <span className="text-xs text-slate-400 block mb-1">Events Processed</span>
                 <span className="text-xl font-bold font-mono text-blue-700">
                   {metrics?.eventsProcessed ?? 0}
-                  <span className="text-slate-500 text-sm font-normal"> / {metrics?.eventsTotal ?? 0}</span>
                 </span>
               </div>
               <div className="bg-slate-50 p-4 rounded border border-slate-200">
@@ -244,94 +278,6 @@ export default function MetricsPage() {
                 <span className="text-xl font-bold font-mono text-amber-700">
                   {metrics ? (metrics.recoveryRate * 100).toFixed(1) : "0.0"}%
                 </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Past Batches Table */}
-          <div className="bg-white border border-slate-200 rounded-lg p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-md font-semibold text-slate-900">Past Batch Simulation Audit</h3>
-                <p className="text-xs text-slate-400">Historical record of triggered batch runs</p>
-              </div>
-              <span className="text-xs font-mono bg-blue-50 border border-blue-200 text-blue-800 px-3 py-1 rounded-md">
-                {batchPagination.total} Total Batches
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-400 border-b border-slate-200">
-                    <th className="p-3 font-medium">Batch ID</th>
-                    <th className="p-3 font-medium">Events</th>
-                    <th className="p-3 font-medium">Created At</th>
-                    <th className="p-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200/60">
-                  {batches.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="text-center py-6 text-slate-500">
-                        No past batches found.
-                      </td>
-                    </tr>
-                  ) : (
-                    batches.map((b) => (
-                      <tr key={b.id} className="hover:bg-slate-100/40">
-                        <td className="p-3 font-mono font-semibold text-blue-700">{b.id}</td>
-                        <td className="p-3 font-mono text-slate-700">{b.eventCount}</td>
-                        <td className="p-3 font-mono text-slate-400">
-                          {new Date(b.createdAt).toLocaleString("en-IN")}
-                        </td>
-                        <td className="p-3 font-mono text-slate-400">
-                          {b.status}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Batch Pagination Controls */}
-            <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>Per page:</span>
-                <select
-                  value={batchLimit}
-                  onChange={(e) => {
-                    setBatchLimit(parseInt(e.target.value, 10));
-                    setBatchPage(1);
-                  }}
-                  className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400 font-mono">
-                  Page {batchPage} of {batchPagination.totalPages}
-                </span>
-                <button
-                  disabled={batchPage <= 1}
-                  onClick={() => setBatchPage((p) => Math.max(1, p - 1))}
-                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={batchPage >= batchPagination.totalPages}
-                  onClick={() => setBatchPage((p) => p + 1)}
-                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
-                >
-                  Next
-                </button>
               </div>
             </div>
           </div>

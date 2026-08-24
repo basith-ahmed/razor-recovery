@@ -56,7 +56,7 @@ export function LiveActivityFeed({ items }: LiveActivityFeedProps) {
       <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
         {items.length === 0 ? (
           <div className="text-center py-8 text-slate-500 text-sm">
-            No live events yet. Trigger a batch above to stream events live.
+            No live events yet. Start a stream injection to watch events flow through live.
           </div>
         ) : (
           items.map((item, idx) => (

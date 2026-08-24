@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useLiveBatch } from "../lib/socket";
+import { useLiveStream } from "../lib/socket";
 import { getMetricsSummary } from "../lib/api";
-import { MetricsSummary } from "../types";
+import { MetricsSummary, MetricsWindow } from "../types";
+import { StreamInjectorPanel } from "../components/StreamInjectorPanel";
+import { WindowSelector } from "../components/WindowSelector";
 import { HeroMetrics } from "../components/HeroMetrics";
 import { LiveActivityFeed } from "../components/LiveActivityFeed";
 import { FunnelChart } from "../components/FunnelChart";
@@ -11,27 +13,52 @@ import { CauseChannelCharts } from "../components/CauseChannelCharts";
 import { ComplianceStrip } from "../components/ComplianceStrip";
 
 export default function OverviewPage() {
+  const [window, setWindow] = useState<MetricsWindow>("24h");
   const [initialMetrics, setInitialMetrics] = useState<MetricsSummary | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
 
-  const { activityFeed, metrics: socketMetrics } = useLiveBatch();
+  // Live global channel: activity feed always shows the latest events,
+  // regardless of the selected metrics window.
+  const { activityFeed, metrics: socketMetrics } = useLiveStream();
 
-  // Fetch initial summary on mount
+  // Fetch windowed summary on mount and whenever the window changes
   useEffect(() => {
-    getMetricsSummary()
-      .then((data) => setInitialMetrics(data))
-      .catch((err) => console.error("Failed to load initial metrics summary:", err));
-  }, []);
+    let ignore = false;
+    getMetricsSummary(window)
+      .then((data) => {
+        if (!ignore) {
+          setInitialMetrics(data);
+          setInitialLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          console.error("Failed to load initial metrics summary:", err);
+          setInitialLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [window]);
 
-  const effectiveMetrics = socketMetrics || initialMetrics;
+  // Prefer live WS updates only when they match the selected window
+  const effectiveMetrics =
+    socketMetrics?.window === window ? socketMetrics : initialMetrics;
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Overview & Operations Center</h1>
-        <p className="text-sm text-slate-400">
-          Monitor real-time revenue failure detection, AI diagnosis, and autonomous dunning workflows.
-        </p>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Overview & Operations Center</h1>
+          <p className="text-sm text-slate-400">
+            Monitor real-time revenue failure detection, AI diagnosis, and autonomous dunning workflows.
+          </p>
+        </div>
+        <WindowSelector value={window} onChange={setWindow} />
       </div>
+
+      <StreamInjectorPanel />
 
       <HeroMetrics metrics={effectiveMetrics} />
 

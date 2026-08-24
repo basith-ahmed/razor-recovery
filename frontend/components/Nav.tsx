@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useLiveBatch } from "../lib/socket";
+import { useLiveStream } from "../lib/socket";
 import { getMetricsSummary } from "../lib/api";
 
 export function Nav() {
   const pathname = usePathname();
-  const { isConnected, progress, metrics: socketMetrics } = useLiveBatch();
+  const { isConnected, metrics: socketMetrics } = useLiveStream();
   const [initialMetrics, setInitialMetrics] = useState<{ amountRecovered: number } | null>(null);
 
   useEffect(() => {
-    getMetricsSummary()
+    getMetricsSummary("all")
       .then((data) => setInitialMetrics(data))
       .catch((err) => console.error("Nav failed to fetch initial metrics:", err));
   }, []);
@@ -62,16 +62,13 @@ export function Nav() {
             <span>₹{recoveredAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
           </div>
 
-          {/* Batch Status Pill */}
+          {/* System Status Pill — the pipeline is always live; there is no
+              idle/running/complete state for a continuous stream */}
           <div className="flex items-center gap-2 bg-slate-100 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium">
             <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-500"}`} />
-            {progress && progress.total > 0 ? (
-              <span className="text-blue-700 font-mono">
-                Batch: {progress.processed}/{progress.total}
-              </span>
-            ) : (
-              <span className="text-slate-400">{isConnected ? "WS Connected" : "Connecting..."}</span>
-            )}
+            <span className={isConnected ? "text-emerald-700 font-semibold uppercase" : "text-slate-400"}>
+              {isConnected ? "Live" : "Connecting..."}
+            </span>
           </div>
         </div>
       </div>

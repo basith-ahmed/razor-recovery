@@ -5,7 +5,7 @@
  * Definition of Done requirements:
  *
  * 1. Full pipeline integration test (mocked at integration boundaries)
- * 2. computeBatchSummary on a batch with 3 events (recovered, escalated, DNC-skipped)
+ * 2. computeLiveMetrics over a window with 3 events (recovered, escalated, DNC-skipped)
  * 3. DNC-flagged customer → outcome 'skipped', zero integration calls
  */
 
@@ -19,7 +19,6 @@ jest.mock("../src/config/prisma", () => ({
     action: { create: jest.fn(), count: jest.fn() },
     auditEntry: { create: jest.fn(), findMany: jest.fn() },
     entityWorkflowState: { findUnique: jest.fn(), upsert: jest.fn() },
-    batch: { update: jest.fn() },
     revenueEvent: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
     diagnosis: { count: jest.fn() },
     ticket: { create: jest.fn() },
@@ -29,7 +28,7 @@ jest.mock("../src/config/prisma", () => ({
   },
 }));
 jest.mock("../src/config/redis", () => {
-  const redisMock = { incr: jest.fn(), set: jest.fn() };
+  const redisMock = { incr: jest.fn(), set: jest.fn(), get: jest.fn() };
   return { redis: redisMock };
 });
 jest.mock("../src/config/razorpay", () => ({
@@ -74,7 +73,7 @@ import {
 } from "../src/domain/types";
 import { executeAction, draftRecoveryEmail } from "../src/services/executorService";
 import { recordAuditEntry } from "../src/services/auditService";
-import { computeBatchSummary, recoveryFunnel } from "../src/services/metricsService";
+import { computeLiveMetrics, recoveryFunnel } from "../src/services/metricsService";
 import { injectFailure } from "../src/simulator/injectFailure";
 import { computeRiskScore } from "../src/domain/riskScoring";
 import { diagnose } from "../src/services/diagnosisService";
@@ -93,7 +92,6 @@ const mockedMailer = mailer as any;
 function makeEvent(overrides: Partial<EnrichedRevenueEvent> = {}): EnrichedRevenueEvent {
   return {
     id: "event-1",
-    batchId: "batch-1",
     entityType: "INVOICE",
     entityId: "entity-1",
     customerId: "customer-1",
@@ -472,18 +470,20 @@ describe("auditService", () => {
 });
 
 describe("metricsService", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (mockedRedis.get as jest.Mock).mockResolvedValue(null);
+  });
 
-  describe("computeBatchSummary", () => {
-    it("computes correct totals for 3 events (recovered, escalated, DNC-skipped)", async () => {
+  describe("computeLiveMetrics", () => {
+    it("computes correct windowed totals for 3 events (recovered, escalated, DNC-skipped)", async () => {
       const now = new Date();
       const oneHourAgo = new Date(now.getTime() - 3600000);
 
-      (mockedPrisma.revenueEvent.findMany as jest.Mock).mockResolvedValueOnce([
+      const events = [
         // Event 1: recovered
         {
           id: "ev-1",
-          batchId: "batch-1",
           amount: 5000,
           occurredAt: oneHourAgo,
           diagnosis: { causeLabel: "expired_card" },
@@ -493,7 +493,6 @@ describe("metricsService", () => {
         // Event 2: escalated
         {
           id: "ev-2",
-          batchId: "batch-1",
           amount: 3000,
           occurredAt: oneHourAgo,
           diagnosis: { causeLabel: "invoice_disputed" },
@@ -503,71 +502,118 @@ describe("metricsService", () => {
         // Event 3: DNC-skipped
         {
           id: "ev-3",
-          batchId: "batch-1",
           amount: 2000,
           occurredAt: oneHourAgo,
           diagnosis: { causeLabel: "dnc" },
           action: { integration: "MOCK", executedAt: now },
           auditEntries: [{ outcome: "skipped", timestamp: now }],
         },
-      ]);
+      ];
 
-      (mockedPrisma.batch.update as jest.Mock).mockResolvedValueOnce({});
+      // Call order within computeLiveMetrics:
+      // 1. revenueEvent.findMany (events)
+      (mockedPrisma.revenueEvent.findMany as jest.Mock).mockResolvedValueOnce(events);
+      // 2. recoveryFunnel: count / count / count / findMany
+      (mockedPrisma.revenueEvent.count as jest.Mock).mockResolvedValueOnce(3);
+      (mockedPrisma.diagnosis.count as jest.Mock).mockResolvedValueOnce(3);
+      (mockedPrisma.action.count as jest.Mock).mockResolvedValueOnce(1);
+      (mockedPrisma.auditEntry.findMany as jest.Mock)
+        .mockResolvedValueOnce([{ eventId: "ev-1" }]) // recovered audits
+        .mockResolvedValueOnce([
+          // compliance audits
+          { outcome: "recovered", decisionSnapshot: null },
+          { outcome: "escalated", decisionSnapshot: null },
+          { outcome: "skipped", decisionSnapshot: { reasoning: "Blocked by policy (DNC or dispute)" } },
+        ])
+        .mockResolvedValueOnce([
+          { eventId: "ev-1" },
+          { eventId: "ev-2" },
+          { eventId: "ev-3" },
+        ]); // processed audits
 
-      const summary = await computeBatchSummary("batch-1");
+      const summary = await computeLiveMetrics("all");
 
+      expect(summary.window).toBe("all");
       // Total amount at risk = 5000 + 3000 + 2000 = 10000
-      expect(summary.totalAmountAtRisk).toBe(10000);
+      expect(summary.amountAtRisk).toBe(10000);
 
       // Only event 1 is recovered = 5000
-      expect(summary.totalRecovered).toBe(5000);
+      expect(summary.amountRecovered).toBe(5000);
 
       // Recovery rate = 5000 / 10000 = 0.5
       expect(summary.recoveryRate).toBe(0.5);
+      expect(summary.eventsProcessed).toBe(3);
+
+      // Funnel breakdown
+      expect(summary.funnel).toEqual([
+        { stage: "detected", count: 3 },
+        { stage: "diagnosed", count: 3 },
+        { stage: "contacted", count: 1 },
+        { stage: "recovered", count: 1 },
+      ]);
 
       // byCause breakdown
-      expect(summary.byCause["expired_card"]).toEqual({
-        count: 1,
-        amountAtRisk: 5000,
-        amountRecovered: 5000,
-      });
-      expect(summary.byCause["invoice_disputed"]).toEqual({
-        count: 1,
-        amountAtRisk: 3000,
-        amountRecovered: 0,
-      });
-      expect(summary.byCause["dnc"]).toEqual({
-        count: 1,
-        amountAtRisk: 2000,
-        amountRecovered: 0,
-      });
+      expect(summary.byCause).toEqual(
+        expect.arrayContaining([
+          { cause: "expired_card", recovered: 5000, atRisk: 5000 },
+          { cause: "invoice_disputed", recovered: 0, atRisk: 3000 },
+          { cause: "dnc", recovered: 0, atRisk: 2000 },
+        ]),
+      );
 
       // byChannel breakdown
-      expect(summary.byChannel["RAZORPAY"]).toEqual({
-        count: 1,
-        amountRecovered: 5000,
-      });
-      expect(summary.byChannel["MOCK"]).toEqual({
-        count: 2,
-        amountRecovered: 0,
+      expect(summary.byChannel).toEqual([
+        { channel: "razorpay", count: 1, recoveredAmount: 5000 },
+        { channel: "email", count: 0, recoveredAmount: 0 },
+        { channel: "human", count: 2, recoveredAmount: 0 },
+      ]);
+
+      // Median time-to-recovery = 1 hour
+      expect(summary.medianTimeToRecoveryHours).toBe(1);
+
+      // Compliance counters
+      expect(summary.compliance).toEqual({
+        dncBlocked: 1,
+        autoEscalated: 1,
+        cooldownStopped: 0,
       });
 
-      // Median time-to-recovery = 3600000ms (1 hour)
-      expect(summary.medianTimeToRecoveryMs).toBe(3600000);
+      // Result was cached in Redis with a short TTL — no Batch row involved
+      expect(mockedRedis.set).toHaveBeenCalledWith(
+        "razorrecovery:metrics:all:all",
+        expect.any(String),
+        "EX",
+        expect.any(Number),
+      );
+    });
+  });
 
-      // Batch row was updated
-      expect(mockedPrisma.batch.update).toHaveBeenCalledWith({
-        where: { id: "batch-1" },
-        data: {
-          amountRecovered: 5000,
-          summaryJson: expect.objectContaining({ batchId: "batch-1" }),
-        },
-      });
+  describe("computeLiveMetrics scoped to a sourceRunId", () => {
+    it("narrows the query to the given demo run tag and includes it in the payload", async () => {
+      (mockedPrisma.revenueEvent.findMany as jest.Mock).mockResolvedValueOnce([]);
+      (mockedPrisma.revenueEvent.count as jest.Mock).mockResolvedValueOnce(0);
+      (mockedPrisma.diagnosis.count as jest.Mock).mockResolvedValueOnce(0);
+      (mockedPrisma.action.count as jest.Mock).mockResolvedValueOnce(0);
+      (mockedPrisma.auditEntry.findMany as jest.Mock)
+        .mockResolvedValueOnce([]) // recovered audits
+        .mockResolvedValueOnce([]) // compliance audits
+        .mockResolvedValueOnce([]); // processed audits
+
+      const summary = await computeLiveMetrics("24h", "run-123");
+
+      expect(summary.sourceRunId).toBe("run-123");
+      expect(summary.eventsProcessed).toBe(0);
+      expect(mockedRedis.set).toHaveBeenCalledWith(
+        "razorrecovery:metrics:24h:run-123",
+        expect.any(String),
+        "EX",
+        expect.any(Number),
+      );
     });
   });
 
   describe("recoveryFunnel", () => {
-    it("returns correct funnel stage counts", async () => {
+    it("returns correct funnel stage counts for a window", async () => {
       (mockedPrisma.revenueEvent.count as jest.Mock).mockResolvedValueOnce(10);
       (mockedPrisma.diagnosis.count as jest.Mock).mockResolvedValueOnce(8);
       (mockedPrisma.action.count as jest.Mock).mockResolvedValueOnce(6);
@@ -576,7 +622,7 @@ describe("metricsService", () => {
         { eventId: "ev-2" },
       ]);
 
-      const funnel = await recoveryFunnel("batch-1");
+      const funnel = await recoveryFunnel("7d");
 
       expect(funnel).toEqual([
         { stage: "detected", count: 10 },
@@ -613,7 +659,7 @@ describe("Definition of Done — Full Pipeline", () => {
       ({ data }) =>
         Promise.resolve({
           id: data.id,
-          batchId: data.batchId,
+          sourceRunId: data.sourceRunId ?? null,
           entityType: data.entityType,
           entityId: data.entityId,
           customerId: data.customerId,
@@ -663,7 +709,7 @@ describe("Definition of Done — Full Pipeline", () => {
 
   it("walks an event directly in sequence: injectFailure (Phase 3) → computeRiskScore (Phase 2) → diagnose (Phase 5) → filterLegalActions + decide (Phase 2/5) → executeAction (6.1) → recordAuditEntry (6.2)", async () => {
     // 1. injectFailure (Phase 3)
-    const rawEvent = await injectFailure("batch-dod", "payment_failed", "customer-1");
+    const rawEvent = await injectFailure("payment_failed", "customer-1", "batch-dod");
     expect(rawEvent.eventType).toBe("PAYMENT_FAILED");
 
     // 2. computeRiskScore (Phase 2)

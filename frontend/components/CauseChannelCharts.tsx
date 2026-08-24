@@ -26,7 +26,7 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
       {/* 1. Failure Cause Breakdown */}
       <div className="bg-white border border-slate-200 rounded-lg p-5">
         <h3 className="text-md font-semibold text-slate-900 mb-1">Failure Cause Distribution</h3>
-        <p className="text-xs text-slate-400 mb-4">Breakdown of failure reasons across current batch/metrics</p>
+        <p className="text-xs text-slate-400 mb-4">Breakdown of failure reasons for current window</p>
 
         <div className="h-64 w-full">
           {byCause.length === 0 ? (

@@ -1,5 +1,8 @@
 import { Router, Request, Response } from "express";
-import { replayBatch, ReplayBatchConfig } from "../../simulator";
+import {
+  startStreamInjection,
+  StreamInjectionConfig,
+} from "../../simulator/streamInjector";
 
 export const demoRouter = Router();
 
@@ -10,13 +13,21 @@ const DEFAULT_MIX = {
   subscriptionFailed: 0.1,
 };
 
-demoRouter.post("/run-batch", async (req: Request, res: Response) => {
+// POST /demo/inject-stream
+//
+// DEMO/DEV TOOLING, not a core product endpoint: it stands in for the real
+// upstream systems (payment gateway, checkout service, invoicing) that would
+// publish events to revenue.events.raw in production. A real deployment has
+// no equivalent route.
+demoRouter.post("/inject-stream", async (req: Request, res: Response) => {
   try {
-    const size = typeof req.body?.size === "number" ? req.body.size : 10;
+    const count = typeof req.body?.count === "number" ? req.body.count : 10;
     const mix = req.body?.mix && typeof req.body.mix === "object" ? req.body.mix : DEFAULT_MIX;
+    const intervalMs =
+      typeof req.body?.intervalMs === "number" ? req.body.intervalMs : undefined;
 
-    if (!Number.isInteger(size) || size < 1) {
-      return res.status(400).json({ error: "Batch size must be a positive integer." });
+    if (!Number.isInteger(count) || count < 1) {
+      return res.status(400).json({ error: "Count must be a positive integer." });
     }
 
     const {
@@ -34,26 +45,32 @@ demoRouter.post("/run-batch", async (req: Request, res: Response) => {
       subscriptionFailed < 0 ||
       Math.abs(total - 1.0) > 0.01
     ) {
-      return res.status(400).json({ error: "Batch mix proportions must be non-negative and sum to 1.0." });
+      return res.status(400).json({ error: "Mix proportions must be non-negative and sum to 1.0." });
     }
 
-    const config: ReplayBatchConfig = {
-      size,
+    if (intervalMs !== undefined && (!Number.isFinite(intervalMs) || intervalMs < 0)) {
+      return res.status(400).json({ error: "intervalMs must be a non-negative number." });
+    }
+
+    const config: StreamInjectionConfig = {
+      count,
       mix: {
         paymentFailed,
         checkoutAbandoned,
         invoiceOverdue,
         subscriptionFailed,
       },
+      ...(intervalMs !== undefined ? { intervalMs } : {}),
     };
 
-    // replayBatch generates synthetic raw events and publishes to Kafka asynchronously
-    const { batchId } = await replayBatch(config);
+    // Injection continues asynchronously at the configured pace; the frontend
+    // follows progress via the demo-only stream:progress WebSocket event.
+    const { runId } = await startStreamInjection(config);
 
-    return res.status(200).json({ batchId });
+    return res.status(200).json({ runId });
   } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : "Failed to run demo batch";
-    console.error("[demoRouter] Error running batch:", error);
+    const errMessage = error instanceof Error ? error.message : "Failed to start stream injection";
+    console.error("[demoRouter] Error starting stream injection:", error);
     return res.status(500).json({ error: errMessage });
   }
 });

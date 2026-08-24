@@ -3,7 +3,6 @@ import { Router, Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { env } from "../../config/env";
 import { prisma } from "../../config/prisma";
-import { computeBatchSummary } from "../../services/metricsService";
 import { emitLiveUpdate } from "../websocket";
 
 export const razorpayWebhookRouter = Router();
@@ -116,11 +115,8 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
           },
         });
 
-        // Recompute batch summary for caching
-        await computeBatchSummary(event.batchId);
-
-        // Trigger real-time WebSocket update for the batch
-        await emitLiveUpdate(event.batchId, event.id);
+        // Trigger real-time WebSocket update on the global live channel
+        await emitLiveUpdate(event.id);
 
         console.log(`[razorpayWebhook] Entity ${event.entityId} marked RECOVERED via payment webhook.`);
       } else {

@@ -12,7 +12,6 @@ const mockedRequestJson = requestJson as jest.MockedFunction<typeof requestJson>
 function event(overrides: Partial<EnrichedRevenueEvent> = {}): EnrichedRevenueEvent {
   return {
     id: "event-1",
-    batchId: "batch-1",
     entityType: "CART",
     entityId: "entity-1",
     customerId: "customer-1",

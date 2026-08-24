@@ -28,12 +28,14 @@ const WEIGHTS = {
 export function computeRiskScore(
   event: RawRevenueEvent,
   history: CustomerHistory,
-  batchMaxAmount: number,
+  recentMaxAmount: number,
   daysOverdue?: number,
   hoursSinceAbandon?: number
 ): { riskScore: number; revenueAtRisk: number; urgency: number } {
+  // recentMaxAmount is a rolling reference value (kept in Redis, updated per
+  // event), not a per-run maximum — there is no "batch" to take a max over.
   const normAmount =
-    batchMaxAmount > 0 ? Math.min(event.amount / batchMaxAmount, 1) : 0;
+    recentMaxAmount > 0 ? Math.min(event.amount / recentMaxAmount, 1) : 0;
   const severity = EVENT_SEVERITY[event.eventType];
   const historyRisk = Math.min(history.priorFailures / 5, 1);
 

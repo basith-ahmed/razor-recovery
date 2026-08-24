@@ -10,7 +10,6 @@ function makeEvent(
 ): RawRevenueEvent {
   return {
     id: "evt-1",
-    batchId: "batch-1",
     entityType: "CUSTOMER",
     entityId: "ent-1",
     customerId: "cust-1",
@@ -36,7 +35,7 @@ function makeHistory(
 
 describe("computeRiskScore", () => {
   it("max-amount event scores near 1.0 for the amount component", () => {
-    // Event amount equals batchMaxAmount → normAmount = 1.0
+    // Event amount equals recentMaxAmount → normAmount = 1.0
     const event = makeEvent({ amount: 10000 });
     const history = makeHistory();
     const result = computeRiskScore(event, history, 10000);
@@ -50,7 +49,7 @@ describe("computeRiskScore", () => {
     expect(result.revenueAtRisk).toBe(10000);
   });
 
-  it("event exceeding batchMaxAmount caps normAmount at 1.0", () => {
+  it("event exceeding recentMaxAmount caps normAmount at 1.0", () => {
     const event = makeEvent({ amount: 20000 });
     const result = computeRiskScore(event, makeHistory(), 10000);
 
@@ -58,7 +57,7 @@ describe("computeRiskScore", () => {
     expect(result.riskScore).toBeCloseTo(0.675, 3);
   });
 
-  it("batchMaxAmount of 0 yields normAmount of 0", () => {
+  it("recentMaxAmount of 0 yields normAmount of 0", () => {
     const event = makeEvent({ amount: 5000 });
     const result = computeRiskScore(event, makeHistory(), 0);
 

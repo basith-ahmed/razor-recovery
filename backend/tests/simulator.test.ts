@@ -5,7 +5,19 @@ import {
 } from "../src/simulator/razorpayErrorReasons";
 import { seedEntities } from "../src/simulator/seedEntities";
 import { injectFailure } from "../src/simulator/injectFailure";
-import { replayBatch } from "../src/simulator";
+import { startStreamInjection } from "../src/simulator/streamInjector";
+
+async function waitFor(
+  predicate: () => Promise<boolean>,
+  timeoutMs = 15000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("waitFor: condition not met within timeout");
+}
 
 describe("Phase 3 - Simulator & Seed Data", () => {
   beforeAll(async () => {
@@ -62,18 +74,15 @@ describe("Phase 3 - Simulator & Seed Data", () => {
 
   describe("3.3 - injectFailure", () => {
     it("creates a payment_failed event matching Razorpay webhook shape", async () => {
-      const batch = await prisma.batch.create({
-        data: { eventCount: 1, amountAtRisk: 100 },
-      });
       const customer = await prisma.customer.findFirst({
         where: { invoices: { some: { status: "open" } } },
       });
       expect(customer).not.toBeNull();
 
       const event = await injectFailure(
-        batch.id,
         "payment_failed",
         customer!.id,
+        "test-run",
       );
 
       expect(event.eventType).toBe("PAYMENT_FAILED");
@@ -85,13 +94,14 @@ describe("Phase 3 - Simulator & Seed Data", () => {
       expect(event.razorpayPaymentId).toMatch(/^pay_sim_/);
       expect(event.razorpayOrderId).toMatch(/^order_sim_/);
 
-      // Verify DB row has riskScore and urgency as null
+      // Verify the sourceRunId tag was carried through
       const dbRow = await prisma.revenueEvent.findUnique({
         where: { id: event.id },
       });
       expect(dbRow).not.toBeNull();
       expect(dbRow!.riskScore).toBeNull();
       expect(dbRow!.urgency).toBeNull();
+      expect(dbRow!.sourceRunId).toBe("test-run");
 
       // Verify rawPayload shape
       const payload = event.rawPayload as any;
@@ -101,10 +111,6 @@ describe("Phase 3 - Simulator & Seed Data", () => {
     });
 
     it("creates checkout_abandoned, invoice_overdue, and subscription_failed events", async () => {
-      const batch = await prisma.batch.create({
-        data: { eventCount: 3, amountAtRisk: 300 },
-      });
-
       const customer = await prisma.customer.findFirst({
         where: {
           carts: { some: {} },
@@ -115,25 +121,20 @@ describe("Phase 3 - Simulator & Seed Data", () => {
       expect(customer).not.toBeNull();
 
       const abandoned = await injectFailure(
-        batch.id,
         "checkout_abandoned",
         customer!.id,
       );
       expect(abandoned.eventType).toBe("CHECKOUT_ABANDONED");
+      expect(abandoned.sourceRunId).toBeUndefined();
       expect(
         (abandoned.rawPayload as any).hoursSinceAbandon,
       ).toBeDefined();
 
-      const overdue = await injectFailure(
-        batch.id,
-        "invoice_overdue",
-        customer!.id,
-      );
+      const overdue = await injectFailure("invoice_overdue", customer!.id);
       expect(overdue.eventType).toBe("INVOICE_OVERDUE");
       expect((overdue.rawPayload as any).daysOverdue).toBeDefined();
 
       const subFailed = await injectFailure(
-        batch.id,
         "subscription_failed",
         customer!.id,
       );
@@ -144,8 +145,8 @@ describe("Phase 3 - Simulator & Seed Data", () => {
     });
   });
 
-  describe("3.4 - replayBatch", () => {
-    it("generates a batch of 20 events with specified mix offline", async () => {
+  describe("3.4 - startStreamInjection", () => {
+    it("generates 20 events sharing one sourceRunId with the specified mix", async () => {
       const mix = {
         paymentFailed: 0.4,
         checkoutAbandoned: 0.3,
@@ -153,18 +154,17 @@ describe("Phase 3 - Simulator & Seed Data", () => {
         subscriptionFailed: 0.1,
       };
 
-      const result = await replayBatch({ size: 20, mix });
-      expect(result.batchId).toBeDefined();
+      const result = await startStreamInjection({ count: 20, mix, intervalMs: 10 });
+      expect(result.runId).toBeDefined();
 
-      const batch = await prisma.batch.findUnique({
-        where: { id: result.batchId },
-      });
-      expect(batch).not.toBeNull();
-      expect(batch!.eventCount).toBe(20);
-      expect(batch!.status).toBe("completed");
+      await waitFor(async () =>
+        (await prisma.revenueEvent.count({
+          where: { sourceRunId: result.runId },
+        })) === 20,
+      );
 
       const events = await prisma.revenueEvent.findMany({
-        where: { batchId: result.batchId },
+        where: { sourceRunId: result.runId },
       });
       expect(events.length).toBe(20);
 
@@ -181,5 +181,27 @@ describe("Phase 3 - Simulator & Seed Data", () => {
       expect(typeCounts.INVOICE_OVERDUE).toBe(4);
       expect(typeCounts.SUBSCRIPTION_FAILED).toBe(2);
     });
+
+    it("paces event creation at the configured intervalMs rather than dumping instantly", async () => {
+      const result = await startStreamInjection({
+        count: 5,
+        mix: {
+          paymentFailed: 1,
+          checkoutAbandoned: 0,
+          invoiceOverdue: 0,
+          subscriptionFailed: 0,
+        },
+        intervalMs: 200,
+      });
+      const startedAt = Date.now();
+      await waitFor(async () =>
+        (await prisma.revenueEvent.count({
+          where: { sourceRunId: result.runId },
+        })) === 5,
+      );
+      const elapsed = Date.now() - startedAt;
+      // 5 events at 200ms pacing -> at least 4 intervals (~800ms)
+      expect(elapsed).toBeGreaterThanOrEqual(700);
+    }, 30000);
   });
 });

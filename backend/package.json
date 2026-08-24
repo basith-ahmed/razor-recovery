@@ -11,6 +11,7 @@
     "create-topics": "tsx src/scripts/createTopics.ts",
     "start-consumers": "tsx src/scripts/startConsumers.ts",
     "test:pipeline": "tsx src/scripts/testPipeline.ts",
+    "seedDemoStream": "tsx src/scripts/seedDemoStream.ts",
     "migrate": "prisma migrate dev",
     "generate": "prisma generate",
     "studio": "prisma studio",

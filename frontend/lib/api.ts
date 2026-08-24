@@ -1,12 +1,13 @@
 import axios from "axios";
 import {
   MetricsSummary,
+  MetricsWindow,
+  TrendPoint,
   EntityItem,
   EntityFilters,
   AuditEntry,
   PolicyResponse,
-  BatchItem,
-  RunBatchParams,
+  InjectStreamParams,
   PaginatedResponse,
 } from "../types";
 
@@ -19,9 +20,23 @@ export const apiClient = axios.create({
   },
 });
 
-export async function getMetricsSummary(batchId?: string): Promise<MetricsSummary> {
-  const params = batchId ? { batchId } : {};
+export async function getMetricsSummary(
+  window: MetricsWindow = "24h",
+  sourceRunId?: string,
+): Promise<MetricsSummary> {
+  const params: Record<string, string> = { window };
+  if (sourceRunId) params.sourceRunId = sourceRunId;
   const response = await apiClient.get<MetricsSummary>("/metrics/summary", { params });
+  return response.data;
+}
+
+export async function getMetricsTrend(
+  window: MetricsWindow = "24h",
+  bucket: "hour" | "day" = "hour",
+): Promise<TrendPoint[]> {
+  const response = await apiClient.get<TrendPoint[]>("/metrics/trend", {
+    params: { window, bucket },
+  });
   return response.data;
 }
 
@@ -47,14 +62,7 @@ export async function getPolicy(
   return response.data;
 }
 
-export async function listBatches(page: number = 1, limit: number = 20): Promise<PaginatedResponse<BatchItem>> {
-  const response = await apiClient.get<PaginatedResponse<BatchItem>>("/batches", {
-    params: { page, limit },
-  });
-  return response.data;
-}
-
-export async function runBatch(params: RunBatchParams): Promise<{ batchId: string }> {
-  const response = await apiClient.post<{ batchId: string }>("/demo/run-batch", params);
+export async function injectStream(params: InjectStreamParams): Promise<{ runId: string }> {
+  const response = await apiClient.post<{ runId: string }>("/demo/inject-stream", params);
   return response.data;
 }

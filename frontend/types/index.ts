@@ -1,10 +1,12 @@
+export type MetricsWindow = "1h" | "24h" | "7d" | "all";
+
 export interface MetricsSummary {
-  batchId?: string;
+  window: MetricsWindow;
+  sourceRunId?: string;
   amountAtRisk: number;
   amountRecovered: number;
   recoveryRate: number;
   eventsProcessed: number;
-  eventsTotal: number;
   funnel: { stage: string; count: number }[];
   byCause: { cause: string; recovered: number; atRisk: number }[];
   byChannel: { channel: string; count: number; recoveredAmount: number }[];
@@ -12,9 +14,15 @@ export interface MetricsSummary {
   compliance: { dncBlocked: number; autoEscalated: number; cooldownStopped: number };
 }
 
+export interface TrendPoint {
+  bucketStart: string;
+  eventsProcessed: number;
+  amountRecovered: number;
+}
+
 export interface EntityItem {
   id: string;
-  batchId: string;
+  sourceRunId?: string | null;
   entityType: string;
   entityId: string;
   customerId: string;
@@ -83,20 +91,11 @@ export interface AuditEntry {
   };
 }
 
-export interface BatchItem {
-  id: string;
-  eventCount: number;
-  status: string;
-  amountAtRisk: number;
-  amountRecovered: number;
-  summaryJson: Record<string, unknown> | null;
-  createdAt: string;
-}
-
 export interface ActivityItem {
   entityId?: string;
   id?: string;
   timestamp: string;
+  customerId?: string;
   customerName: string;
   eventType: string;
   cause: string;
@@ -131,12 +130,26 @@ export interface PolicyResponse {
   };
 }
 
-export interface RunBatchParams {
-  size: number;
+export interface InjectStreamParams {
+  count: number;
+  intervalMs?: number;
   mix: {
     paymentFailed: number;
     checkoutAbandoned: number;
     invoiceOverdue: number;
     subscriptionFailed: number;
   };
+}
+
+export interface EntityFilters {
+  state?: string;
+  cause?: string;
+  eventType?: string;
+  minAmount?: string | number;
+  maxAmount?: string | number;
+  search?: string;
+  sort?: string;
+  window?: MetricsWindow;
+  page?: number;
+  limit?: number;
 }
