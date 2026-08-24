@@ -36,7 +36,10 @@ const EMAIL_ACTIONS = new Set([
   "send_winback_offer",
 ]);
 
-const EMAIL_DRAFT_SYSTEM_PROMPT = `You are RazorRecovery's email copywriter. Write a short, friendly billing-recovery email. Return JSON only with "subject" and "html" fields. The html should be a complete email body with proper HTML formatting. Keep the tone empathetic, professional, and action-oriented. Do not include unsubscribe links or legal disclaimers.`;
+const EMAIL_DRAFT_SYSTEM_PROMPT = `You are RazorRecovery's email copywriter. Write a short, friendly billing-recovery email. 
+Return JSON only with "subject" and "html" fields. 
+CRITICAL: The "html" field must be a valid JSON string. Escape all double quotes inside the HTML as \\" and escape all newlines as \\n. 
+The html should be a complete email body with proper HTML formatting. Keep the tone empathetic, professional, and action-oriented. Do not include unsubscribe links or legal disclaimers.`;
 
 const emailDraftSchema = {
   type: "object",
@@ -47,6 +50,48 @@ const emailDraftSchema = {
     html: { type: "string" },
   },
 };
+
+function parseEmailDraftJson(raw: string): { subject: string; html: string } | null {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  
+  const sanitizeHtml = (html: string) => html.replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/, "").trim();
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (parsed && typeof parsed.subject === "string" && typeof parsed.html === "string") {
+      parsed.html = sanitizeHtml(parsed.html);
+      return parsed;
+    }
+  } catch (err) {
+    // Repair 1: Remove literal newlines/returns which break JSON string literals. HTML doesn't need them.
+    let repaired = cleaned.replace(/\n/g, " ").replace(/\r/g, "");
+    
+    // Repair 2: Fix unescaped double quotes in the HTML value.
+    const htmlKeyIndex = repaired.indexOf('"html"');
+    if (htmlKeyIndex !== -1) {
+      const colonIndex = repaired.indexOf(':', htmlKeyIndex);
+      const firstQuote = repaired.indexOf('"', colonIndex);
+      const lastQuote = repaired.lastIndexOf('"');
+      
+      if (firstQuote !== -1 && lastQuote > firstQuote) {
+        const htmlContent = repaired.substring(firstQuote + 1, lastQuote);
+        const escapedHtml = htmlContent.replace(/\\"/g, '"').replace(/"/g, '\\"');
+        repaired = repaired.substring(0, firstQuote + 1) + escapedHtml + repaired.substring(lastQuote);
+      }
+    }
+    
+    try {
+      const parsed = JSON.parse(repaired);
+      if (parsed && typeof parsed.subject === "string" && typeof parsed.html === "string") {
+        parsed.html = sanitizeHtml(parsed.html);
+        return parsed;
+      }
+    } catch (err2) {
+      return null;
+    }
+  }
+  return null;
+}
 
 /**
  * AI Touchpoint #3: Drafts recovery email copy using Gemini.
@@ -71,34 +116,12 @@ export async function draftRecoveryEmail(
       schema: emailDraftSchema,
     });
 
-    const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-
-    try {
-      const parsed = JSON.parse(cleaned);
-      if (
-        parsed !== null &&
-        typeof parsed === "object" &&
-        typeof (parsed as Record<string, unknown>).subject === "string" &&
-        typeof (parsed as Record<string, unknown>).html === "string"
-      ) {
-        return {
-          subject: (parsed as { subject: string; html: string }).subject,
-          html: (parsed as { subject: string; html: string }).html,
-        };
-      }
-    } catch {
-      // Regex extraction fallback if JSON.parse fails on unescaped control chars/quotes
-      const matchSubject = /"subject"\s*:\s*"([^"]*)"/.exec(cleaned);
-      const matchHtml = /"html"\s*:\s*"([\s\S]*?)"\s*\}/.exec(cleaned);
-      if (matchSubject && matchHtml) {
-        return {
-          subject: matchSubject[1],
-          html: matchHtml[1].replace(/\\"/g, '"'),
-        };
-      }
+    const parsed = parseEmailDraftJson(raw);
+    if (parsed) {
+      return parsed;
     }
 
-    console.warn(`[executor] Gemini returned non-standard email JSON. Using clean fallback email copy.`);
+    console.warn(`[executor] Gemini returned unrepairable non-standard email JSON. Using fallback.`);
     return fallbackEmail(customerName, amount);
   } catch (error) {
     console.warn(`[executor] Gemini request unavailable; using fallback email copy.`);
