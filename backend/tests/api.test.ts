@@ -117,12 +117,24 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
     });
 
     describe("GET /batches & GET /batches/:id", () => {
-      it("returns a list of past batches", async () => {
+      it("returns a paginated list of past batches", async () => {
         const res = await fetch(`${baseUrl}/batches`);
         expect(res.status).toBe(200);
-        const data = (await res.json()) as Array<{ id: string; eventCount: number }>;
-        expect(Array.isArray(data)).toBe(true);
-        expect(data.length).toBeGreaterThan(0);
+        const data = (await res.json()) as {
+          items: Array<{ id: string; eventCount: number }>;
+          total: number;
+          page: number;
+          limit: number;
+          totalPages: number;
+        };
+
+        expect(Array.isArray(data.items)).toBe(true);
+        expect(data.items.length).toBeGreaterThan(0);
+        expect(typeof data.total).toBe("number");
+        expect(data.total).toBeGreaterThanOrEqual(data.items.length);
+        expect(typeof data.page).toBe("number");
+        expect(typeof data.limit).toBe("number");
+        expect(typeof data.totalPages).toBe("number");
       });
 
       it("returns detail for a specific batch", async () => {
@@ -142,28 +154,33 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
     });
 
     describe("GET /entities & GET /entities/:id/audit", () => {
-      it("returns filterable/sortable list of entities", async () => {
+      it("returns a filterable/sortable paginated list of entities", async () => {
         const res = await fetch(`${baseUrl}/entities?sort=amount_desc`);
         expect(res.status).toBe(200);
-        const data = (await res.json()) as Array<{
-          id: string;
-          entityId: string;
-          amount: number;
-          customerName: string;
-          state: string;
-        }>;
-        expect(Array.isArray(data)).toBe(true);
-        if (data.length > 1) {
-          expect(data[0].amount).toBeGreaterThanOrEqual(data[1].amount);
+        const data = (await res.json()) as {
+          items: Array<{ id: string; entityId: string; amount: number; customerName: string; state: string }>;
+          total: number;
+          page: number;
+          limit: number;
+          totalPages: number;
+        };
+
+        expect(Array.isArray(data.items)).toBe(true);
+        expect(typeof data.total).toBe("number");
+        expect(typeof data.page).toBe("number");
+        expect(typeof data.limit).toBe("number");
+        expect(typeof data.totalPages).toBe("number");
+        if (data.items.length > 1) {
+          expect(data.items[0].amount).toBeGreaterThanOrEqual(data.items[1].amount);
         }
       });
 
       it("supports filtering by eventType and search term", async () => {
         const res = await fetch(`${baseUrl}/entities?eventType=PAYMENT_FAILED`);
         expect(res.status).toBe(200);
-        const data = (await res.json()) as Array<{ eventType: string }>;
-        expect(Array.isArray(data)).toBe(true);
-        data.forEach((e) => expect(e.eventType).toBe("PAYMENT_FAILED"));
+        const data = (await res.json()) as { items: Array<{ eventType: string }> };
+        expect(Array.isArray(data.items)).toBe(true);
+        data.items.forEach((e) => expect(e.eventType).toBe("PAYMENT_FAILED"));
       });
 
       it("returns ordered audit entries for an entity", async () => {
@@ -224,20 +241,35 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
     });
 
     describe("GET /policy", () => {
-      it("returns live policy.json, DNC list, and paginated compliance log", async () => {
+      it("returns live policy.json, paginated DNC list, and paginated compliance log", async () => {
         const res = await fetch(`${baseUrl}/policy`);
         expect(res.status).toBe(200);
         const data = (await res.json()) as {
           policy: { version: string; rules: unknown[] };
-          dncList: unknown[];
-          complianceLog: { entries: unknown[]; total: number; page: number; limit: number };
+          dncList: {
+            entries: Array<{ id: string }>;
+            total: number;
+            page: number;
+            limit: number;
+            totalPages: number;
+          };
+          complianceLog: { entries: unknown[]; total: number; page: number; limit: number; totalPages: number };
         };
 
         expect(data.policy).toHaveProperty("version");
         expect(Array.isArray(data.policy.rules)).toBe(true);
-        expect(Array.isArray(data.dncList)).toBe(true);
-        expect(data.complianceLog).toHaveProperty("total");
+
+        expect(Array.isArray(data.dncList.entries)).toBe(true);
+        expect(typeof data.dncList.total).toBe("number");
+        expect(data.dncList.total).toBeGreaterThanOrEqual(data.dncList.entries.length);
+        expect(typeof data.dncList.page).toBe("number");
+        expect(typeof data.dncList.limit).toBe("number");
+        expect(typeof data.dncList.totalPages).toBe("number");
+
+        expect(typeof data.complianceLog.total).toBe("number");
         expect(Array.isArray(data.complianceLog.entries)).toBe(true);
+        expect(data.complianceLog.total).toBeGreaterThanOrEqual(data.complianceLog.entries.length);
+        expect(typeof data.complianceLog.totalPages).toBe("number");
       });
     });
   });

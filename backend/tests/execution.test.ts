@@ -159,25 +159,82 @@ describe("executorService", () => {
   });
 
   describe("draftRecoveryEmail", () => {
-    it("calls Gemini and returns subject + html", async () => {
+    it("sends complete event context to Gemini", async () => {
       mockedRequestJson.mockResolvedValueOnce(
         JSON.stringify({
           subject: "Update your payment method",
-          html: "<p>Hi Aarav, please update your card.</p>",
+          body_paragraphs: ["Hi Aarav, please update your card."],
         }),
       );
 
-      const result = await draftRecoveryEmail("Aarav Sharma", "expired_card", 5000);
+      await draftRecoveryEmail(
+        makeEvent({ errorReason: "card_expired", errorCode: "BAD_REQUEST_ERROR" }),
+        "Aarav Sharma",
+        "expired_card",
+      );
 
       expect(mockedRequestJson).toHaveBeenCalledTimes(1);
+      const requestArg = mockedRequestJson.mock.calls[0][0];
+      const parsedInput = JSON.parse(requestArg.input);
+      expect(parsedInput).toMatchObject({
+        customerName: "Aarav Sharma",
+        cause: "expired_card",
+        amount: 5000,
+        currency: "INR",
+        eventType: "PAYMENT_FAILED",
+        entityType: "INVOICE",
+        entityId: "entity-1",
+        errorReason: "card_expired",
+        errorCode: "BAD_REQUEST_ERROR",
+      });
+    });
+
+    it("wraps body_paragraphs into the templated HTML email", async () => {
+      mockedRequestJson.mockResolvedValueOnce(
+        JSON.stringify({
+          subject: "Update your payment method",
+          body_paragraphs: ["Hi Aarav,", "Your card has expired."],
+        }),
+      );
+
+      const result = await draftRecoveryEmail(
+        makeEvent(),
+        "Aarav Sharma",
+        "expired_card",
+      );
+
       expect(result.subject).toBe("Update your payment method");
-      expect(result.html).toContain("Aarav");
+      expect(result.html).toContain("Hi Aarav,");
+      expect(result.html).toContain("Your card has expired.");
+      expect(result.html).toContain("₹5000");
+    });
+
+    it("renders body paragraphs into template when Gemini returns body_paragraphs field", async () => {
+      mockedRequestJson.mockResolvedValueOnce(
+        JSON.stringify({
+          subject: "Update your payment method",
+          body_paragraphs: ["Hi Aarav, please update your card."],
+        }),
+      );
+
+      const result = await draftRecoveryEmail(
+        makeEvent(),
+        "Aarav Sharma",
+        "expired_card",
+      );
+
+      expect(result.subject).toBe("Update your payment method");
+      expect(result.html).toContain("Hi Aarav, please update your card.");
     });
 
     it("uses fallback copy when Gemini fails", async () => {
       mockedRequestJson.mockRejectedValueOnce(new Error("Gemini down"));
 
-      const result = await draftRecoveryEmail("Aarav Sharma", "expired_card", 5000);
+      const result = await draftRecoveryEmail(
+        makeEvent({ amount: 5000 }),
+        "Aarav Sharma",
+        "expired_card",
+      );
 
       expect(result.subject).toContain("5000");
       expect(result.html).toContain("Aarav Sharma");
@@ -224,7 +281,7 @@ describe("executorService", () => {
     it("routes email actions through draftRecoveryEmail + sendRecoveryEmail", async () => {
       (mockedPrisma.customer.findUnique as jest.Mock).mockResolvedValueOnce(mockCustomer);
       mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({ subject: "Payment reminder", html: "<p>Hi</p>" }),
+        JSON.stringify({ subject: "Payment reminder", body_paragraphs: ["Hi"] }),
       );
       mockedMailer.sendMail.mockResolvedValueOnce({ messageId: "msg-123" });
 
@@ -235,6 +292,8 @@ describe("executorService", () => {
 
       expect(mockedRequestJson).toHaveBeenCalledTimes(1); // AI touchpoint for email draft
       expect(mockedMailer.sendMail).toHaveBeenCalledTimes(1);
+      expect(mockedMailer.sendMail.mock.calls[0][0].subject).toBe("Payment reminder");
+      expect(mockedMailer.sendMail.mock.calls[0][0].html).toContain("Hi");
       expect(result.result).toBe("success");
       expect(result.integration).toBe("EMAIL");
       expect(result.actionType).toBe("send_reminder_email");
@@ -716,29 +775,46 @@ describe("Definition of Done — DNC Compliance", () => {
     expect(auditCall.data.outcome).toBe("skipped");
   });
 
-  describe("draftRecoveryEmail", () => {
-    it("handles raw JSON responses", async () => {
+  describe("draftRecoveryEmail response parsing", () => {
+    it("handles body_paragraphs responses and templates them", async () => {
       mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({ subject: "Action Required", html: "<p>Please update payment.</p>" }),
+        JSON.stringify({ subject: "Action Required", body_paragraphs: ["Please update payment."] }),
       );
 
-      const result = await draftRecoveryEmail("Alice", "expired_card", 1000);
-      expect(result).toEqual({
-        subject: "Action Required",
-        html: "<p>Please update payment.</p>",
-      });
+      const result = await draftRecoveryEmail(makeEvent({ amount: 1000 }), "Alice", "expired_card");
+      expect(result.subject).toBe("Action Required");
+      expect(result.html).toContain("<p");
+      expect(result.html).toContain("Please update payment.");
+      expect(result.html).toContain("₹1000");
+    });
+
+    it("handles structured JSON responses with body paragraphs", async () => {
+      mockedRequestJson.mockResolvedValueOnce(
+        JSON.stringify({ subject: "Action Required", body_paragraphs: ["Please update payment."] }),
+      );
+
+      const result = await draftRecoveryEmail(makeEvent({ amount: 1000 }), "Alice", "expired_card");
+      expect(result.subject).toBe("Action Required");
+      expect(result.html).toContain("Please update payment.");
+      expect(result.html).toContain("₹1000");
     });
 
     it("strips markdown code blocks (```json ... ```) from Gemini responses", async () => {
       mockedRequestJson.mockResolvedValueOnce(
-        "```json\n{\n  \"subject\": \"Markdown Subject\",\n  \"html\": \"<p>Markdown Body</p>\"\n}\n```",
+        "```json\n{\n  \"subject\": \"Markdown Subject\",\n  \"body_paragraphs\": [\"Markdown Body\"]\n}\n```",
       );
 
-      const result = await draftRecoveryEmail("Bob", "insufficient_funds", 500);
-      expect(result).toEqual({
-        subject: "Markdown Subject",
-        html: "<p>Markdown Body</p>",
-      });
+      const result = await draftRecoveryEmail(makeEvent({ amount: 500 }), "Bob", "insufficient_funds");
+      expect(result.subject).toBe("Markdown Subject");
+      expect(result.html).toContain("Markdown Body");
+    });
+
+    it("uses fallback copy when Gemini returns unparseable output", async () => {
+      mockedRequestJson.mockResolvedValueOnce("not json at all");
+
+      const result = await draftRecoveryEmail(makeEvent({ amount: 500 }), "Bob", "insufficient_funds");
+      expect(result.subject).toContain("₹500");
+      expect(result.html).toContain("Bob");
     });
   });
 });

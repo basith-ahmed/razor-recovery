@@ -45,9 +45,9 @@ const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
     "DO_NOT_CONTACT",
   ],
   ESCALATED: ["RECOVERED", "WRITTEN_OFF"],
-  RECOVERED: ["RECOVERED"],
-  WRITTEN_OFF: ["WRITTEN_OFF"],
-  DO_NOT_CONTACT: ["DO_NOT_CONTACT"],
+  RECOVERED: [],
+  WRITTEN_OFF: [],
+  DO_NOT_CONTACT: [],
 };
 
 export function canTransition(
