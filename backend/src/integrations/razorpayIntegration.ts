@@ -8,6 +8,7 @@ export interface RecoveryPaymentLinkParams {
   customerEmail: string;
   customerPhone?: string;
   description: string;
+  notify?: boolean;
 }
 
 /**
@@ -47,6 +48,8 @@ export async function createRecoveryPaymentLink(
   params: RecoveryPaymentLinkParams,
 ): Promise<ActionResult> {
   try {
+    const shouldNotify = params.notify ?? true;
+    
     const paymentLink = await razorpay.paymentLink.create({
       amount: Math.round(params.amount * 100),
       currency: params.currency,
@@ -56,8 +59,8 @@ export async function createRecoveryPaymentLink(
         email: params.customerEmail,
         ...(params.customerPhone ? { contact: params.customerPhone } : {}),
       },
-      notify: { sms: true, email: true },
-      reminder_enable: true,
+      notify: { sms: shouldNotify, email: shouldNotify },
+      reminder_enable: shouldNotify,
     });
 
     return {

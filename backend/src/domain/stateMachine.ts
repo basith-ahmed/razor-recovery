@@ -20,6 +20,7 @@ export type WorkflowState =
 const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
   DETECTED: ["CONTACTED", "RETRYING", "DO_NOT_CONTACT", "ESCALATED"],
   CONTACTED: [
+    "CONTACTED",
     "RETRYING",
     "COOLING_DOWN",
     "RECOVERED",
@@ -28,6 +29,7 @@ const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
     "DO_NOT_CONTACT",
   ],
   RETRYING: [
+    "RETRYING",
     "COOLING_DOWN",
     "RECOVERED",
     "ESCALATED",
@@ -35,6 +37,7 @@ const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
     "DO_NOT_CONTACT",
   ],
   COOLING_DOWN: [
+    "COOLING_DOWN",
     "RETRYING",
     "CONTACTED",
     "ESCALATED",
@@ -42,9 +45,9 @@ const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
     "DO_NOT_CONTACT",
   ],
   ESCALATED: ["RECOVERED", "WRITTEN_OFF"],
-  RECOVERED: [],
-  WRITTEN_OFF: [],
-  DO_NOT_CONTACT: [],
+  RECOVERED: ["RECOVERED"],
+  WRITTEN_OFF: ["WRITTEN_OFF"],
+  DO_NOT_CONTACT: ["DO_NOT_CONTACT"],
 };
 
 export function canTransition(

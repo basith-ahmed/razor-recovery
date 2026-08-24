@@ -36,55 +36,66 @@ const EMAIL_ACTIONS = new Set([
   "send_winback_offer",
 ]);
 
-const EMAIL_DRAFT_SYSTEM_PROMPT = `You are RazorRecovery's email copywriter. Write a short, friendly billing-recovery email. 
-Return JSON only with "subject" and "html" fields. 
-CRITICAL: The "html" field must be a valid JSON string. Escape all double quotes inside the HTML as \\" and escape all newlines as \\n. 
-The html should be a complete email body with proper HTML formatting. Keep the tone empathetic, professional, and action-oriented. Do not include unsubscribe links or legal disclaimers.`;
+const EMAIL_DRAFT_SYSTEM_PROMPT = `You are RazorRecovery's email copywriter. Write a short, highly personalized, friendly billing-recovery email.
+Return JSON only with "subject" and "body_paragraphs" fields. 
+The "body_paragraphs" should be an array of simple text strings. Do not include HTML tags.
+
+CRITICAL INSTRUCTIONS FOR PERSONALIZATION:
+- Analyze the "eventType" (e.g., PAYMENT_FAILED, SUBSCRIPTION_FAILED, INVOICE_OVERDUE).
+- Analyze the "errorReason" and "errorCode" (e.g., insufficient_balance, card_expired). Mention this specifically but politely in the email (e.g., "It looks like your card might have expired" or "It seems the payment failed due to insufficient funds").
+- Provide context (e.g., "your recent subscription renewal", "your pending invoice").
+- Include the "entityId" if it helps identify the transaction (e.g., "Order/Invoice #${`{entityId}`.slice(-6)}").
+Keep the tone empathetic, professional, and action-oriented. Do not include unsubscribe links or legal disclaimers.`;
 
 const emailDraftSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["subject", "html"],
+  required: ["subject", "body_paragraphs"],
   properties: {
     subject: { type: "string" },
-    html: { type: "string" },
+    body_paragraphs: { 
+      type: "array", 
+      items: { type: "string" } 
+    },
   },
 };
 
-function parseEmailDraftJson(raw: string): { subject: string; html: string } | null {
+function buildEmailTemplate(paragraphs: string[], amount: number, paymentUrl?: string): string {
+  const contentHtml = paragraphs.map(p => `<p style="margin-bottom: 16px;">${p}</p>`).join("");
+  const buttonHtml = paymentUrl 
+    ? `<div style="text-align: center; margin: 32px 0;">
+         <a href="${paymentUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">Pay \u20b9${amount} Now</a>
+       </div>`
+    : "";
+
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; background-color: #ffffff; border-radius: 8px; border: 1px solid #eaeaea;">
+      <h2 style="color: #4f46e5; margin-top: 0; margin-bottom: 24px;">RazorRecovery</h2>
+      ${contentHtml}
+      ${buttonHtml}
+      <hr style="border: none; border-top: 1px solid #eaeaea; margin: 32px 0;" />
+      <p style="font-size: 12px; color: #888; margin: 0;">
+        This is an automated message regarding a pending payment of \u20b9${amount}. If you've already resolved this, please ignore this email.
+      </p>
+    </div>
+  `;
+}
+
+function parseEmailDraftJson(raw: string): { subject: string; paragraphs: string[] } | null {
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
   
-  const sanitizeHtml = (html: string) => html.replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/, "").trim();
-
   try {
     const parsed = JSON.parse(cleaned);
-    if (parsed && typeof parsed.subject === "string" && typeof parsed.html === "string") {
-      parsed.html = sanitizeHtml(parsed.html);
-      return parsed;
+    if (parsed && typeof parsed.subject === "string" && Array.isArray(parsed.body_paragraphs)) {
+      return { subject: parsed.subject, paragraphs: parsed.body_paragraphs };
     }
   } catch (err) {
-    // Repair 1: Remove literal newlines/returns which break JSON string literals. HTML doesn't need them.
+    // Basic repair: if LLM returned unescaped newlines inside strings, remove them
     let repaired = cleaned.replace(/\n/g, " ").replace(/\r/g, "");
-    
-    // Repair 2: Fix unescaped double quotes in the HTML value.
-    const htmlKeyIndex = repaired.indexOf('"html"');
-    if (htmlKeyIndex !== -1) {
-      const colonIndex = repaired.indexOf(':', htmlKeyIndex);
-      const firstQuote = repaired.indexOf('"', colonIndex);
-      const lastQuote = repaired.lastIndexOf('"');
-      
-      if (firstQuote !== -1 && lastQuote > firstQuote) {
-        const htmlContent = repaired.substring(firstQuote + 1, lastQuote);
-        const escapedHtml = htmlContent.replace(/\\"/g, '"').replace(/"/g, '\\"');
-        repaired = repaired.substring(0, firstQuote + 1) + escapedHtml + repaired.substring(lastQuote);
-      }
-    }
-    
     try {
       const parsed = JSON.parse(repaired);
-      if (parsed && typeof parsed.subject === "string" && typeof parsed.html === "string") {
-        parsed.html = sanitizeHtml(parsed.html);
-        return parsed;
+      if (parsed && typeof parsed.subject === "string" && Array.isArray(parsed.body_paragraphs)) {
+        return { subject: parsed.subject, paragraphs: parsed.body_paragraphs };
       }
     } catch (err2) {
       return null;
@@ -98,16 +109,23 @@ function parseEmailDraftJson(raw: string): { subject: string; html: string } | n
  * Kept as a separate, clearly-labeled function for easy identification.
  */
 export async function draftRecoveryEmail(
+  event: EnrichedRevenueEvent,
   customerName: string,
   cause: string,
-  amount: number,
+  paymentUrl?: string,
 ): Promise<{ subject: string; html: string }> {
   try {
     const input = JSON.stringify({
       customerName,
       cause,
-      amount,
-      currency: "INR",
+      amount: event.amount,
+      currency: event.currency,
+      eventType: event.eventType,
+      entityType: event.entityType,
+      entityId: event.entityId,
+      errorCode: event.errorCode,
+      errorReason: event.errorReason,
+      hasPaymentLinkIncluded: !!paymentUrl,
     });
     const raw = await requestJson({
       instructions: EMAIL_DRAFT_SYSTEM_PROMPT,
@@ -118,24 +136,30 @@ export async function draftRecoveryEmail(
 
     const parsed = parseEmailDraftJson(raw);
     if (parsed) {
-      return parsed;
+      const html = buildEmailTemplate(parsed.paragraphs, event.amount, paymentUrl);
+      return { subject: parsed.subject, html };
     }
 
     console.warn(`[executor] Gemini returned unrepairable non-standard email JSON. Using fallback.`);
-    return fallbackEmail(customerName, amount);
+    return fallbackEmail(customerName, event.amount, paymentUrl);
   } catch (error) {
     console.warn(`[executor] Gemini request unavailable; using fallback email copy.`);
-    return fallbackEmail(customerName, amount);
+    return fallbackEmail(customerName, event.amount, paymentUrl);
   }
 }
 
 function fallbackEmail(
   customerName: string,
   amount: number,
+  paymentUrl?: string,
 ): { subject: string; html: string } {
   return {
     subject: `Action required: pending payment of \u20b9${amount}`,
-    html: `<p>Hi ${customerName},</p><p>We noticed a pending payment of \u20b9${amount}. Please update your payment method at your earliest convenience.</p><p>Best regards,<br/>Billing Team</p>`,
+    html: buildEmailTemplate([
+      `Hi ${customerName},`,
+      `We noticed a pending payment of \u20b9${amount}. Please update your payment method at your earliest convenience.`,
+      `Best regards,<br/>The RazorRecovery Team`
+    ], amount, paymentUrl),
   };
 }
 
@@ -196,17 +220,44 @@ export async function executeAction(
     actionResult = { ...actionResult, actionType: chosenAction };
   } else if (EMAIL_ACTIONS.has(chosenAction)) {
     const customer = await lookupCustomer(event.customerId);
+    
+    let paymentUrl: string | undefined;
+    let paymentLinkId: string | undefined;
+
+    try {
+      const linkResult = await razorpayIntegration.createRecoveryPaymentLink({
+        amount: event.amount,
+        currency: event.currency,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        customerPhone: customer.phone ?? undefined,
+        description: `Recovery payment for ${event.eventType} — ${event.entityId}`,
+        notify: false, // Do not let Razorpay send its default email/SMS
+      });
+      paymentUrl = linkResult.paymentLinkShortUrl;
+      paymentLinkId = linkResult.razorpayPaymentLinkId;
+    } catch (err) {
+      console.warn(`[executor] Failed to generate payment link for email, proceeding without button.`, err);
+    }
+
     const { subject, html } = await draftRecoveryEmail(
+      event,
       customer.name,
       event.errorReason ?? "payment issue",
-      event.amount,
+      paymentUrl
     );
     actionResult = await emailIntegration.sendRecoveryEmail({
       to: customer.email,
       subject,
       html,
     });
-    actionResult = { ...actionResult, actionType: chosenAction };
+    
+    actionResult = { 
+      ...actionResult, 
+      actionType: chosenAction,
+      razorpayPaymentLinkId: paymentLinkId,
+      paymentLinkShortUrl: paymentUrl
+    };
   } else if (chosenAction === "escalate_to_human") {
     actionResult = await ticketMock.escalateToHuman(
       event.entityId,
