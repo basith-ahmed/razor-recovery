@@ -17,6 +17,7 @@ import { computeRiskScore } from "../../domain/riskScoring";
 import { EnrichedRevenueEvent, RawRevenueEvent } from "../../domain/types";
 import { publish } from "../producer";
 import { TOPICS } from "../topics";
+import { emitIncomingEvent } from "../../api/websocket";
 
 const CONSUMER_GROUP = "detection-service";
 const STAGE = "detection";
@@ -124,6 +125,21 @@ export async function startDetectionConsumer(): Promise<void> {
         };
 
         await publish(TOPICS.EVENTS_ENRICHED, event.id, enrichedEvent);
+
+        // Live ingestion feed: broadcast the event as soon as it has entered
+        // the pipeline (observability only — no downstream stage depends on it)
+        emitIncomingEvent({
+          eventId: event.id,
+          entityId: event.entityId,
+          customerId: event.customerId,
+          customerName: customer.name,
+          eventType: event.eventType,
+          amount: event.amount,
+          currency: event.currency,
+          occurredAt: new Date().toISOString(),
+          riskScore,
+        });
+
         console.log(
           `[detection] Enriched event ${event.id} → riskScore=${riskScore}, urgency=${urgency}`,
         );

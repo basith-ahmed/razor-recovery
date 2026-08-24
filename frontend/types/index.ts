@@ -91,6 +91,18 @@ export interface AuditEntry {
   };
 }
 
+export interface IncomingEventItem {
+  eventId: string;
+  entityId: string;
+  customerId?: string;
+  customerName: string;
+  eventType: string;
+  amount: number;
+  currency: string;
+  occurredAt: string;
+  riskScore?: number;
+}
+
 export interface ActivityItem {
   entityId?: string;
   id?: string;

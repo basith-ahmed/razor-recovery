@@ -90,6 +90,24 @@ export async function emitLiveUpdate(eventId?: string): Promise<void> {
 }
 
 /**
+ * Broadcasts a raw event the moment it enters the pipeline (detection stage),
+ * so the frontend can show live ingestion separately from processed outcomes.
+ */
+export function emitIncomingEvent(payload: {
+  eventId: string;
+  entityId: string;
+  customerId: string;
+  customerName: string;
+  eventType: string;
+  amount: number;
+  currency: string;
+  occurredAt: string;
+  riskScore?: number;
+}): void {
+  ioInstance?.emit("event:incoming", payload);
+}
+
+/**
  * DEMO-ONLY signal emitted by the stream injector (not the pipeline) purely to
  * drive the frontend's injection-progress indicator. A client only cares about
  * this while it has an injection in flight.

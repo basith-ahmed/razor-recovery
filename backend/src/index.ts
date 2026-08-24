@@ -1,11 +1,68 @@
 import { env } from "./config/env";
 import { server } from "./api/server";
-import { connectProducer } from "./kafka/producer";
-import { startDetectionConsumer } from "./kafka/consumers/detectionConsumer";
-import { startDiagnosisConsumer } from "./kafka/consumers/diagnosisConsumer";
-import { startDecisionConsumer } from "./kafka/consumers/decisionConsumer";
-import { startExecutorConsumer } from "./kafka/consumers/executorConsumer";
-import { startAuditConsumer } from "./kafka/consumers/auditConsumer";
+import { redis } from "./config/redis";
+import { connectProducer, disconnectProducer } from "./kafka/producer";
+import {
+  startDetectionConsumer,
+  stopDetectionConsumer,
+} from "./kafka/consumers/detectionConsumer";
+import {
+  startDiagnosisConsumer,
+  stopDiagnosisConsumer,
+} from "./kafka/consumers/diagnosisConsumer";
+import {
+  startDecisionConsumer,
+  stopDecisionConsumer,
+} from "./kafka/consumers/decisionConsumer";
+import {
+  startExecutorConsumer,
+  stopExecutorConsumer,
+} from "./kafka/consumers/executorConsumer";
+import {
+  startAuditConsumer,
+  stopAuditConsumer,
+} from "./kafka/consumers/auditConsumer";
+
+let shuttingDown = false;
+
+/**
+ * Graceful shutdown: the pipeline holds long-lived Kafka consumer/producer
+ * connections, a Redis client, and an HTTP/WebSocket server — without this
+ * handler, Ctrl+C can't drain the event loop and tsx has to force-kill.
+ */
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n${signal} received — shutting down pipeline gracefully...`);
+
+  // Hard exit failsafe in case a connection hangs during teardown
+  const forceExitTimer = setTimeout(() => {
+    console.error("Graceful shutdown timed out; forcing exit.");
+    process.exit(1);
+  }, 10_000);
+  forceExitTimer.unref();
+
+  try {
+    await Promise.allSettled([
+      stopDetectionConsumer(),
+      stopDiagnosisConsumer(),
+      stopDecisionConsumer(),
+      stopExecutorConsumer(),
+      stopAuditConsumer(),
+      disconnectProducer(),
+      new Promise<void>((resolve) => server.close(() => resolve())),
+    ]);
+    redis.disconnect();
+    console.log("Pipeline stopped. Goodbye.");
+    process.exit(0);
+  } catch (err) {
+    console.error("Error during shutdown:", err);
+    process.exit(1);
+  }
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 async function main() {
   // Shared producer: connected once at process startup, reused everywhere

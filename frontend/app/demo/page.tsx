@@ -1,11 +1,12 @@
 "use client";
 
 import { StreamInjectorPanel } from "../../components/StreamInjectorPanel";
+import { IncomingEventFeed } from "../../components/IncomingEventFeed";
 import { LiveActivityFeed } from "../../components/LiveActivityFeed";
 import { useLiveStream } from "../../lib/socket";
 
 export default function DemoPage() {
-  const { activityFeed } = useLiveStream();
+  const { activityFeed, incomingEvents } = useLiveStream();
 
   return (
     <div>
@@ -17,6 +18,8 @@ export default function DemoPage() {
       </div>
 
       <StreamInjectorPanel />
+
+      <IncomingEventFeed items={incomingEvents} />
 
       <LiveActivityFeed items={activityFeed} />
     </div>

@@ -6,6 +6,7 @@ import { getMetricsSummary } from "../lib/api";
 import { MetricsSummary, MetricsWindow } from "../types";
 import { StreamInjectorPanel } from "../components/StreamInjectorPanel";
 import { WindowSelector } from "../components/WindowSelector";
+import { IncomingEventFeed } from "../components/IncomingEventFeed";
 import { HeroMetrics } from "../components/HeroMetrics";
 import { LiveActivityFeed } from "../components/LiveActivityFeed";
 import { FunnelChart } from "../components/FunnelChart";
@@ -19,7 +20,7 @@ export default function OverviewPage() {
 
   // Live global channel: activity feed always shows the latest events,
   // regardless of the selected metrics window.
-  const { activityFeed, metrics: socketMetrics } = useLiveStream();
+  const { activityFeed, incomingEvents, metrics: socketMetrics } = useLiveStream();
 
   // Fetch windowed summary on mount and whenever the window changes
   useEffect(() => {
@@ -59,6 +60,8 @@ export default function OverviewPage() {
       </div>
 
       <StreamInjectorPanel />
+
+      <IncomingEventFeed items={incomingEvents} />
 
       <HeroMetrics metrics={effectiveMetrics} />
 
