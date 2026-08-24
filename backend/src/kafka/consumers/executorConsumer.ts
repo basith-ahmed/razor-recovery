@@ -25,7 +25,11 @@ const CONSUMER_GROUP = "executor-service";
 const STAGE = "executor";
 const DEDUP_TTL = 3600; // 1 hour
 
-const consumer = kafka.consumer({ groupId: CONSUMER_GROUP });
+const consumer = kafka.consumer({
+  groupId: CONSUMER_GROUP,
+  sessionTimeout: 60000,
+  heartbeatInterval: 3000,
+});
 
 interface DecisionPayload {
   event: EnrichedRevenueEvent;
@@ -37,7 +41,7 @@ export async function startExecutorConsumer(): Promise<void> {
   await consumer.connect();
   await consumer.subscribe({
     topic: TOPICS.DECISIONS,
-    fromBeginning: true,
+    fromBeginning: false,
   });
 
   await consumer.run({

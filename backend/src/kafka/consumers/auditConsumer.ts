@@ -42,7 +42,7 @@ export async function startAuditConsumer(): Promise<void> {
   await consumer.connect();
   await consumer.subscribe({
     topic: TOPICS.ACTIONS,
-    fromBeginning: true,
+    fromBeginning: false,
   });
 
   await consumer.run({

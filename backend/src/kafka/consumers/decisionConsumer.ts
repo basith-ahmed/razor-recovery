@@ -29,7 +29,11 @@ const STAGE = "decision";
 const DEDUP_TTL = 3600; // 1 hour
 const REDIS_PREFIX = "razorrecovery";
 
-const consumer = kafka.consumer({ groupId: CONSUMER_GROUP });
+const consumer = kafka.consumer({
+  groupId: CONSUMER_GROUP,
+  sessionTimeout: 60000,
+  heartbeatInterval: 3000,
+});
 
 interface DiagnosisPayload {
   event: EnrichedRevenueEvent;
@@ -40,7 +44,7 @@ export async function startDecisionConsumer(): Promise<void> {
   await consumer.connect();
   await consumer.subscribe({
     topic: TOPICS.DIAGNOSES,
-    fromBeginning: true,
+    fromBeginning: false,
   });
 
   await consumer.run({

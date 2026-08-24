@@ -21,13 +21,17 @@ const CONSUMER_GROUP = "diagnosis-service";
 const STAGE = "diagnosis";
 const DEDUP_TTL = 3600; // 1 hour
 
-const consumer = kafka.consumer({ groupId: CONSUMER_GROUP });
+const consumer = kafka.consumer({
+  groupId: CONSUMER_GROUP,
+  sessionTimeout: 60000,
+  heartbeatInterval: 3000,
+});
 
 export async function startDiagnosisConsumer(): Promise<void> {
   await consumer.connect();
   await consumer.subscribe({
     topic: TOPICS.EVENTS_ENRICHED,
-    fromBeginning: true,
+    fromBeginning: false,
   });
 
   await consumer.run({
