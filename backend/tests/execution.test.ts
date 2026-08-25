@@ -19,6 +19,12 @@ jest.mock("../src/config/prisma", () => ({
     action: { create: jest.fn(), upsert: jest.fn(), count: jest.fn() },
     auditEntry: { create: jest.fn(), findMany: jest.fn() },
     entityWorkflowState: { findUnique: jest.fn(), upsert: jest.fn() },
+    entityCauseState: {
+      findUnique: jest.fn(),
+      upsert: jest.fn(),
+      deleteMany: jest.fn(),
+      findMany: jest.fn(),
+    },
     revenueEvent: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
     diagnosis: { count: jest.fn() },
     ticket: { create: jest.fn() },
@@ -355,11 +361,12 @@ describe("auditService", () => {
     (mockedPrisma.entityWorkflowState.findUnique as jest.Mock).mockResolvedValue({
       entityId: "entity-1",
       state: "DETECTED",
-      attemptCount: 0,
     });
     (mockedPrisma.entityWorkflowState.upsert as jest.Mock).mockResolvedValue({});
-    (mockedRedis.incr as jest.Mock).mockResolvedValue(1);
-    (mockedRedis.set as jest.Mock).mockResolvedValue("OK");
+    (mockedPrisma.entityCauseState.upsert as jest.Mock).mockResolvedValue({});
+    (mockedPrisma.entityCauseState.deleteMany as jest.Mock).mockResolvedValue({
+      count: 0,
+    });
   });
 
   it("writes an AuditEntry with all four snapshots", async () => {
@@ -423,9 +430,9 @@ describe("auditService", () => {
     expect(upsertCall.create.state).toBe("DO_NOT_CONTACT");
   });
 
-  it("updates Redis counters (cooldown, lastContact) for an executed action", async () => {
+  it("upserts EntityCauseState (per-cause attempt + cooldown) for an executed action", async () => {
     const event = makeEvent();
-    const diagnosis = makeDiagnosis();
+    const diagnosis = makeDiagnosis({ causeLabel: "gateway_timeout" });
     const decision = makeDecision();
     const action: ActionResult = {
       actionType: "retry_payment",
@@ -435,19 +442,20 @@ describe("auditService", () => {
 
     await recordAuditEntry({ event, diagnosis, decision, action });
 
-    expect(mockedRedis.set).toHaveBeenCalledWith(
-      "razorrecovery:cooldown:entity-1",
-      expect.any(String),
-      "EX",
-      expect.any(Number),
-    );
-    expect(mockedRedis.set).toHaveBeenCalledWith(
-      "razorrecovery:lastContact:entity-1",
-      expect.any(String),
-    );
+    expect(mockedPrisma.entityCauseState.upsert).toHaveBeenCalledTimes(1);
+    const upsertCall = (mockedPrisma.entityCauseState.upsert as jest.Mock).mock
+      .calls[0][0];
+    expect(upsertCall.where).toEqual({
+      entityId_causeLabel: { entityId: "entity-1", causeLabel: "gateway_timeout" },
+    });
+    // Successful attempt consumes this cause's budget and starts its cooldown
+    expect(upsertCall.create.attemptCount).toBe(1);
+    expect(upsertCall.create.cooldownUntil).toBeInstanceOf(Date);
+    expect(upsertCall.update.attemptCount).toEqual({ increment: 1 });
+    expect(upsertCall.update.cooldownUntil).toBeInstanceOf(Date);
   });
 
-  it("does not consume attempt budget or set counters for a skipped action", async () => {
+  it("does not consume attempt budget or set cooldown for a skipped action", async () => {
     const event = makeEvent();
     const diagnosis = makeDiagnosis();
     const decision = makeDecision({
@@ -463,11 +471,16 @@ describe("auditService", () => {
 
     await recordAuditEntry({ event, diagnosis, decision, action });
 
-    expect(mockedRedis.set).not.toHaveBeenCalled();
+    // dnc_skip transitions DETECTED → DO_NOT_CONTACT (terminal): the arc
+    // closes, so per-cause state is wiped and never recreated in the same tick.
+    expect(mockedPrisma.entityCauseState.deleteMany).toHaveBeenCalledWith({
+      where: { entityId: "entity-1" },
+    });
+    expect(mockedPrisma.entityCauseState.upsert).not.toHaveBeenCalled();
+
     const upsertCall = (mockedPrisma.entityWorkflowState.upsert as jest.Mock).mock
       .calls[0][0];
-    expect(upsertCall.create.attemptCount).toBe(0);
-    expect(upsertCall.update.attemptCount).toBeUndefined();
+    expect(upsertCall.create.state).toBe("DO_NOT_CONTACT");
   });
 
   it("starts a fresh arc when a new event arrives on a terminal-state entity", async () => {
@@ -476,11 +489,10 @@ describe("auditService", () => {
     (mockedPrisma.entityWorkflowState.findUnique as jest.Mock).mockResolvedValueOnce({
       entityId: "entity-1",
       state: "RECOVERED",
-      attemptCount: 0,
     });
 
     const event = makeEvent();
-    const diagnosis = makeDiagnosis();
+    const diagnosis = makeDiagnosis({ causeLabel: "insufficient_funds" });
     const decision = makeDecision();
     const action: ActionResult = {
       actionType: "retry_payment",
@@ -494,7 +506,12 @@ describe("auditService", () => {
       .calls[0][0];
     // retry_initiated computed from the fresh DETECTED arc → RETRYING
     expect(upsertCall.update.state).toBe("RETRYING");
-    expect(upsertCall.update.attemptCount).toEqual({ increment: 1 });
+
+    // The new arc's first successful contact opens a fresh per-cause budget
+    const causeUpsertCall = (mockedPrisma.entityCauseState.upsert as jest.Mock).mock
+      .calls[0][0];
+    expect(causeUpsertCall.create.attemptCount).toBe(1);
+    expect(causeUpsertCall.create.lastContactedAt).toBeInstanceOf(Date);
   });
 
   it("derives outcome 'escalated' for escalate_to_human action", async () => {
@@ -515,6 +532,128 @@ describe("auditService", () => {
 
     const createCall = (mockedPrisma.auditEntry.create as jest.Mock).mock.calls[0][0];
     expect(createCall.data.outcome).toBe("escalated");
+  });
+});
+
+describe("per-cause attempt/cooldown scoping", () => {
+  // Mirrors the FilterContext construction in decisionConsumer: attempt/cooldown
+  // state is looked up per (entityId, causeLabel) in EntityCauseState.
+  function lookupCauseState(entityId: string, causeLabel: string) {
+    return prisma.entityCauseState.findUnique({
+      where: { entityId_causeLabel: { entityId, causeLabel } },
+    });
+  }
+
+  function buildFilterCtx(
+    causeLabel: string,
+    causeState: { attemptCount?: number; cooldownUntil?: Date | null } | null,
+  ) {
+    const now = new Date();
+    const isInCooldown = causeState?.cooldownUntil
+      ? causeState.cooldownUntil > now
+      : false;
+    return {
+      causeLabel,
+      customerId: "customer-1",
+      isDnc: false,
+      isDisputed: false,
+      attemptCount: causeState?.attemptCount ?? 0,
+      isInCooldown,
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (mockedPrisma.entityCauseState.findUnique as jest.Mock).mockResolvedValue(null);
+  });
+
+  it("does not bleed attempt budgets across causes for the same entity", async () => {
+    // gateway_timeout already exhausted its budget (2/2 attempts); an
+    // unrelated insufficient_funds diagnosis must start from a clean slate.
+    const entityId = "entity-multi-cause";
+    const newCause = "insufficient_funds";
+
+    // The per-cause lookup targets the NEW cause's row, not gateway_timeout's
+    const causeState = await lookupCauseState(entityId, newCause);
+    expect(mockedPrisma.entityCauseState.findUnique).toHaveBeenCalledWith({
+      where: { entityId_causeLabel: { entityId, causeLabel: newCause } },
+    });
+
+    const ctx = buildFilterCtx(newCause, causeState);
+    const legalActions = filterLegalActions(ctx);
+
+    // Full action list for insufficient_funds — NOT escalation-only, because
+    // this cause's attemptCount is 0 regardless of gateway_timeout's 2.
+    expect(legalActions).toEqual([
+      "retry_payment",
+      "send_payment_link",
+      "send_sms_reminder",
+      "escalate_to_human",
+    ]);
+  });
+
+  it("cooldown on one cause does not block an unrelated cause", async () => {
+    // gateway_timeout is actively in cooldown; insufficient_funds must not
+    // inherit it.
+    const entityId = "entity-cooldown";
+
+    // Sanity: the gateway_timeout cause itself IS blocked by its own cooldown
+    const blockedCtx = buildFilterCtx("gateway_timeout", {
+      cooldownUntil: new Date(Date.now() + 30 * 60 * 1000),
+    });
+    expect(filterLegalActions(blockedCtx)).toEqual([]);
+
+    const newCause = "insufficient_funds";
+    const causeState = await lookupCauseState(entityId, newCause);
+    expect(mockedPrisma.entityCauseState.findUnique).toHaveBeenCalledWith({
+      where: { entityId_causeLabel: { entityId, causeLabel: newCause } },
+    });
+
+    const ctx = buildFilterCtx(newCause, causeState);
+    expect(ctx.isInCooldown).toBe(false);
+    expect(filterLegalActions(ctx).length).toBeGreaterThan(0);
+  });
+
+  it("arc closure wipes ALL per-cause rows, not just the resolving one", async () => {
+    // Entity has two open per-cause budgets accumulated while RETRYING:
+    // gateway_timeout @ 1 attempt, insufficient_funds @ 2 attempts.
+    (mockedPrisma.entityWorkflowState.findUnique as jest.Mock).mockResolvedValueOnce({
+      entityId: "entity-two-causes",
+      state: "RETRYING",
+    });
+    // Simulates the DB immediately after arc closure: the entity-wide
+    // deleteMany removed every cause row (jest mocks can't model mutation,
+    // so the post-wipe read returns what Postgres would return).
+    (mockedPrisma.entityCauseState.findMany as jest.Mock).mockResolvedValue([]);
+
+    // A DNC-skipped action closes the arc: RETRYING → DO_NOT_CONTACT (terminal)
+    const event = makeEvent({ entityId: "entity-two-causes" });
+    const diagnosis = makeDiagnosis();
+    const decision = makeDecision({
+      chosenAction: "none",
+      legalActions: [],
+      reasoning: "Blocked by policy (DNC or dispute)",
+    });
+    const action: ActionResult = {
+      actionType: "none",
+      result: "skipped",
+      integration: "MOCK",
+    };
+
+    await recordAuditEntry({ event, diagnosis, decision, action });
+
+    // Wipe is entity-wide — both causes gone, not just the diagnosed one
+    expect(mockedPrisma.entityCauseState.deleteMany).toHaveBeenCalledWith({
+      where: { entityId: "entity-two-causes" },
+    });
+    // And nothing recreates a row in the same tick after arc closure
+    expect(mockedPrisma.entityCauseState.upsert).not.toHaveBeenCalled();
+
+    // Direct query confirms both rows would be gone post-wipe
+    const remaining = await prisma.entityCauseState.findMany({
+      where: { entityId: "entity-two-causes" },
+    });
+    expect(remaining).toEqual([]);
   });
 });
 

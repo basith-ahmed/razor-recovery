@@ -1,12 +1,11 @@
 /**
  * Audit Service — records the full audit trail for a processed event,
  * updates entity workflow state via the state machine, and maintains
- * Redis counters (attempts, cooldown, lastContact).
+ * per-cause attempt/cooldown/last-contact state (EntityCauseState).
  */
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
-import { redis } from "../config/redis";
 import { logError } from "../config/logger";
 import { getRuleForCause } from "../domain/policy";
 import { isTerminal, nextState, WorkflowState } from "../domain/stateMachine";
@@ -16,8 +15,6 @@ import {
   DiagnosisResult,
   EnrichedRevenueEvent,
 } from "../domain/types";
-
-const REDIS_PREFIX = "razorrecovery";
 
 /**
  * Derive outcome from the action result for audit purposes.
@@ -87,8 +84,8 @@ function cooldownTtlSeconds(causeLabel: string): number {
 /**
  * Records the full audit entry for a processed event.
  *
- * Also transitions the EntityWorkflowState and updates Redis counters
- * (attempts, cooldown, lastContact).
+ * Also transitions the EntityWorkflowState and updates per-cause
+ * attempt/cooldown/last-contact state in EntityCauseState.
  */
 export async function recordAuditEntry(params: {
   event: EnrichedRevenueEvent;
@@ -119,6 +116,8 @@ export async function recordAuditEntry(params: {
   // previous billing cycle) starts a FRESH arc: it is transitioned as if the
   // entity were at DETECTED again.
   const smOutcome = toStateMachineOutcome(action);
+  let newState: WorkflowState | null = null;
+
   if (smOutcome) {
     try {
       const existing = await prisma.entityWorkflowState.findUnique({
@@ -127,11 +126,7 @@ export async function recordAuditEntry(params: {
 
       const currentState = (existing?.state ?? "DETECTED") as WorkflowState;
       const effectiveCurrent = isTerminal(currentState) ? "DETECTED" : currentState;
-      const newState = nextState(effectiveCurrent, smOutcome);
-
-      // attemptCount tracks real contact attempts only; a skipped/failed action
-      // transitions state but does not consume attempt budget.
-      const countsAsAttempt = action.result === "success";
+      newState = nextState(effectiveCurrent, smOutcome);
 
       await prisma.entityWorkflowState.upsert({
         where: { entityId: event.entityId },
@@ -139,15 +134,21 @@ export async function recordAuditEntry(params: {
           entityId: event.entityId,
           customerId: event.customerId,
           state: newState,
-          attemptCount: countsAsAttempt ? 1 : 0,
-          lastContactedAt: now,
         },
         update: {
           state: newState,
-          ...(countsAsAttempt ? { attemptCount: { increment: 1 } } : {}),
-          lastContactedAt: now,
         },
       });
+
+      // Closing the arc for this entity wipes ALL of its per-cause
+      // attempt/cooldown history, not just the cause that just resolved — a
+      // fresh arc should start with a genuinely clean slate across every
+      // cause, matching the intent documented on isTerminal()/nextState().
+      if (isTerminal(newState)) {
+        await prisma.entityCauseState.deleteMany({
+          where: { entityId: event.entityId },
+        });
+      }
     } catch (err) {
       // Never mask a recorded audit entry behind a state-transition problem;
       // log and continue so consumers don't write spurious duplicate failures.
@@ -155,22 +156,38 @@ export async function recordAuditEntry(params: {
     }
   }
 
-  // 3. Update Redis counters — only for actions that actually executed.
-  // Skipped (DNC/policy-blocked) and failed actions are not recovery attempts
-  // and must not consume attempt budget or trigger cooldowns.
-  if (action.result === "success") {
-    const entityId = event.entityId;
-    const ttl = cooldownTtlSeconds(diagnosis.causeLabel);
-    await redis.set(
-      `${REDIS_PREFIX}:cooldown:${entityId}`,
-      now.toISOString(),
-      "EX",
-      ttl,
-    );
+  // 3. Per-cause attempt/cooldown tracking — only while this cause's arc is
+  // still open. If the action above just closed the arc (newState is terminal),
+  // EntityCauseState rows for this entity were already wiped, so don't recreate
+  // one in the same tick.
+  //
+  // Only successful actions consume attempt budget or trigger cooldowns;
+  // skipped (DNC/policy-blocked) and failed actions are not recovery attempts.
+  if (smOutcome && !isTerminal(newState ?? "DETECTED")) {
+    const countsAsAttempt = action.result === "success";
+    const cooldownUntil = countsAsAttempt
+      ? new Date(now.getTime() + cooldownTtlSeconds(diagnosis.causeLabel) * 1000)
+      : undefined;
 
-    await redis.set(
-      `${REDIS_PREFIX}:lastContact:${entityId}`,
-      now.toISOString(),
-    );
+    await prisma.entityCauseState.upsert({
+      where: {
+        entityId_causeLabel: {
+          entityId: event.entityId,
+          causeLabel: diagnosis.causeLabel,
+        },
+      },
+      create: {
+        entityId: event.entityId,
+        causeLabel: diagnosis.causeLabel,
+        attemptCount: countsAsAttempt ? 1 : 0,
+        lastContactedAt: now,
+        cooldownUntil,
+      },
+      update: {
+        ...(countsAsAttempt ? { attemptCount: { increment: 1 } } : {}),
+        lastContactedAt: now,
+        ...(cooldownUntil ? { cooldownUntil } : {}),
+      },
+    });
   }
 }

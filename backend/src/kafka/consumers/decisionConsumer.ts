@@ -3,8 +3,8 @@
  *
  * Subscribes to DIAGNOSES. For each message:
  * 1. Dedup via Redis SETNX
- * 2. Builds FilterContext (queries Redis for DNC/cooldown/attempts,
- *    queries Postgres for dispute flag)
+ * 2. Builds FilterContext (queries Postgres: EntityCauseState for
+ *    per-cause attempt/cooldown/last-contact, Customer DNC flag, dispute flag)
  * 3. Calls decide() from Phase 5
  * 4. Persists the Decision row
  * 5. Publishes { event, diagnosis, decision } to DECISIONS
@@ -64,23 +64,23 @@ export async function startDecisionConsumer(): Promise<void> {
           return;
         }
 
-        // Build FilterContext from Postgres + Redis.
-        // attemptCount is read from EntityWorkflowState (Postgres) — the
-        // single source of truth, reset to 0 on confirmed recovery.
-        const [cooldownVal, lastContactVal] = await Promise.all([
-          redis.get(`${REDIS_PREFIX}:cooldown:${event.entityId}`),
-          redis.get(`${REDIS_PREFIX}:lastContact:${event.entityId}`),
-        ]);
-
-        // Also check Postgres DNC flag on Customer
-        const [customer, workflowState] = await Promise.all([
+        // Build FilterContext from Postgres.
+        // Attempt/cooldown/last-contact state is scoped per
+        // (entityId, causeLabel) in EntityCauseState — each cause gets its own
+        // independent budget per policy.json. Overall lifecycle status lives
+        // separately in EntityWorkflowState.state.
+        const [customer, causeState] = await Promise.all([
           prisma.customer.findUnique({
             where: { id: event.customerId },
             select: { dncFlag: true, lifetimeValue: true },
           }),
-          prisma.entityWorkflowState.findUnique({
-            where: { entityId: event.entityId },
-            select: { attemptCount: true },
+          prisma.entityCauseState.findUnique({
+            where: {
+              entityId_causeLabel: {
+                entityId: event.entityId,
+                causeLabel: diagnosis.causeLabel,
+              },
+            },
           }),
         ]);
 
@@ -94,15 +94,18 @@ export async function startDecisionConsumer(): Promise<void> {
           isDisputed = invoice?.disputeFlag ?? false;
         }
 
+        const now = new Date();
         const isDnc = customer?.dncFlag ?? false;
-        const isInCooldown = cooldownVal !== null;
-        const attemptCount = workflowState?.attemptCount ?? 0;
+        const isInCooldown = causeState?.cooldownUntil
+          ? causeState.cooldownUntil > now
+          : false;
+        const attemptCount = causeState?.attemptCount ?? 0;
 
-        // Elapsed time since last real contact, in hours (precise) and whole
-        // days (for LLM context readability)
+        // Elapsed time since last real contact for THIS cause, in hours
+        // (precise) and whole days (for LLM context readability)
         let hoursSinceLastContact: number | undefined;
-        if (lastContactVal) {
-          const elapsedMs = Date.now() - new Date(lastContactVal).getTime();
+        if (causeState?.lastContactedAt) {
+          const elapsedMs = now.getTime() - causeState.lastContactedAt.getTime();
           if (!Number.isNaN(elapsedMs)) {
             hoursSinceLastContact = Math.max(0, elapsedMs / (1000 * 60 * 60));
           }

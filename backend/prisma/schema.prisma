@@ -163,15 +163,28 @@ model AuditEntry {
 }
 
 model EntityWorkflowState {
-  id              String        @id @default(uuid())
-  entityId        String        @unique
-  customerId      String?
-  customer        Customer?     @relation(fields: [customerId], references: [id])
-  state           WorkflowState @default(DETECTED)
-  attemptCount    Int           @default(0)
+  id         String        @id @default(uuid())
+  entityId   String        @unique
+  customerId String?
+  customer   Customer?     @relation(fields: [customerId], references: [id])
+  state      WorkflowState @default(DETECTED)
+  updatedAt  DateTime      @updatedAt
+}
+
+// Attempt/cooldown/last-contact state scoped per (entityId, causeLabel):
+// each diagnosed cause gets its own independent attempt budget and cooldown
+// window, per policy.json. Overall lifecycle status stays in EntityWorkflowState.
+model EntityCauseState {
+  id              String    @id @default(uuid())
+  entityId        String
+  causeLabel      String
+  attemptCount    Int       @default(0)
   lastContactedAt DateTime?
   cooldownUntil   DateTime?
-  updatedAt       DateTime      @updatedAt
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([entityId, causeLabel])
+  @@index([entityId])
 }
 
 model Ticket {

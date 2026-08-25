@@ -4,7 +4,6 @@ import { AddressInfo } from "net";
 import { server } from "../src/api/server";
 import { env } from "../src/config/env";
 import { prisma } from "../src/config/prisma";
-import { redis } from "../src/config/redis";
 import { seedEntities } from "../src/simulator/seedEntities";
 import { verifyWebhookSignature } from "../src/api/webhooks/razorpayWebhook";
 import { emitLiveUpdate } from "../src/api/websocket";
@@ -237,8 +236,8 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       expect(verifyWebhookSignature(payloadStr, "invalid-sig", secret)).toBe(false);
     });
 
-    it("resets entity memory on confirmed recovery (attemptCount, lastContact)", async () => {
-      // Arrange: an entity mid-recovery-arc with burned attempts
+    it("resets entity memory on confirmed recovery (per-cause attempts + cooldowns)", async () => {
+      // Arrange: an entity mid-recovery-arc with burned budgets on TWO causes
       const customer = await prisma.customer.findFirstOrThrow();
       const entityId = `entity-reset-${crypto.randomUUID().slice(0, 8)}`;
       const paymentId = `pay_reset_${crypto.randomUUID().slice(0, 8)}`;
@@ -269,11 +268,25 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
           entityId,
           customerId: customer.id,
           state: "RETRYING",
-          attemptCount: 3,
+        },
+      });
+      await prisma.entityCauseState.create({
+        data: {
+          entityId,
+          causeLabel: "gateway_timeout",
+          attemptCount: 2,
+          lastContactedAt: new Date(),
+          cooldownUntil: new Date(Date.now() + 3600 * 1000),
+        },
+      });
+      await prisma.entityCauseState.create({
+        data: {
+          entityId,
+          causeLabel: "insufficient_funds",
+          attemptCount: 1,
           lastContactedAt: new Date(),
         },
       });
-      await redis.set(`razorrecovery:lastContact:${entityId}`, new Date().toISOString());
 
       const payloadObj = {
         event: "payment.captured",
@@ -305,11 +318,15 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
         where: { entityId },
       });
       expect(state.state).toBe("RECOVERED");
-      expect(state.attemptCount).toBe(0);
-      expect(await redis.get(`razorrecovery:lastContact:${entityId}`)).toBeNull();
+      // Arc closure wipes ALL per-cause budgets, not just the resolving one
+      const remainingCauseState = await prisma.entityCauseState.findMany({
+        where: { entityId },
+      });
+      expect(remainingCauseState).toEqual([]);
 
       // Cleanup
       await prisma.auditEntry.deleteMany({ where: { eventId: event.id } });
+      await prisma.entityCauseState.deleteMany({ where: { entityId } });
       await prisma.entityWorkflowState.delete({ where: { entityId } });
       await prisma.action.delete({ where: { eventId: event.id } });
       await prisma.revenueEvent.delete({ where: { id: event.id } });

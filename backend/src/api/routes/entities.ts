@@ -99,8 +99,21 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
     });
     const stateMap = new Map(workflowStates.map((s) => [s.entityId, s]));
 
+    // Attempt/last-contact state is scoped per (entityId, causeLabel); resolve
+    // each event against ITS OWN diagnosed cause.
+    const causeStates = await prisma.entityCauseState.findMany({
+      where: { entityId: { in: entityIds } },
+    });
+    const causeStateMap = new Map(
+      causeStates.map((c) => [`${c.entityId}|${c.causeLabel}`, c]),
+    );
+
     const result = events.map((event) => {
       const stateRow = stateMap.get(event.entityId);
+      const eventCause = event.diagnosis?.causeLabel ?? null;
+      const causeStateRow = eventCause
+        ? causeStateMap.get(`${event.entityId}|${eventCause}`)
+        : undefined;
       return {
         id: event.id,
         entityType: event.entityType,
@@ -121,8 +134,8 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         actionIntegration: event.action?.integration ?? null,
         razorpayPaymentId: event.razorpayPaymentId ?? null,
         razorpayOrderId: event.razorpayOrderId ?? null,
-        lastContactedAt: stateRow?.lastContactedAt?.toISOString() ?? null,
-        attemptCount: stateRow?.attemptCount ?? 0,
+        lastContactedAt: causeStateRow?.lastContactedAt?.toISOString() ?? null,
+        attemptCount: causeStateRow?.attemptCount ?? 0,
       };
     });
 
