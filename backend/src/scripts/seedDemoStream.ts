@@ -23,7 +23,6 @@
  */
 
 import { prisma } from "../config/prisma";
-import { redis } from "../config/redis";
 import { connectProducer, disconnectProducer, publish } from "../kafka/producer";
 import { TOPICS } from "../kafka/topics";
 import { injectFailure } from "../simulator/injectFailure";
@@ -121,15 +120,30 @@ async function main() {
   await sleep(INTERVAL_MS);
 
   // Beat 7: hard write-off — entity has already burned max attempts (3 of 3).
-  // Preset the compliance counter so policy allows only escalation/write-off.
+  // attemptCount lives in EntityWorkflowState (Postgres, the single source of
+  // truth), keyed by the invoice's entityId so the preset matches the event.
   const writeOffCustomer = await pickCustomer({
     where: {
       dncFlag: false,
       invoices: { some: { status: "open", disputeFlag: false } },
     },
   });
-  const exhaustedEntityId = `inv-${writeOffCustomer.id}`;
-  await redis.set(`razorrecovery:attempts:${exhaustedEntityId}`, "3");
+  const exhaustedInvoice = await prisma.invoice.findFirst({
+    where: { customerId: writeOffCustomer.id, status: "open", disputeFlag: false },
+    orderBy: { dueDate: "asc" },
+  });
+  if (!exhaustedInvoice)
+    throw new Error("Write-off beat: customer has no open invoice.");
+  await prisma.entityWorkflowState.upsert({
+    where: { entityId: exhaustedInvoice.id },
+    update: { attemptCount: 3 },
+    create: {
+      entityId: exhaustedInvoice.id,
+      customerId: writeOffCustomer.id,
+      state: "DETECTED",
+      attemptCount: 3,
+    },
+  });
   const writeOff = await injectFailure("payment_failed", writeOffCustomer.id);
   await emit(writeOff);
   await sleep(INTERVAL_MS);

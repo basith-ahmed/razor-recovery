@@ -4,6 +4,7 @@ import { AddressInfo } from "net";
 import { server } from "../src/api/server";
 import { env } from "../src/config/env";
 import { prisma } from "../src/config/prisma";
+import { redis } from "../src/config/redis";
 import { seedEntities } from "../src/simulator/seedEntities";
 import { verifyWebhookSignature } from "../src/api/webhooks/razorpayWebhook";
 import { emitLiveUpdate } from "../src/api/websocket";
@@ -234,6 +235,84 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
 
       expect(verifyWebhookSignature(payloadStr, validSignature, secret)).toBe(true);
       expect(verifyWebhookSignature(payloadStr, "invalid-sig", secret)).toBe(false);
+    });
+
+    it("resets entity memory on confirmed recovery (attemptCount, lastContact)", async () => {
+      // Arrange: an entity mid-recovery-arc with burned attempts
+      const customer = await prisma.customer.findFirstOrThrow();
+      const entityId = `entity-reset-${crypto.randomUUID().slice(0, 8)}`;
+      const paymentId = `pay_reset_${crypto.randomUUID().slice(0, 8)}`;
+
+      const event = await prisma.revenueEvent.create({
+        data: {
+          entityType: "INVOICE",
+          entityId,
+          customerId: customer.id,
+          eventType: "PAYMENT_FAILED",
+          amount: 999,
+          currency: "INR",
+          occurredAt: new Date(),
+          razorpayPaymentId: paymentId,
+          rawPayload: { event: "payment.failed" },
+        },
+      });
+      await prisma.action.create({
+        data: {
+          eventId: event.id,
+          actionType: "send_reminder",
+          result: "success",
+          integration: "EMAIL",
+        },
+      });
+      await prisma.entityWorkflowState.create({
+        data: {
+          entityId,
+          customerId: customer.id,
+          state: "RETRYING",
+          attemptCount: 3,
+          lastContactedAt: new Date(),
+        },
+      });
+      await redis.set(`razorrecovery:lastContact:${entityId}`, new Date().toISOString());
+
+      const payloadObj = {
+        event: "payment.captured",
+        payload: {
+          payment: {
+            entity: { id: paymentId, order_id: `order_${paymentId}`, amount: 99900 },
+          },
+        },
+      };
+      const payloadStr = JSON.stringify(payloadObj);
+      const signature = crypto
+        .createHmac("sha256", env.RAZORPAY_WEBHOOK_SECRET)
+        .update(payloadStr)
+        .digest("hex");
+
+      // Act
+      const res = await fetch(`${baseUrl}/webhooks/razorpay`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-razorpay-signature": signature,
+        },
+        body: payloadStr,
+      });
+
+      // Assert
+      expect(res.status).toBe(200);
+      const state = await prisma.entityWorkflowState.findUniqueOrThrow({
+        where: { entityId },
+      });
+      expect(state.state).toBe("RECOVERED");
+      expect(state.attemptCount).toBe(0);
+      expect(await redis.get(`razorrecovery:lastContact:${entityId}`)).toBeNull();
+
+      // Cleanup
+      await prisma.auditEntry.deleteMany({ where: { eventId: event.id } });
+      await prisma.entityWorkflowState.delete({ where: { entityId } });
+      await prisma.action.delete({ where: { eventId: event.id } });
+      await prisma.revenueEvent.delete({ where: { id: event.id } });
     });
 
     it("processes validly-signed payment.captured webhook correctly", async () => {

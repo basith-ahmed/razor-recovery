@@ -58,6 +58,15 @@ export function canTransition(
 }
 
 /**
+ * Terminal states close one recovery ARC for an entity. For recurring entities
+ * (e.g. subscriptions) a later billing cycle starts a NEW arc: callers treat a
+ * new event on a terminal-state entity as beginning again from DETECTED.
+ */
+export function isTerminal(state: WorkflowState): boolean {
+  return ALLOWED_TRANSITIONS[state].length === 0;
+}
+
+/**
  * Maps an action outcome string to the next WorkflowState.
  * Throws if the resulting transition is not in ALLOWED_TRANSITIONS.
  */

@@ -423,7 +423,7 @@ describe("auditService", () => {
     expect(upsertCall.create.state).toBe("DO_NOT_CONTACT");
   });
 
-  it("updates Redis counters (attempts, cooldown, lastContact)", async () => {
+  it("updates Redis counters (cooldown, lastContact) for an executed action", async () => {
     const event = makeEvent();
     const diagnosis = makeDiagnosis();
     const decision = makeDecision();
@@ -435,7 +435,6 @@ describe("auditService", () => {
 
     await recordAuditEntry({ event, diagnosis, decision, action });
 
-    expect(mockedRedis.incr).toHaveBeenCalledWith("razorrecovery:attempts:entity-1");
     expect(mockedRedis.set).toHaveBeenCalledWith(
       "razorrecovery:cooldown:entity-1",
       expect.any(String),
@@ -446,6 +445,56 @@ describe("auditService", () => {
       "razorrecovery:lastContact:entity-1",
       expect.any(String),
     );
+  });
+
+  it("does not consume attempt budget or set counters for a skipped action", async () => {
+    const event = makeEvent();
+    const diagnosis = makeDiagnosis();
+    const decision = makeDecision({
+      chosenAction: "none",
+      legalActions: [],
+      reasoning: "Blocked by policy (DNC or dispute)",
+    });
+    const action: ActionResult = {
+      actionType: "none",
+      result: "skipped",
+      integration: "MOCK",
+    };
+
+    await recordAuditEntry({ event, diagnosis, decision, action });
+
+    expect(mockedRedis.set).not.toHaveBeenCalled();
+    const upsertCall = (mockedPrisma.entityWorkflowState.upsert as jest.Mock).mock
+      .calls[0][0];
+    expect(upsertCall.create.attemptCount).toBe(0);
+    expect(upsertCall.update.attemptCount).toBeUndefined();
+  });
+
+  it("starts a fresh arc when a new event arrives on a terminal-state entity", async () => {
+    // A subscription recovered last billing cycle is RECOVERED (terminal);
+    // this month's failure must transition from DETECTED, not throw.
+    (mockedPrisma.entityWorkflowState.findUnique as jest.Mock).mockResolvedValueOnce({
+      entityId: "entity-1",
+      state: "RECOVERED",
+      attemptCount: 0,
+    });
+
+    const event = makeEvent();
+    const diagnosis = makeDiagnosis();
+    const decision = makeDecision();
+    const action: ActionResult = {
+      actionType: "retry_payment",
+      result: "success",
+      integration: "RAZORPAY",
+    };
+
+    await recordAuditEntry({ event, diagnosis, decision, action });
+
+    const upsertCall = (mockedPrisma.entityWorkflowState.upsert as jest.Mock).mock
+      .calls[0][0];
+    // retry_initiated computed from the fresh DETECTED arc → RETRYING
+    expect(upsertCall.update.state).toBe("RETRYING");
+    expect(upsertCall.update.attemptCount).toEqual({ increment: 1 });
   });
 
   it("derives outcome 'escalated' for escalate_to_human action", async () => {

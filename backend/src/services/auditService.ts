@@ -7,8 +7,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
+import { logError } from "../config/logger";
 import { getRuleForCause } from "../domain/policy";
-import { nextState, WorkflowState } from "../domain/stateMachine";
+import { isTerminal, nextState, WorkflowState } from "../domain/stateMachine";
 import {
   ActionResult,
   DecisionResult,
@@ -113,47 +114,63 @@ export async function recordAuditEntry(params: {
     },
   });
 
-  // 2. Update EntityWorkflowState via state machine
+  // 2. Update EntityWorkflowState via state machine.
+  // A new event on a terminal-state entity (e.g. RECOVERED subscription from a
+  // previous billing cycle) starts a FRESH arc: it is transitioned as if the
+  // entity were at DETECTED again.
   const smOutcome = toStateMachineOutcome(action);
   if (smOutcome) {
-    const existing = await prisma.entityWorkflowState.findUnique({
-      where: { entityId: event.entityId },
-    });
+    try {
+      const existing = await prisma.entityWorkflowState.findUnique({
+        where: { entityId: event.entityId },
+      });
 
-    const currentState = (existing?.state ?? "DETECTED") as WorkflowState;
-    const newState = nextState(currentState, smOutcome);
+      const currentState = (existing?.state ?? "DETECTED") as WorkflowState;
+      const effectiveCurrent = isTerminal(currentState) ? "DETECTED" : currentState;
+      const newState = nextState(effectiveCurrent, smOutcome);
 
-    await prisma.entityWorkflowState.upsert({
-      where: { entityId: event.entityId },
-      create: {
-        entityId: event.entityId,
-        customerId: event.customerId,
-        state: newState,
-        attemptCount: 1,
-        lastContactedAt: now,
-      },
-      update: {
-        state: newState,
-        attemptCount: { increment: 1 },
-        lastContactedAt: now,
-      },
-    });
+      // attemptCount tracks real contact attempts only; a skipped/failed action
+      // transitions state but does not consume attempt budget.
+      const countsAsAttempt = action.result === "success";
+
+      await prisma.entityWorkflowState.upsert({
+        where: { entityId: event.entityId },
+        create: {
+          entityId: event.entityId,
+          customerId: event.customerId,
+          state: newState,
+          attemptCount: countsAsAttempt ? 1 : 0,
+          lastContactedAt: now,
+        },
+        update: {
+          state: newState,
+          ...(countsAsAttempt ? { attemptCount: { increment: 1 } } : {}),
+          lastContactedAt: now,
+        },
+      });
+    } catch (err) {
+      // Never mask a recorded audit entry behind a state-transition problem;
+      // log and continue so consumers don't write spurious duplicate failures.
+      logError("audit", err);
+    }
   }
 
-  // 3. Update Redis counters
-  const entityId = event.entityId;
-  await redis.incr(`${REDIS_PREFIX}:attempts:${entityId}`);
+  // 3. Update Redis counters — only for actions that actually executed.
+  // Skipped (DNC/policy-blocked) and failed actions are not recovery attempts
+  // and must not consume attempt budget or trigger cooldowns.
+  if (action.result === "success") {
+    const entityId = event.entityId;
+    const ttl = cooldownTtlSeconds(diagnosis.causeLabel);
+    await redis.set(
+      `${REDIS_PREFIX}:cooldown:${entityId}`,
+      now.toISOString(),
+      "EX",
+      ttl,
+    );
 
-  const ttl = cooldownTtlSeconds(diagnosis.causeLabel);
-  await redis.set(
-    `${REDIS_PREFIX}:cooldown:${entityId}`,
-    now.toISOString(),
-    "EX",
-    ttl,
-  );
-
-  await redis.set(
-    `${REDIS_PREFIX}:lastContact:${entityId}`,
-    now.toISOString(),
-  );
+    await redis.set(
+      `${REDIS_PREFIX}:lastContact:${entityId}`,
+      now.toISOString(),
+    );
+  }
 }

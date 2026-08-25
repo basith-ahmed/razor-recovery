@@ -3,6 +3,7 @@ import { Router, Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { env } from "../../config/env";
 import { prisma } from "../../config/prisma";
+import { redis } from "../../config/redis";
 import { emitLiveUpdate } from "../websocket";
 
 export const razorpayWebhookRouter = Router();
@@ -88,18 +89,28 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
       }
 
       if (event) {
-        // Transition EntityWorkflowState to RECOVERED
+        // Recovery closes this recovery ARC: reset per-entity memory so the
+        // next billing cycle (or a new failure on the same entity) starts
+        // fresh instead of inheriting stale attempt counts. The cooldown key
+        // is left to expire naturally.
+        await redis.del(
+          `razorrecovery:attempts:${event.entityId}`,
+          `razorrecovery:lastContact:${event.entityId}`,
+        );
+
+        // Transition EntityWorkflowState to RECOVERED with a clean attempt count
         await prisma.entityWorkflowState.upsert({
           where: { entityId: event.entityId },
           create: {
             entityId: event.entityId,
             customerId: event.customerId,
             state: "RECOVERED",
-            attemptCount: 1,
+            attemptCount: 0,
             lastContactedAt: new Date(),
           },
           update: {
             state: "RECOVERED",
+            attemptCount: 0,
           },
         });
 

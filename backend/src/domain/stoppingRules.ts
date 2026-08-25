@@ -15,6 +15,8 @@ export interface FilterContext {
   isInCooldown: boolean;
   daysOverdue?: number;
   daysSinceLastContact?: number;
+  /** Precise elapsed hours since last contact; preferred over days when present. */
+  hoursSinceLastContact?: number;
 }
 
 export function filterLegalActions(ctx: FilterContext): string[] {
@@ -89,11 +91,12 @@ function applyStoppingConditions(
     }
   }
 
-  // noResponseWithinHours: if daysSinceLastContact exceeds the threshold,
+  // noResponseWithinHours: if time since last contact exceeds the threshold,
   // apply the timeout action
   if (stopping.noResponseWithinHours !== undefined) {
     const hoursThreshold = stopping.noResponseWithinHours;
     const hoursSinceLastContact =
+      ctx.hoursSinceLastContact ??
       (ctx.daysSinceLastContact ?? 0) * 24;
     if (hoursSinceLastContact >= hoursThreshold) {
       if (stopping.onTimeoutAction === "stop") {

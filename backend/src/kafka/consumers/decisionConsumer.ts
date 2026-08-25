@@ -64,20 +64,25 @@ export async function startDecisionConsumer(): Promise<void> {
           return;
         }
 
-        // Build FilterContext from Redis + Postgres
-        const [isDncMember, cooldownVal, attemptsStr, lastContactVal] =
-          await Promise.all([
-            redis.sismember(`${REDIS_PREFIX}:dnc:set`, event.customerId),
-            redis.get(`${REDIS_PREFIX}:cooldown:${event.entityId}`),
-            redis.get(`${REDIS_PREFIX}:attempts:${event.entityId}`),
-            redis.get(`${REDIS_PREFIX}:lastContact:${event.entityId}`),
-          ]);
+        // Build FilterContext from Postgres + Redis.
+        // attemptCount is read from EntityWorkflowState (Postgres) — the
+        // single source of truth, reset to 0 on confirmed recovery.
+        const [cooldownVal, lastContactVal] = await Promise.all([
+          redis.get(`${REDIS_PREFIX}:cooldown:${event.entityId}`),
+          redis.get(`${REDIS_PREFIX}:lastContact:${event.entityId}`),
+        ]);
 
         // Also check Postgres DNC flag on Customer
-        const customer = await prisma.customer.findUnique({
-          where: { id: event.customerId },
-          select: { dncFlag: true, lifetimeValue: true },
-        });
+        const [customer, workflowState] = await Promise.all([
+          prisma.customer.findUnique({
+            where: { id: event.customerId },
+            select: { dncFlag: true, lifetimeValue: true },
+          }),
+          prisma.entityWorkflowState.findUnique({
+            where: { entityId: event.entityId },
+            select: { attemptCount: true },
+          }),
+        ]);
 
         // Check dispute flag on the entity (Invoice-specific)
         let isDisputed = false;
@@ -89,18 +94,23 @@ export async function startDecisionConsumer(): Promise<void> {
           isDisputed = invoice?.disputeFlag ?? false;
         }
 
-        const isDnc = isDncMember === 1 || (customer?.dncFlag ?? false);
+        const isDnc = customer?.dncFlag ?? false;
         const isInCooldown = cooldownVal !== null;
-        const attemptCount = attemptsStr ? parseInt(attemptsStr, 10) : 0;
+        const attemptCount = workflowState?.attemptCount ?? 0;
 
-        // Compute daysSinceLastContact
-        let daysSinceLastContact = 0;
+        // Elapsed time since last real contact, in hours (precise) and whole
+        // days (for LLM context readability)
+        let hoursSinceLastContact: number | undefined;
         if (lastContactVal) {
-          const lastContactDate = new Date(lastContactVal);
-          daysSinceLastContact = Math.floor(
-            (Date.now() - lastContactDate.getTime()) / (1000 * 60 * 60 * 24),
-          );
+          const elapsedMs = Date.now() - new Date(lastContactVal).getTime();
+          if (!Number.isNaN(elapsedMs)) {
+            hoursSinceLastContact = Math.max(0, elapsedMs / (1000 * 60 * 60));
+          }
         }
+        const daysSinceLastContact =
+          hoursSinceLastContact !== undefined
+            ? Math.floor(hoursSinceLastContact / 24)
+            : 0;
 
         // Extract daysOverdue from rawPayload if present
         const rawPayload = event.rawPayload as Record<string, unknown>;
@@ -118,6 +128,9 @@ export async function startDecisionConsumer(): Promise<void> {
           isInCooldown,
           daysOverdue,
           daysSinceLastContact,
+          ...(hoursSinceLastContact !== undefined
+            ? { hoursSinceLastContact }
+            : {}),
         };
 
         // Count prior failures for entity context
