@@ -75,7 +75,8 @@ export async function decide(
   try {
     rawResponse = await requestDecision(payload);
   } catch (err) {
-    console.error("Gemini decision request failed; using deterministic fallback.", err);
+    logError("decision", err);
+    console.error("[decision] LLM decision request failed; using deterministic fallback.");
     return {
       legalActions,
       chosenAction: legalActions[0],
@@ -92,7 +93,7 @@ export async function decide(
 
   if (chosenAction !== output.chosen_action) {
     console.error(
-      `[decision] Gemini chose action "${output.chosen_action}" outside the legal set [${legalActions.join(", ")}]; using deterministic fallback.`,
+      `[decision] LLM chose action "${output.chosen_action}" outside the legal set [${legalActions.join(", ")}]; using deterministic fallback.`,
     );
   }
 

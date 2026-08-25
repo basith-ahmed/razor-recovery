@@ -3,7 +3,7 @@
  * persists the Action record, and returns the ActionResult.
  *
  * Contains draftRecoveryEmail(), the third AI touchpoint (alongside diagnosis
- * and decision), which asks Gemini for email copy in a billing-recovery tone.
+ * and decision), which asks the LLM for email copy in a billing-recovery tone.
  */
 
 import { requestJson } from "../config/openai";
@@ -106,7 +106,7 @@ function parseEmailDraftJson(raw: string): { subject: string; paragraphs: string
 }
 
 /**
- * AI Touchpoint #3: Drafts recovery email copy using Gemini.
+ * AI Touchpoint #3: Drafts recovery email copy using the LLM.
  * Kept as a separate, clearly-labeled function for easy identification.
  */
 export async function draftRecoveryEmail(
@@ -141,10 +141,10 @@ export async function draftRecoveryEmail(
       return { subject: parsed.subject, html };
     }
 
-    console.warn(`[executor] Gemini returned unrepairable non-standard email JSON. Using fallback.`);
+    console.warn(`[executor] LLM returned unrepairable non-standard email JSON. Using fallback.`);
     return fallbackEmail(customerName, event.amount, paymentUrl);
   } catch (error) {
-    console.warn(`[executor] Gemini request unavailable; using fallback email copy.`);
+    console.warn(`[executor] LLM request unavailable; using fallback email copy.`);
     return fallbackEmail(customerName, event.amount, paymentUrl);
   }
 }

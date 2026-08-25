@@ -30,13 +30,13 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().min(1),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1),
 
-  // Gemini API, accessed through the OpenAI-compatible SDK endpoint
+  // LLM via OpenRouter (OpenAI-compatible Chat Completions endpoint)
   LLM_API_KEY: z.string().min(1),
-  LLM_MODEL: z.string().default("gemini-3.7-flash"),
+  LLM_MODEL: z.string().default("openrouter/free"),
   LLM_BASE_URL: z
     .string()
     .url()
-    .default("https://generativelanguage.googleapis.com/v1beta/openai/"),
+    .default("https://openrouter.ai/api/v1"),
 
   // Email (Mailhog)
   SMTP_HOST: z.string().min(1),

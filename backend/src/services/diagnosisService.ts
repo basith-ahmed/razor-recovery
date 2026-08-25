@@ -118,14 +118,14 @@ export async function diagnose(
     const first = toResult(parseJson(raw1) ?? {});
     if (first) return first;
 
-    console.error("Gemini returned an invalid diagnosis label; retrying with correction.");
+    console.error("LLM returned an invalid diagnosis label; retrying with correction.");
     const raw2 = await requestDiagnosis(
       `${payload}\n\nCorrection: return a JSON object whose cause_label is exactly one of the allowed labels.`,
     );
     const corrected = toResult(parseJson(raw2) ?? {});
     if (corrected) return corrected;
   } catch (err) {
-    console.error("Gemini diagnosis request failed; applying fallback rule diagnosis.");
+    console.error("LLM diagnosis request failed; applying fallback rule diagnosis.");
     return {
       causeLabel: "no_reason_signal",
       confidence: 0.5,
@@ -134,6 +134,6 @@ export async function diagnose(
     };
   }
 
-  console.error("Gemini returned an invalid diagnosis label after correction; using unknown.");
+  console.error("LLM returned an invalid diagnosis label after correction; using unknown.");
   return { causeLabel: "unknown", confidence: 0, method: "LLM", reasoning: "Model output was invalid." };
 }
