@@ -104,6 +104,7 @@ export async function recordAuditEntry(params: {
       entityId: event.entityId,
       actor: "system",
       inputSnapshot: event as unknown as Prisma.InputJsonValue,
+      diagnosisSnapshot: diagnosis as unknown as Prisma.InputJsonValue,
       decisionSnapshot: decision as unknown as Prisma.InputJsonValue,
       actionSnapshot: action as unknown as Prisma.InputJsonValue,
       outcome,

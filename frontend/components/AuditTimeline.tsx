@@ -84,6 +84,65 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
               </button>
             </div>
 
+            {/* Pipeline summary: detection → diagnosis → decision → action */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-xs">
+              <div className="border border-slate-200 rounded p-2">
+                <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                  Detection
+                </div>
+                <div className="text-slate-700">
+                  Risk:{" "}
+                  {typeof entry.inputSnapshot?.riskScore === "number"
+                    ? (entry.inputSnapshot.riskScore as number).toFixed(3)
+                    : "N/A"}
+                  {typeof entry.inputSnapshot?.urgency === "number" && (
+                    <> · Urgency: {(entry.inputSnapshot.urgency as number).toFixed(2)}</>
+                  )}
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded p-2">
+                <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                  Diagnosis
+                </div>
+                <div className="text-slate-700">
+                  {entry.event?.diagnosis ? (
+                    <>
+                      <span className="font-mono">{entry.event.diagnosis.causeLabel}</span>{" "}
+                      ({entry.event.diagnosis.method}
+                      {typeof entry.event.diagnosis.confidence === "number" &&
+                        `, ${(entry.event.diagnosis.confidence * 100).toFixed(0)}%`}
+                      )
+                    </>
+                  ) : (
+                    "N/A"
+                  )}
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded p-2">
+                <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                  Decision
+                </div>
+                <div className="text-slate-700">
+                  {typeof entry.decisionSnapshot?.chosenAction === "string"
+                    ? `${entry.decisionSnapshot.chosenAction} (${(entry.decisionSnapshot.legalActions as string[])?.length ?? 0} legal)`
+                    : "N/A"}
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded p-2">
+                <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                  Action
+                </div>
+                <div className="text-slate-700">
+                  {entry.actionSnapshot
+                    ? `${entry.actionSnapshot.actionType} · ${entry.actionSnapshot.result} · ${entry.actionSnapshot.integration}`
+                    : "Not executed (failed before action)"}
+                </div>
+              </div>
+            </div>
+
             {/* PROMINENT REASONING CALLOUT - Primary design requirement */}
             {reasoning && (
               <div className="my-3 bg-blue-50/60 border-l-4 border-blue-500 p-4 rounded-r-lg">
@@ -125,6 +184,14 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                     <h5 className="text-xs font-mono font-semibold text-slate-400 mb-1">inputSnapshot:</h5>
                     <pre className="bg-slate-50 p-3 rounded text-[11px] font-mono text-emerald-800 overflow-x-auto border border-slate-200">
                       {JSON.stringify(entry.inputSnapshot, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {entry.diagnosisSnapshot && (
+                  <div>
+                    <h5 className="text-xs font-mono font-semibold text-slate-400 mb-1">diagnosisSnapshot:</h5>
+                    <pre className="bg-slate-50 p-3 rounded text-[11px] font-mono text-amber-800 overflow-x-auto border border-slate-200">
+                      {JSON.stringify(entry.diagnosisSnapshot, null, 2)}
                     </pre>
                   </div>
                 )}

@@ -70,6 +70,7 @@ export interface AuditEntry {
   actor: string;
   outcome: string;
   inputSnapshot: Record<string, unknown>;
+  diagnosisSnapshot: Record<string, unknown> | null;
   decisionSnapshot: Record<string, unknown> | null;
   actionSnapshot: Record<string, unknown> | null;
   timestamp: string;
@@ -80,6 +81,12 @@ export interface AuditEntry {
     eventType: string;
     amount: number;
     currency: string;
+    diagnosis?: {
+      causeLabel: string;
+      confidence: number;
+      method: string;
+      reasoning?: string | null;
+    } | null;
     customer?: {
       id: string;
       name: string;

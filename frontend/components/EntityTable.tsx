@@ -221,7 +221,7 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                   <td className="p-3 text-right">
                     <Link
                       href={`/entities/${item.id}`}
-                      className="bg-blue-600 hover:bg-blue-500 text-slate-900 text-[11px] font-medium px-2.5 py-1 rounded transition-colors"
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium px-2.5 py-1 rounded transition-colors"
                     >
                       Audit Trail →
                     </Link>

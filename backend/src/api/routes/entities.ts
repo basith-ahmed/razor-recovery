@@ -164,7 +164,7 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       orderBy: { timestamp: "asc" },
       include: {
         event: {
-          include: { customer: true },
+          include: { customer: true, diagnosis: true },
         },
       },
     });

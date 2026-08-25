@@ -84,6 +84,10 @@ export async function startExecutorConsumer(): Promise<void> {
                 entityId: payload.event.entityId,
                 actor: "system",
                 inputSnapshot: payload.event as unknown as Prisma.InputJsonValue,
+                // The decision was made before execution failed — keep it in
+                // the trail so the entity page shows the full context.
+                diagnosisSnapshot: payload.diagnosis as unknown as Prisma.InputJsonValue,
+                decisionSnapshot: payload.decision as unknown as Prisma.InputJsonValue,
                 outcome: "failed",
                 timestamp: new Date(),
               },

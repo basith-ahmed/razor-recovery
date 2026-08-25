@@ -190,6 +190,7 @@ export async function startDecisionConsumer(): Promise<void> {
                 entityId: payload.event.entityId,
                 actor: "system",
                 inputSnapshot: payload.event as unknown as Prisma.InputJsonValue,
+                diagnosisSnapshot: payload.diagnosis as unknown as Prisma.InputJsonValue,
                 outcome: "failed",
                 timestamp: new Date(),
               },

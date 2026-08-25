@@ -150,16 +150,17 @@ model Action {
 }
 
 model AuditEntry {
-  id               String       @id @default(uuid())
-  eventId          String
-  event            RevenueEvent @relation(fields: [eventId], references: [id])
-  entityId         String
-  actor            String
-  inputSnapshot    Json
-  decisionSnapshot Json?
-  actionSnapshot   Json?
-  outcome          String
-  timestamp        DateTime     @default(now())
+  id                String       @id @default(uuid())
+  eventId           String
+  event             RevenueEvent @relation(fields: [eventId], references: [id])
+  entityId          String
+  actor             String
+  inputSnapshot     Json
+  diagnosisSnapshot Json?
+  decisionSnapshot  Json?
+  actionSnapshot    Json?
+  outcome           String
+  timestamp         DateTime     @default(now())
 }
 
 model EntityWorkflowState {
