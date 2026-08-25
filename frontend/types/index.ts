@@ -32,6 +32,7 @@ export interface EntityItem {
   occurredAt: string;
   riskScore: number | null;
   state: string;
+  stage: "DETECTED" | "DIAGNOSED" | "DECIDED" | "EXECUTED";
   causeLabel: string | null;
   diagnosisMethod: string | null;
   actionType: string | null;

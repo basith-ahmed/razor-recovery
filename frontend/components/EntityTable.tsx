@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { EntityItem, EntityFilters } from "../types";
 
 interface EntityTableProps {
@@ -22,7 +22,15 @@ const STATE_BADGES: Record<string, string> = {
   DO_NOT_CONTACT: "bg-white text-slate-500 border-slate-300",
 };
 
+const STAGE_BADGES: Record<string, string> = {
+  DETECTED: "bg-slate-100 text-slate-600 border-slate-300",
+  DIAGNOSED: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  DECIDED: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  EXECUTED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+};
+
 export function EntityTable({ entities, filters, pagination, onFilterChange, loading }: EntityTableProps) {
+  const router = useRouter();
   const handleSortToggle = (field: string) => {
     let newSort = `${field}_desc`;
     if (filters.sort === `${field}_desc`) {
@@ -152,6 +160,7 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                 Amount {filters.sort?.startsWith("amount") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
               </th>
               <th className="p-3 font-medium">State</th>
+              <th className="p-3 font-medium">Stage</th>
               <th className="p-3 font-medium">Diagnosis Cause</th>
               <th
                 className="p-3 font-medium cursor-pointer hover:text-slate-900"
@@ -166,7 +175,6 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
               >
                 Occurred At {filters.sort?.startsWith("occurredAt") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
               </th>
-              <th className="p-3 font-medium text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200/60">
@@ -184,7 +192,18 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
               </tr>
             ) : (
               entities.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-100/50 transition-colors">
+                <tr
+                  key={item.id}
+                  className="cursor-pointer hover:bg-slate-100/50 transition-colors"
+                  onClick={() => router.push(`/entities/${item.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      router.push(`/entities/${item.id}`);
+                    }
+                  }}
+                  tabIndex={0}
+                  aria-label={`Open audit trail for ${item.customerName}`}
+                >
                   <td className="p-3">
                     <div className="font-semibold text-slate-900">{item.customerName}</div>
                     <div className="text-slate-400 text-[11px] font-mono">{item.customerEmail}</div>
@@ -202,6 +221,11 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                       {item.state}
                     </span>
                   </td>
+                  <td className="p-3">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${STAGE_BADGES[item.stage] || STAGE_BADGES.DETECTED}`}>
+                      {item.stage}
+                    </span>
+                  </td>
                   <td className="p-3 text-slate-700">
                     {item.causeLabel || <span className="text-slate-500 font-italic">Unassigned</span>}
                   </td>
@@ -217,14 +241,6 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                   <td className="p-3 font-mono text-slate-700">{item.attemptCount}</td>
                   <td className="p-3 text-slate-400 font-mono">
                     {new Date(item.occurredAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
-                  </td>
-                  <td className="p-3 text-right">
-                    <Link
-                      href={`/entities/${item.id}`}
-                      className="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium px-2.5 py-1 rounded transition-colors"
-                    >
-                      Audit Trail →
-                    </Link>
                   </td>
                 </tr>
               ))

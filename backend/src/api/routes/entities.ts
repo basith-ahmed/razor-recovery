@@ -114,6 +114,17 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
       const causeStateRow = eventCause
         ? causeStateMap.get(`${event.entityId}|${eventCause}`)
         : undefined;
+      // Pipeline progress for THIS event, derived from which stage rows
+      // exist yet. Independent of EntityWorkflowState, which only moves when
+      // the audit consumer records the action's outcome.
+      const stage = event.action
+        ? "EXECUTED"
+        : event.decision
+          ? "DECIDED"
+          : event.diagnosis
+            ? "DIAGNOSED"
+            : "DETECTED";
+
       return {
         id: event.id,
         entityType: event.entityType,
@@ -127,6 +138,7 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         occurredAt: event.occurredAt.toISOString(),
         riskScore: event.riskScore,
         state: stateRow?.state ?? "DETECTED",
+        stage,
         causeLabel: event.diagnosis?.causeLabel ?? null,
         diagnosisMethod: event.diagnosis?.method ?? null,
         actionType: event.action?.actionType ?? null,
