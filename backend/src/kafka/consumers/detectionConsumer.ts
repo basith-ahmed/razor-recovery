@@ -12,6 +12,7 @@
 import { Prisma } from "@prisma/client";
 import { kafka } from "../../config/kafka";
 import { prisma } from "../../config/prisma";
+import { logError } from "../../config/logger";
 import { redis } from "../../config/redis";
 import { computeRiskScore } from "../../domain/riskScoring";
 import { EnrichedRevenueEvent, RawRevenueEvent } from "../../domain/types";
@@ -163,10 +164,7 @@ export async function startDetectionConsumer(): Promise<void> {
           `[detection] Enriched event ${event.id} → riskScore=${riskScore}, urgency=${urgency}`,
         );
       } catch (error) {
-        console.error(
-          `[detection] Failed to process event ${event?.id ?? "unknown"}:`,
-          error,
-        );
+        logError("detection", error);
         // Write a failed audit entry so the failure is visible
         if (event) {
           try {

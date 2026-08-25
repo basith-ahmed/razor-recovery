@@ -1,4 +1,5 @@
 import { requestJson } from "../config/openai";
+import { logError, renderError } from "../config/logger";
 import { getPolicyVersion } from "../domain/policy";
 import { FilterContext, filterLegalActions } from "../domain/stoppingRules";
 import { DecisionResult, DiagnosisResult, DomainError } from "../domain/types";
@@ -39,7 +40,7 @@ async function requestDecision(input: string): Promise<string> {
       schema: decisionSchema,
     });
   } catch (cause) {
-    console.error("Gemini decision request failed.", cause);
+    logError("decision", cause);
     throw new DomainError("Unable to select a recovery action.", "LLM_DECISION_FAILED", cause);
   }
 }
@@ -90,10 +91,9 @@ export async function decide(
       : legalActions[0];
 
   if (chosenAction !== output.chosen_action) {
-    console.error("Gemini chose an action outside the legal action set; using deterministic fallback.", {
-      chosenAction: output.chosen_action,
-      legalActions,
-    });
+    console.error(
+      `[decision] Gemini chose action "${output.chosen_action}" outside the legal set [${legalActions.join(", ")}]; using deterministic fallback.`,
+    );
   }
 
   return {

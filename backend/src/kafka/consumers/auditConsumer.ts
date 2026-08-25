@@ -13,6 +13,7 @@
 import { Prisma } from "@prisma/client";
 import { kafka } from "../../config/kafka";
 import { prisma } from "../../config/prisma";
+import { logError } from "../../config/logger";
 import { redis } from "../../config/redis";
 import { recordAuditEntry } from "../../services/auditService";
 import {
@@ -73,10 +74,7 @@ export async function startAuditConsumer(): Promise<void> {
           `[audit] Event ${event.id} → audit entry recorded, published to AUDIT`,
         );
       } catch (error) {
-        console.error(
-          `[audit] Failed to process event ${payload?.event?.id ?? "unknown"}:`,
-          error,
-        );
+        logError("audit", error);
         // Attempt to write a failure audit entry as a last resort
         if (payload?.event) {
           try {

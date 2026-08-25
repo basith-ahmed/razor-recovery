@@ -13,9 +13,9 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
   let port: number;
 
   beforeAll(async () => {
-    // Seed test entities if DB is empty
+    // Seed test entities if DB has fewer customers than this suite needs
     const customerCount = await prisma.customer.count();
-    if (customerCount === 0) {
+    if (customerCount < 5) {
       await seedEntities({ customers: 20 });
     }
 

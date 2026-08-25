@@ -1,4 +1,5 @@
 import { prisma } from "../config/prisma";
+import { logError } from "../config/logger";
 import { ActionResult, DomainError } from "../domain/types";
 
 export async function escalateToHuman(
@@ -17,7 +18,7 @@ export async function escalateToHuman(
       detail: ticket.id,
     };
   } catch (error: unknown) {
-    console.error("Human escalation ticket creation failed:", error);
+    logError("ticket", error);
     throw new DomainError(
       `Unable to create a human-escalation ticket for entity ${entityId}.`,
       "TICKET_CREATION_FAILED",

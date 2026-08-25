@@ -11,6 +11,7 @@
 import { Prisma } from "@prisma/client";
 import { kafka } from "../../config/kafka";
 import { prisma } from "../../config/prisma";
+import { logError } from "../../config/logger";
 import { redis } from "../../config/redis";
 import { diagnose } from "../../services/diagnosisService";
 import { DiagnosisResult, EnrichedRevenueEvent } from "../../domain/types";
@@ -105,10 +106,7 @@ export async function startDiagnosisConsumer(): Promise<void> {
           `[diagnosis] Event ${event.id} → cause=${diagnosis.causeLabel}, method=${diagnosis.method}`,
         );
       } catch (error) {
-        console.error(
-          `[diagnosis] Failed to process event ${event?.id ?? "unknown"}:`,
-          error,
-        );
+        logError("diagnosis", error);
         if (event) {
           try {
             await prisma.auditEntry.create({

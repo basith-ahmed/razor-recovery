@@ -10,6 +10,7 @@
 import { Prisma } from "@prisma/client";
 import { kafka } from "../../config/kafka";
 import { prisma } from "../../config/prisma";
+import { logError } from "../../config/logger";
 import { redis } from "../../config/redis";
 import { executeAction } from "../../services/executorService";
 import {
@@ -74,10 +75,7 @@ export async function startExecutorConsumer(): Promise<void> {
           `[executor] Event ${event.id} → ${action.actionType} (${action.result})`,
         );
       } catch (error) {
-        console.error(
-          `[executor] Failed to process event ${payload?.event?.id ?? "unknown"}:`,
-          error,
-        );
+        logError("executor", error);
         if (payload?.event) {
           try {
             await prisma.auditEntry.create({

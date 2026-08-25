@@ -1,4 +1,5 @@
 import { requestJson } from "../config/openai";
+import { logError } from "../config/logger";
 import { CustomerHistory } from "../domain/riskScoring";
 import { DiagnosisResult, DomainError, EnrichedRevenueEvent } from "../domain/types";
 
@@ -93,7 +94,7 @@ async function requestDiagnosis(input: string): Promise<string> {
       schema: diagnosisSchema,
     });
   } catch (cause) {
-    console.error("Gemini diagnosis request failed.", cause);
+    logError("diagnosis", cause);
     throw new DomainError("Unable to diagnose revenue event.", "LLM_DIAGNOSIS_FAILED", cause);
   }
 }

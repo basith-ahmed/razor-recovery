@@ -1,5 +1,6 @@
 import { mailer } from "../config/mailer";
 import { env } from "../config/env";
+import { logError } from "../config/logger";
 import { ActionResult, DomainError } from "../domain/types";
 
 export interface RecoveryEmailParams {
@@ -26,7 +27,7 @@ export async function sendRecoveryEmail(
       emailMessageId: message.messageId,
     };
   } catch (error: unknown) {
-    console.error("Recovery email delivery failed:", error);
+    logError("email", error);
     throw new DomainError(
       `Unable to send recovery email to ${params.to}.`,
       "RECOVERY_EMAIL_DELIVERY_FAILED",

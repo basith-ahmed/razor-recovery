@@ -7,6 +7,7 @@
  */
 
 import { requestJson } from "../config/openai";
+import { logWarn } from "../config/logger";
 import { prisma } from "../config/prisma";
 import * as razorpayIntegration from "../integrations/razorpayIntegration";
 import * as emailIntegration from "../integrations/emailIntegration";
@@ -237,7 +238,8 @@ export async function executeAction(
       paymentUrl = linkResult.paymentLinkShortUrl;
       paymentLinkId = linkResult.razorpayPaymentLinkId;
     } catch (err) {
-      console.warn(`[executor] Failed to generate payment link for email, proceeding without button.`, err);
+      logWarn("executor", err);
+      console.warn("[executor] Proceeding without payment-link button in email.");
     }
 
     const { subject, html } = await draftRecoveryEmail(

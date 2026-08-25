@@ -13,6 +13,7 @@
 import { Prisma } from "@prisma/client";
 import { kafka } from "../../config/kafka";
 import { prisma } from "../../config/prisma";
+import { logError } from "../../config/logger";
 import { redis } from "../../config/redis";
 import { decide } from "../../services/decisionService";
 import {
@@ -164,10 +165,7 @@ export async function startDecisionConsumer(): Promise<void> {
           `[decision] Event ${event.id} → action=${decision.chosenAction}`,
         );
       } catch (error) {
-        console.error(
-          `[decision] Failed to process event ${payload?.event?.id ?? "unknown"}:`,
-          error,
-        );
+        logError("decision", error);
         if (payload?.event) {
           try {
             await prisma.auditEntry.create({

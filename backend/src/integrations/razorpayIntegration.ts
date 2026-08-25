@@ -1,4 +1,5 @@
 import { razorpay } from "../config/razorpay";
+import { logError } from "../config/logger";
 import { ActionResult, DomainError } from "../domain/types";
 
 export interface RecoveryPaymentLinkParams {
@@ -35,7 +36,7 @@ export async function retryPayment(orderId: string): Promise<ActionResult> {
         detail: `[SIMULATED] Order ${orderId} prepared for retry via Razorpay Checkout.`,
       };
     }
-    console.error("Razorpay order retry preparation failed:", error);
+    logError("razorpay", error);
     throw new DomainError(
       `Unable to prepare Razorpay order ${orderId} for retry.`,
       "RAZORPAY_RETRY_PREPARATION_FAILED",
@@ -71,7 +72,7 @@ export async function createRecoveryPaymentLink(
       paymentLinkShortUrl: paymentLink.short_url,
     };
   } catch (error: unknown) {
-    console.error("Razorpay recovery payment-link creation failed:", error);
+    logError("razorpay", error);
     throw new DomainError(
       "Unable to create Razorpay recovery payment link.",
       "RAZORPAY_PAYMENT_LINK_CREATION_FAILED",
