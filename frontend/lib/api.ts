@@ -7,7 +7,6 @@ import {
   EntityFilters,
   AuditEntry,
   PolicyResponse,
-  InjectStreamParams,
   PaginatedResponse,
 } from "../types";
 
@@ -22,10 +21,8 @@ export const apiClient = axios.create({
 
 export async function getMetricsSummary(
   window: MetricsWindow = "24h",
-  sourceRunId?: string,
 ): Promise<MetricsSummary> {
   const params: Record<string, string> = { window };
-  if (sourceRunId) params.sourceRunId = sourceRunId;
   const response = await apiClient.get<MetricsSummary>("/metrics/summary", { params });
   return response.data;
 }
@@ -59,10 +56,5 @@ export async function getPolicy(
   const response = await apiClient.get<PolicyResponse>("/policy", {
     params: { page, limit, dncPage, dncLimit },
   });
-  return response.data;
-}
-
-export async function injectStream(params: InjectStreamParams): Promise<{ runId: string }> {
-  const response = await apiClient.post<{ runId: string }>("/demo/inject-stream", params);
   return response.data;
 }

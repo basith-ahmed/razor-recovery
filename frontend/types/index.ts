@@ -2,7 +2,6 @@ export type MetricsWindow = "1h" | "24h" | "7d" | "all";
 
 export interface MetricsSummary {
   window: MetricsWindow;
-  sourceRunId?: string;
   amountAtRisk: number;
   amountRecovered: number;
   recoveryRate: number;
@@ -22,7 +21,6 @@ export interface TrendPoint {
 
 export interface EntityItem {
   id: string;
-  sourceRunId?: string | null;
   entityType: string;
   entityId: string;
   customerId: string;
@@ -139,17 +137,6 @@ export interface PolicyResponse {
     page: number;
     limit: number;
     totalPages: number;
-  };
-}
-
-export interface InjectStreamParams {
-  count: number;
-  intervalMs?: number;
-  mix: {
-    paymentFailed: number;
-    checkoutAbandoned: number;
-    invoiceOverdue: number;
-    subscriptionFailed: number;
   };
 }
 

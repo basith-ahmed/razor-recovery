@@ -79,9 +79,18 @@ export async function startDiagnosisConsumer(): Promise<void> {
           tenureDays,
         });
 
-        // Persist Diagnosis row
-        await prisma.diagnosis.create({
-          data: {
+        // Persist Diagnosis row.
+        // Upsert: Kafka is at-least-once, so replays after a consumer restart
+        // or rebalance must not fail on the eventId unique constraint.
+        await prisma.diagnosis.upsert({
+          where: { eventId: event.id },
+          update: {
+            causeLabel: diagnosis.causeLabel,
+            confidence: diagnosis.confidence,
+            method: diagnosis.method,
+            reasoning: diagnosis.reasoning ?? null,
+          },
+          create: {
             eventId: event.id,
             causeLabel: diagnosis.causeLabel,
             confidence: diagnosis.confidence,

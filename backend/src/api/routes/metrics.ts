@@ -13,13 +13,11 @@ function parseWindow(raw: unknown): Window {
   return WINDOWS.includes(raw as Window) ? (raw as Window) : "24h";
 }
 
-// GET /metrics/summary?window=1h|24h|7d|all&sourceRunId=
+// GET /metrics/summary?window=1h|24h|7d|all
 metricsRouter.get("/summary", async (req: Request, res: Response) => {
   try {
     const window = parseWindow(req.query.window);
-    const sourceRunId =
-      typeof req.query.sourceRunId === "string" ? req.query.sourceRunId : undefined;
-    const summary = await computeLiveMetrics(window, sourceRunId);
+    const summary = await computeLiveMetrics(window);
     return res.status(200).json(summary);
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "Failed to compute metrics summary";

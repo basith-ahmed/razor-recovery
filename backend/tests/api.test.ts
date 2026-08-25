@@ -5,26 +5,12 @@ import { server } from "../src/api/server";
 import { env } from "../src/config/env";
 import { prisma } from "../src/config/prisma";
 import { seedEntities } from "../src/simulator/seedEntities";
-import { startStreamInjection } from "../src/simulator/streamInjector";
 import { verifyWebhookSignature } from "../src/api/webhooks/razorpayWebhook";
 import { emitLiveUpdate } from "../src/api/websocket";
-
-async function waitFor(
-  predicate: () => Promise<boolean>,
-  timeoutMs = 15000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error("waitFor: condition not met within timeout");
-}
 
 describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
   let baseUrl: string;
   let port: number;
-  let testRunId: string;
 
   beforeAll(async () => {
     // Seed test entities if DB is empty
@@ -33,23 +19,30 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       await seedEntities({ customers: 20 });
     }
 
-    // Generate a test stream injection
-    const result = await startStreamInjection({
-      count: 5,
-      mix: {
-        paymentFailed: 0.4,
-        checkoutAbandoned: 0.4,
-        invoiceOverdue: 0.2,
-        subscriptionFailed: 0,
-      },
-      intervalMs: 10,
-    });
-    testRunId = result.runId;
-    await waitFor(async () =>
-      (await prisma.revenueEvent.count({
-        where: { sourceRunId: testRunId },
-      })) === 5,
-    );
+    // Create a few events so list/detail/metrics endpoints always have data.
+    // Direct DB setup: these tests exercise the HTTP layer, not ingestion.
+    const customers = await prisma.customer.findMany({ take: 5 });
+    const eventTypes = [
+      "PAYMENT_FAILED",
+      "CHECKOUT_ABANDONED",
+      "INVOICE_OVERDUE",
+      "SUBSCRIPTION_FAILED",
+      "PAYMENT_FAILED",
+    ] as const;
+    for (let i = 0; i < customers.length; i++) {
+      await prisma.revenueEvent.create({
+        data: {
+          entityType: "CUSTOMER",
+          entityId: customers[i].id,
+          customerId: customers[i].id,
+          eventType: eventTypes[i],
+          amount: 1000 + i,
+          currency: "INR",
+          occurredAt: new Date(),
+          rawPayload: { event: "test.fixture", index: i },
+        },
+      });
+    }
 
     // Start server on an ephemeral port
     await new Promise<void>((resolve) => {
@@ -79,62 +72,6 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
   });
 
   describe("8.2 — Routes", () => {
-    describe("POST /demo/inject-stream", () => {
-      it("starts a stream injection and returns runId immediately", async () => {
-        const res = await fetch(`${baseUrl}/demo/inject-stream`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            count: 4,
-            intervalMs: 10,
-            mix: {
-              paymentFailed: 0.5,
-              checkoutAbandoned: 0.5,
-              invoiceOverdue: 0,
-              subscriptionFailed: 0,
-            },
-          }),
-        });
-
-        expect(res.status).toBe(200);
-        const data = (await res.json()) as { runId: string };
-        expect(data.runId).toBeDefined();
-        expect(typeof data.runId).toBe("string");
-      });
-
-      it("returns HTTP 400 for invalid count", async () => {
-        const res = await fetch(`${baseUrl}/demo/inject-stream`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ count: -5 }),
-        });
-
-        expect(res.status).toBe(400);
-        const data = (await res.json()) as { error: string };
-        expect(data.error).toContain("positive integer");
-      });
-
-      it("returns HTTP 400 if mix proportions do not sum to 1", async () => {
-        const res = await fetch(`${baseUrl}/demo/inject-stream`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            count: 5,
-            mix: {
-              paymentFailed: 0.2,
-              checkoutAbandoned: 0.2,
-              invoiceOverdue: 0.2,
-              subscriptionFailed: 0.2,
-            },
-          }),
-        });
-
-        expect(res.status).toBe(400);
-        const data = (await res.json()) as { error: string };
-        expect(data.error).toContain("sum to 1.0");
-      });
-    });
-
     describe("GET /entities & GET /entities/:id/audit", () => {
       it("returns a filterable/sortable paginated list of entities", async () => {
         const res = await fetch(`${baseUrl}/entities?sort=amount_desc`);
@@ -221,18 +158,6 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
         expect(data.compliance).toHaveProperty("dncBlocked");
         expect(data.compliance).toHaveProperty("autoEscalated");
         expect(data.compliance).toHaveProperty("cooldownStopped");
-      });
-
-      it("scopes the summary to a sourceRunId when one is passed", async () => {
-        const res = await fetch(
-          `${baseUrl}/metrics/summary?window=all&sourceRunId=${testRunId}`,
-        );
-        expect(res.status).toBe(200);
-        const data = (await res.json()) as {
-          sourceRunId?: string;
-          amountAtRisk: number;
-        };
-        expect(data.sourceRunId).toBe(testRunId);
       });
 
       it("returns trend points from GET /metrics/trend", async () => {

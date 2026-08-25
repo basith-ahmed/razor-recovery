@@ -12,11 +12,6 @@ export type EventType =
 
 export interface RawRevenueEvent {
   id: string;
-  /**
-   * Optional demo-only tag grouping events injected by one stream-injector
-   * run. Never used by core pipeline logic; a real production event has none.
-   */
-  sourceRunId?: string;
   entityType: "CUSTOMER" | "CART" | "INVOICE" | "SUBSCRIPTION";
   entityId: string;
   customerId: string;
@@ -64,8 +59,6 @@ export type Window = "1h" | "24h" | "7d" | "all";
 
 export interface MetricsSummary {
   window: Window;
-  /** Present only when the query was scoped to a demo stream-injection run. */
-  sourceRunId?: string;
   amountAtRisk: number;
   amountRecovered: number;
   recoveryRate: number;

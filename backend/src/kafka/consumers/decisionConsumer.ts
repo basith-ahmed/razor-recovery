@@ -134,9 +134,18 @@ export async function startDecisionConsumer(): Promise<void> {
           daysSinceLastContact,
         });
 
-        // Persist Decision row
-        await prisma.decision.create({
-          data: {
+        // Persist Decision row.
+        // Upsert: Kafka is at-least-once, so replays after a consumer restart
+        // or rebalance must not fail on the eventId unique constraint.
+        await prisma.decision.upsert({
+          where: { eventId: event.id },
+          update: {
+            legalActions: decision.legalActions,
+            chosenAction: decision.chosenAction,
+            reasoning: decision.reasoning,
+            policyVersion: decision.policyVersion,
+          },
+          create: {
             eventId: event.id,
             legalActions: decision.legalActions,
             chosenAction: decision.chosenAction,

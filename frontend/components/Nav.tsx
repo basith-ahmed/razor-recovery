@@ -24,7 +24,6 @@ export function Nav() {
     { href: "/entities", label: "Entities" },
     { href: "/metrics", label: "Metrics" },
     { href: "/policy", label: "Policy & Compliance" },
-    { href: "/demo", label: "Demo" },
   ];
 
   return (

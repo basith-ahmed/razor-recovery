@@ -93,7 +93,6 @@ model Subscription {
 
 model RevenueEvent {
   id                String     @id @default(uuid())
-  sourceRunId       String?
   entityType        EntityType
   entityId          String
   customerId        String
@@ -114,8 +113,6 @@ model RevenueEvent {
   decision     Decision?
   action       Action?
   auditEntries AuditEntry[]
-
-  @@index([sourceRunId])
 }
 
 model Diagnosis {

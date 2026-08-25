@@ -16,7 +16,7 @@ jest.mock("../src/config/openai", () => ({ requestJson: jest.fn() }));
 jest.mock("../src/config/prisma", () => ({
   prisma: {
     customer: { findUnique: jest.fn() },
-    action: { create: jest.fn(), count: jest.fn() },
+    action: { create: jest.fn(), upsert: jest.fn(), count: jest.fn() },
     auditEntry: { create: jest.fn(), findMany: jest.fn() },
     entityWorkflowState: { findUnique: jest.fn(), upsert: jest.fn() },
     revenueEvent: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
@@ -255,7 +255,7 @@ describe("executorService", () => {
       expect(result.result).toBe("success");
       expect(result.integration).toBe("RAZORPAY");
       expect(result.actionType).toBe("retry_payment");
-      expect(mockedPrisma.action.create).toHaveBeenCalledTimes(1);
+      expect(mockedPrisma.action.upsert).toHaveBeenCalledTimes(1);
     });
 
     it("routes send_payment_link to razorpayIntegration.createRecoveryPaymentLink", async () => {
@@ -578,9 +578,9 @@ describe("metricsService", () => {
         cooldownStopped: 0,
       });
 
-      // Result was cached in Redis with a short TTL — no Batch row involved
+      // Result was cached in Redis with a short TTL — window is the only scope
       expect(mockedRedis.set).toHaveBeenCalledWith(
-        "razorrecovery:metrics:all:all",
+        "razorrecovery:metrics:all",
         expect.any(String),
         "EX",
         expect.any(Number),
@@ -588,8 +588,8 @@ describe("metricsService", () => {
     });
   });
 
-  describe("computeLiveMetrics scoped to a sourceRunId", () => {
-    it("narrows the query to the given demo run tag and includes it in the payload", async () => {
+  describe("computeLiveMetrics window handling", () => {
+    it("computes over the given window only and caches without any run tag", async () => {
       (mockedPrisma.revenueEvent.findMany as jest.Mock).mockResolvedValueOnce([]);
       (mockedPrisma.revenueEvent.count as jest.Mock).mockResolvedValueOnce(0);
       (mockedPrisma.diagnosis.count as jest.Mock).mockResolvedValueOnce(0);
@@ -599,12 +599,12 @@ describe("metricsService", () => {
         .mockResolvedValueOnce([]) // compliance audits
         .mockResolvedValueOnce([]); // processed audits
 
-      const summary = await computeLiveMetrics("24h", "run-123");
+      const summary = await computeLiveMetrics("24h");
 
-      expect(summary.sourceRunId).toBe("run-123");
+      expect(summary.window).toBe("24h");
       expect(summary.eventsProcessed).toBe(0);
       expect(mockedRedis.set).toHaveBeenCalledWith(
-        "razorrecovery:metrics:24h:run-123",
+        "razorrecovery:metrics:24h",
         expect.any(String),
         "EX",
         expect.any(Number),
@@ -654,29 +654,6 @@ describe("Definition of Done — Full Pipeline", () => {
       disputeFlag: false,
     });
 
-    // Mock revenue event create for injectFailure
-    (mockedPrisma.revenueEvent.create as jest.Mock).mockImplementation(
-      ({ data }) =>
-        Promise.resolve({
-          id: data.id,
-          sourceRunId: data.sourceRunId ?? null,
-          entityType: data.entityType,
-          entityId: data.entityId,
-          customerId: data.customerId,
-          eventType: data.eventType,
-          amount: data.amount,
-          currency: data.currency,
-          occurredAt: data.occurredAt,
-          razorpayPaymentId: data.razorpayPaymentId,
-          razorpayOrderId: data.razorpayOrderId,
-          errorCode: data.errorCode,
-          errorReason: data.errorReason,
-          rawPayload: data.rawPayload,
-          riskScore: null,
-          urgency: null,
-        }),
-    );
-
     // Mock action create
     (mockedPrisma.action.create as jest.Mock).mockResolvedValue({
       id: "action-1",
@@ -709,7 +686,7 @@ describe("Definition of Done — Full Pipeline", () => {
 
   it("walks an event directly in sequence: injectFailure (Phase 3) → computeRiskScore (Phase 2) → diagnose (Phase 5) → filterLegalActions + decide (Phase 2/5) → executeAction (6.1) → recordAuditEntry (6.2)", async () => {
     // 1. injectFailure (Phase 3)
-    const rawEvent = await injectFailure("payment_failed", "customer-1", "batch-dod");
+    const rawEvent = await injectFailure("payment_failed", "customer-1");
     expect(rawEvent.eventType).toBe("PAYMENT_FAILED");
 
     // 2. computeRiskScore (Phase 2)

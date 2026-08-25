@@ -22,7 +22,6 @@ function randomInteger(min: number, max: number): number {
 
 function toRawEvent(event: {
   id: string;
-  sourceRunId: string | null;
   entityType: EntityType;
   entityId: string;
   customerId: string;
@@ -36,9 +35,14 @@ function toRawEvent(event: {
   errorReason: string | null;
   rawPayload: Prisma.JsonValue;
 }): RawRevenueEvent {
-  const { sourceRunId, ...rest } = event;
-  const result: RawRevenueEvent = {
-    ...rest,
+  return {
+    id: event.id,
+    entityType: event.entityType,
+    entityId: event.entityId,
+    customerId: event.customerId,
+    eventType: event.eventType,
+    amount: event.amount,
+    currency: event.currency,
     occurredAt: event.occurredAt.toISOString(),
     razorpayPaymentId: event.razorpayPaymentId ?? undefined,
     razorpayOrderId: event.razorpayOrderId ?? undefined,
@@ -46,17 +50,17 @@ function toRawEvent(event: {
     errorReason: event.errorReason ?? undefined,
     rawPayload: event.rawPayload as Record<string, unknown>,
   };
-  if (sourceRunId !== null) {
-    result.sourceRunId = sourceRunId;
-  }
-  return result;
 }
 
-/** Persists one offline, webhook-shaped revenue event. It never calls Razorpay. */
+/**
+ * Builds one webhook-shaped revenue event for the given customer.
+ * Pure factory: it never persists the event and never calls Razorpay.
+ * The caller publishes the returned event onto revenue.events.raw; the
+ * detection consumer persists it.
+ */
 export async function injectFailure(
   type: SyntheticFailureType,
   customerId: string,
-  sourceRunId?: string,
 ): Promise<RawRevenueEvent> {
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
@@ -197,23 +201,19 @@ export async function injectFailure(
     };
   }
 
-  const saved = await prisma.revenueEvent.create({
-    data: {
-      id,
-      sourceRunId,
-      entityType,
-      entityId,
-      customerId,
-      eventType,
-      amount,
-      currency: "INR",
-      occurredAt,
-      razorpayPaymentId,
-      razorpayOrderId,
-      errorCode,
-      errorReason,
-      rawPayload: payload as Prisma.InputJsonValue,
-    },
+  return toRawEvent({
+    id,
+    entityType,
+    entityId,
+    customerId,
+    eventType,
+    amount,
+    currency: "INR",
+    occurredAt,
+    razorpayPaymentId: razorpayPaymentId ?? null,
+    razorpayOrderId: razorpayOrderId ?? null,
+    errorCode: errorCode ?? null,
+    errorReason: errorReason ?? null,
+    rawPayload: payload as Prisma.JsonValue,
   });
-  return toRawEvent(saved);
 }

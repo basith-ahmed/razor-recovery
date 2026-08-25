@@ -4,7 +4,8 @@
  * Checks:
  * 1. Creates/verifies all 6 Kafka topics.
  * 2. Starts all 5 consumers in background.
- * 3. Injects a paced synthetic stream of 10 events via `startStreamInjection`.
+ * 3. Injects a paced synthetic stream of 10 events via `injectFailure` +
+ *    publish — the same path any production producer uses.
  * 4. Polls Prisma until all 10 events have matching `AuditEntry` rows.
  * 5. Verifies Redis dedup keys were created for each stage.
  * 6. Tests deduplication behavior by attempting duplicate processing.
@@ -17,7 +18,7 @@ import { kafka } from "../config/kafka";
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
 import { TOPICS } from "../kafka/topics";
-import { connectProducer, disconnectProducer } from "../kafka/producer";
+import { connectProducer, disconnectProducer, publish } from "../kafka/producer";
 import {
   startDetectionConsumer,
   stopDetectionConsumer,
@@ -38,8 +39,27 @@ import {
   startAuditConsumer,
   stopAuditConsumer,
 } from "../kafka/consumers/auditConsumer";
-import { startStreamInjection } from "../simulator/streamInjector";
+import {
+  injectFailure,
+  SyntheticFailureType,
+} from "../simulator/injectFailure";
 import { computeLiveMetrics } from "../services/metricsService";
+
+const EVENT_COUNT = 10;
+const MIX: Array<[SyntheticFailureType, number]> = [
+  ["payment_failed", 0.4],
+  ["checkout_abandoned", 0.2],
+  ["invoice_overdue", 0.2],
+  ["subscription_failed", 0.2],
+];
+
+function buildEventPlan(): SyntheticFailureType[] {
+  const planned = MIX.flatMap(([type, share]) =>
+    Array(Math.floor(share * EVENT_COUNT)).fill(type) as SyntheticFailureType[],
+  );
+  while (planned.length < EVENT_COUNT) planned.push(MIX[0][0]);
+  return planned.sort(() => Math.random() - 0.5);
+}
 
 async function runPipelineTest() {
   console.log("==================================================");
@@ -80,21 +100,40 @@ async function runPipelineTest() {
   ]);
   console.log("   All 5 consumers running!");
 
-  // Step 3: Trigger stream injection
-  console.log("\n3. Injecting a paced stream of 10 events via Kafka...");
-  const { runId } = await startStreamInjection({
-    count: 10,
-    mix: {
-      paymentFailed: 0.4,
-      checkoutAbandoned: 0.2,
-      invoiceOverdue: 0.2,
-      subscriptionFailed: 0.2,
-    },
-    intervalMs: 200,
-  });
-  console.log(`   Stream injection started: ${runId}`);
+  // Step 3: Publish a paced stream of synthetic events
+  console.log("\n3. Publishing a paced stream of 10 events via Kafka...");
+  const eventPlan = buildEventPlan();
+  const eventIds: string[] = [];
 
-  // Step 4: Poll DB until all 10 events reach audit stage
+  for (const type of eventPlan) {
+    const eligibleCustomers = await prisma.customer.findMany({
+      where:
+        type === "subscription_failed"
+          ? { subscriptions: { some: { status: "active" } } }
+          : type === "checkout_abandoned"
+            ? { carts: { some: {} } }
+            : type === "invoice_overdue"
+              ? { invoices: { some: { status: "open" } } }
+              : {
+                  OR: [
+                    { invoices: { some: { status: "open" } } },
+                    { carts: { some: {} } },
+                  ],
+                },
+      select: { id: true },
+    });
+    if (eligibleCustomers.length === 0)
+      throw new Error(`No eligible customer is available for ${type}.`);
+    const customer =
+      eligibleCustomers[Math.floor(Math.random() * eligibleCustomers.length)];
+    const event = await injectFailure(type, customer.id);
+    eventIds.push(event.id);
+    await publish(TOPICS.EVENTS_RAW, event.id, event);
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  console.log(`   Published ${eventIds.length} events.`);
+
+  // Step 4: Poll DB until all published events reach audit stage
   console.log("\n4. Waiting for event pipeline to process all 10 events...");
   const startTime = Date.now();
   const maxWaitMs = 60000; // 60 second timeout
@@ -103,11 +142,11 @@ async function runPipelineTest() {
 
   while (Date.now() - startTime < maxWaitMs) {
     auditCount = await prisma.auditEntry.count({
-      where: { event: { sourceRunId: runId } },
+      where: { eventId: { in: eventIds } },
     });
     console.log(`   Progress: ${auditCount}/10 events processed through audit stage...`);
     if (auditCount >= 10) {
-      summary = await computeLiveMetrics("all", runId);
+      summary = await computeLiveMetrics("all");
       break;
     }
     await new Promise((r) => setTimeout(r, 1500));
@@ -117,29 +156,25 @@ async function runPipelineTest() {
     console.error(`Pipeline timed out after 60s. Only ${auditCount}/10 events reached audit stage.`);
   } else {
     console.log(`Success! All ${auditCount}/10 events fully processed through Kafka pipeline!`);
-    console.log(`   Live metrics for this run:`, JSON.stringify(summary, null, 2));
+    console.log(`   Live metrics:`, JSON.stringify(summary, null, 2));
   }
 
   // Step 5: Verify Dedup Redis Keys
   console.log("\n5. Verifying Redis Idempotency / Dedup Keys...");
-  const events = await prisma.revenueEvent.findMany({
-    where: { sourceRunId: runId },
-    select: { id: true },
-  });
   let totalDedupKeysFound = 0;
   const stages = ["detection", "diagnosis", "decision", "executor", "audit"];
 
-  for (const event of events) {
+  for (const eventId of eventIds) {
     for (const stage of stages) {
-      const key = `razorrecovery:dedup:${event.id}:${stage}`;
+      const key = `razorrecovery:dedup:${eventId}:${stage}`;
       const val = await redis.get(key);
       if (val === "1") {
         totalDedupKeysFound++;
       }
     }
   }
-  console.log(`   Found ${totalDedupKeysFound}/${events.length * stages.length} Redis dedup keys across 5 pipeline stages.`);
-  if (totalDedupKeysFound === events.length * stages.length) {
+  console.log(`   Found ${totalDedupKeysFound}/${eventIds.length * stages.length} Redis dedup keys across 5 pipeline stages.`);
+  if (totalDedupKeysFound === eventIds.length * stages.length) {
     console.log("   Idempotency keys successfully verified for all pipeline stages!");
   }
 

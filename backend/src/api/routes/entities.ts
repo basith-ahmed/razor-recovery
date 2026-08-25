@@ -103,7 +103,6 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
       const stateRow = stateMap.get(event.entityId);
       return {
         id: event.id,
-        sourceRunId: event.sourceRunId,
         entityType: event.entityType,
         entityId: event.entityId,
         customerId: event.customerId,

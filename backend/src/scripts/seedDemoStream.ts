@@ -3,8 +3,8 @@
  *
  * Not random: constructs an explicit sequence of ~8 events injected through
  * the live pipeline path (injectFailure → publish to revenue.events.raw) at
- * demo pacing, all tagged with the fixed sourceRunId 'demo-run' so they are
- * easy to re-query.
+ * demo pacing. The events are plain production-shaped payloads — the pipeline
+ * treats them exactly like real gateway traffic.
  *
  * Narrative beats covered:
  *  - 2 payment failures expected to recover via Razorpay retry
@@ -29,7 +29,6 @@ import { TOPICS } from "../kafka/topics";
 import { injectFailure } from "../simulator/injectFailure";
 import { RawRevenueEvent } from "../domain/types";
 
-const RUN_ID = "demo-run";
 const INTERVAL_MS = 800;
 
 function sleep(ms: number): Promise<void> {
@@ -43,14 +42,12 @@ async function pickCustomer(where: Parameters<typeof prisma.customer.findFirst>[
   return customer;
 }
 
-/** Override fields inside the stored rawPayload to simulate elapsed time. */
-async function craftPayload(event: RawRevenueEvent, patch: Record<string, unknown>) {
-  const payload = { ...(event.rawPayload as Record<string, unknown>), ...patch };
-  await prisma.revenueEvent.update({
-    where: { id: event.id },
-    data: { rawPayload: payload as any },
-  });
-  return { ...event, rawPayload: payload };
+/** Override fields inside the rawPayload to simulate elapsed time. */
+function craftPayload(event: RawRevenueEvent, patch: Record<string, unknown>): RawRevenueEvent {
+  return {
+    ...event,
+    rawPayload: { ...(event.rawPayload as Record<string, unknown>), ...patch },
+  };
 }
 
 async function emit(event: RawRevenueEvent) {
@@ -73,7 +70,7 @@ async function main() {
         invoices: { some: { status: "open", disputeFlag: false } },
       },
     });
-    const event = await injectFailure("payment_failed", customer.id, RUN_ID);
+    const event = await injectFailure("payment_failed", customer.id);
     await emit(await craftPayload(event, {}));
     await sleep(INTERVAL_MS);
   }
@@ -82,7 +79,7 @@ async function main() {
   const cartCustomer = await pickCustomer({
     where: { dncFlag: false, carts: { some: {} } },
   });
-  const abandoned = await injectFailure("checkout_abandoned", cartCustomer.id, RUN_ID);
+  const abandoned = await injectFailure("checkout_abandoned", cartCustomer.id);
   await emit(await craftPayload(abandoned, { hoursSinceAbandon: 1 }));
   await sleep(INTERVAL_MS);
 
@@ -93,7 +90,7 @@ async function main() {
       invoices: { some: { status: "open", disputeFlag: false } },
     },
   });
-  const overdue = await injectFailure("invoice_overdue", overdueCustomer.id, RUN_ID);
+  const overdue = await injectFailure("invoice_overdue", overdueCustomer.id);
   await emit(await craftPayload(overdue, { daysOverdue: 35 }));
   await sleep(INTERVAL_MS);
 
@@ -101,10 +98,10 @@ async function main() {
   const dncCustomer = await pickCustomer({
     where: { dncFlag: true },
   });
-  const dncEvent = await injectFailure("payment_failed", dncCustomer.id, RUN_ID).catch(
+  const dncEvent = await injectFailure("payment_failed", dncCustomer.id).catch(
     async () => {
       // A DNC fixture may lack open invoices/carts; fall back to subscription or craft minimal event
-      return injectFailure("checkout_abandoned", dncCustomer.id, RUN_ID);
+      return injectFailure("checkout_abandoned", dncCustomer.id);
     },
   );
   await emit(dncEvent);
@@ -119,7 +116,6 @@ async function main() {
   const disputeEvent = await injectFailure(
     "payment_failed",
     disputedInvoice.customerId,
-    RUN_ID,
   );
   await emit(disputeEvent);
   await sleep(INTERVAL_MS);
@@ -134,7 +130,7 @@ async function main() {
   });
   const exhaustedEntityId = `inv-${writeOffCustomer.id}`;
   await redis.set(`razorrecovery:attempts:${exhaustedEntityId}`, "3");
-  const writeOff = await injectFailure("payment_failed", writeOffCustomer.id, RUN_ID);
+  const writeOff = await injectFailure("payment_failed", writeOffCustomer.id);
   await emit(writeOff);
   await sleep(INTERVAL_MS);
 

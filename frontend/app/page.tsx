@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useLiveStream } from "../lib/socket";
 import { getMetricsSummary } from "../lib/api";
 import { MetricsSummary, MetricsWindow } from "../types";
-import { StreamInjectorPanel } from "../components/StreamInjectorPanel";
 import { WindowSelector } from "../components/WindowSelector";
 import { IncomingEventFeed } from "../components/IncomingEventFeed";
 import { HeroMetrics } from "../components/HeroMetrics";
@@ -58,8 +57,6 @@ export default function OverviewPage() {
         </div>
         <WindowSelector value={window} onChange={setWindow} />
       </div>
-
-      <StreamInjectorPanel />
 
       <IncomingEventFeed items={incomingEvents} />
 

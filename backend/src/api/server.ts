@@ -3,7 +3,6 @@ import express from "express";
 import cors from "cors";
 import { env } from "../config/env";
 import { initWebSocket } from "./websocket";
-import { demoRouter } from "./routes/demo";
 import { entitiesRouter } from "./routes/entities";
 import { metricsRouter } from "./routes/metrics";
 import { policyRouter } from "./routes/policy";
@@ -35,7 +34,6 @@ app.get("/health", (_req, res) => {
 });
 
 // Mount route modules
-app.use("/demo", demoRouter);
 app.use("/entities", entitiesRouter);
 app.use("/metrics", metricsRouter);
 app.use("/policy", policyRouter);

@@ -6,7 +6,7 @@
  * 2. Loads customer history from Postgres
  * 3. Calls computeRiskScore
  * 4. Publishes EnrichedRevenueEvent to EVENTS_ENRICHED
- * 5. Writes riskScore/urgency back onto the RevenueEvent row
+ * 5. Upserts the RevenueEvent row with riskScore/urgency
  */
 
 import { Prisma } from "@prisma/client";
@@ -111,10 +111,29 @@ export async function startDetectionConsumer(): Promise<void> {
           RISK_NORM_TTL,
         );
 
-        // Write riskScore + urgency back onto the RevenueEvent row
-        await prisma.revenueEvent.update({
+        // Persist the event (upsert makes the consumer self-sufficient: any
+        // publisher can emit a complete RawRevenueEvent without pre-saving it)
+        // and write riskScore + urgency onto the row
+        await prisma.revenueEvent.upsert({
           where: { id: event.id },
-          data: { riskScore, urgency },
+          update: { riskScore, urgency },
+          create: {
+            id: event.id,
+            entityType: event.entityType,
+            entityId: event.entityId,
+            customerId: event.customerId,
+            eventType: event.eventType,
+            amount: event.amount,
+            currency: event.currency,
+            occurredAt: new Date(event.occurredAt),
+            razorpayPaymentId: event.razorpayPaymentId ?? null,
+            razorpayOrderId: event.razorpayOrderId ?? null,
+            errorCode: event.errorCode ?? null,
+            errorReason: event.errorReason ?? null,
+            rawPayload: event.rawPayload as Prisma.InputJsonValue,
+            riskScore,
+            urgency,
+          },
         });
 
         // Build enriched event and publish

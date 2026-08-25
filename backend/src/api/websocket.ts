@@ -106,16 +106,3 @@ export function emitIncomingEvent(payload: {
 }): void {
   ioInstance?.emit("event:incoming", payload);
 }
-
-/**
- * DEMO-ONLY signal emitted by the stream injector (not the pipeline) purely to
- * drive the frontend's injection-progress indicator. A client only cares about
- * this while it has an injection in flight.
- */
-export function emitStreamProgress(
-  runId: string,
-  sent: number,
-  total: number,
-): void {
-  ioInstance?.emit("stream:progress", { runId, sent, total });
-}

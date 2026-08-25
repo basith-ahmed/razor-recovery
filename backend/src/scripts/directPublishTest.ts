@@ -1,7 +1,7 @@
 /**
  * Throwaway verification: publishes a raw event DIRECTLY onto
- * revenue.events.raw (bypassing the stream injector entirely) to prove the
- * pipeline has no dependency on the injector or on sourceRunId.
+ * revenue.events.raw without any simulator helpers, proving the pipeline is
+ * self-sufficient: the detection consumer persists whatever it consumes.
  */
 import { kafka } from "../config/kafka";
 import { prisma } from "../config/prisma";
@@ -29,26 +29,7 @@ async function main() {
     errorCode: "BAD_REQUEST_ERROR",
     errorReason: "card_expired",
     rawPayload: { event: "payment.failed", direct: true },
-    // NOTE: no sourceRunId at all — real production events have none
   };
-
-  await prisma.revenueEvent.create({
-    data: {
-      id,
-      entityType: event.entityType,
-      entityId: event.entityId,
-      customerId: event.customerId,
-      eventType: event.eventType,
-      amount: event.amount,
-      currency: event.currency,
-      occurredAt,
-      razorpayPaymentId: event.razorpayPaymentId,
-      razorpayOrderId: event.razorpayOrderId,
-      errorCode: event.errorCode,
-      errorReason: event.errorReason,
-      rawPayload: event.rawPayload as any,
-    },
-  });
 
   const producer = kafka.producer();
   await producer.connect();

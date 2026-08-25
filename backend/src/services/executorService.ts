@@ -282,9 +282,21 @@ export async function executeAction(
     );
   }
 
-  // Persist the Action row
-  await prisma.action.create({
-    data: {
+  // Persist the Action row.
+  // Upsert: Kafka is at-least-once, so replays after a consumer restart or
+  // rebalance must not fail on the eventId unique constraint. External side
+  // effects above remain at-least-once; the stage dedup key is the first line
+  // of defense against re-execution.
+  await prisma.action.upsert({
+    where: { eventId: event.id },
+    update: {
+      actionType: actionResult.actionType,
+      result: actionResult.result,
+      integration: actionResult.integration,
+      razorpayPaymentLinkId: actionResult.razorpayPaymentLinkId ?? null,
+      emailMessageId: actionResult.emailMessageId ?? null,
+    },
+    create: {
       eventId: event.id,
       actionType: actionResult.actionType,
       result: actionResult.result,

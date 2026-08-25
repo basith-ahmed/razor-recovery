@@ -1,8 +1,8 @@
 /**
  * Metrics Service — read-only aggregation queries over rolling time windows.
- * There is no "batch" concept: metrics are computed over a window
- * ('1h' | '24h' | '7d' | 'all'), optionally narrowed to one demo-only
- * sourceRunId, and cached briefly in Redis so dashboard polling stays snappy.
+ * Metrics are computed over a window ('1h' | '24h' | '7d' | 'all') across all
+ * events in the system, and cached briefly in Redis so dashboard polling stays
+ * snappy. There is no run/batch scoping anywhere.
  */
 
 import { prisma } from "../config/prisma";
@@ -42,11 +42,10 @@ function windowStartDate(window: Window): Date | null {
   }
 }
 
-export function eventWindowFilter(window: Window, sourceRunId?: string) {
+export function eventWindowFilter(window: Window) {
   const occurredAt = windowStartDate(window);
   return {
     ...(occurredAt ? { occurredAt: { gte: occurredAt } } : {}),
-    ...(sourceRunId ? { sourceRunId } : {}),
   };
 }
 
@@ -54,11 +53,8 @@ export function eventWindowFilter(window: Window, sourceRunId?: string) {
  * Returns funnel stage counts within the given time window:
  * detected → diagnosed → contacted → recovered
  */
-export async function recoveryFunnel(
-  window: Window,
-  sourceRunId?: string,
-): Promise<FunnelStage[]> {
-  const eventFilter = eventWindowFilter(window, sourceRunId);
+export async function recoveryFunnel(window: Window): Promise<FunnelStage[]> {
+  const eventFilter = eventWindowFilter(window);
 
   // detected = total events in the window
   const detected = await prisma.revenueEvent.count({ where: eventFilter });
@@ -97,9 +93,8 @@ export async function recoveryFunnel(
 
 async function computeLiveMetricsUncached(
   window: Window,
-  sourceRunId?: string,
 ): Promise<MetricsSummary> {
-  const eventFilter = eventWindowFilter(window, sourceRunId);
+  const eventFilter = eventWindowFilter(window);
 
   const events = await prisma.revenueEvent.findMany({
     where: eventFilter,
@@ -110,7 +105,7 @@ async function computeLiveMetricsUncached(
     },
   });
 
-  const funnel = await recoveryFunnel(window, sourceRunId);
+  const funnel = await recoveryFunnel(window);
 
   let amountAtRisk = 0;
   let amountRecovered = 0;
@@ -227,7 +222,6 @@ async function computeLiveMetricsUncached(
 
   return {
     window,
-    ...(sourceRunId ? { sourceRunId } : {}),
     amountAtRisk: totalAtRiskRounded,
     amountRecovered: totalRecoveredRounded,
     recoveryRate,
@@ -253,14 +247,13 @@ async function computeLiveMetricsUncached(
 }
 
 /**
- * Full live metrics summary for the given rolling window (and optional demo
- * run tag), cached briefly in Redis so dashboard polling stays responsive.
+ * Full live metrics summary for the given rolling window, cached briefly in
+ * Redis so dashboard polling stays responsive.
  */
 export async function computeLiveMetrics(
   window: Window,
-  sourceRunId?: string,
 ): Promise<MetricsSummary> {
-  const cacheKey = `razorrecovery:metrics:${window}:${sourceRunId ?? "all"}`;
+  const cacheKey = `razorrecovery:metrics:${window}`;
   try {
     const cached = await redis.get(cacheKey);
     if (cached) return JSON.parse(cached) as MetricsSummary;
@@ -268,7 +261,7 @@ export async function computeLiveMetrics(
     console.error("[metricsService] Redis cache read failed:", err);
   }
 
-  const summary = await computeLiveMetricsUncached(window, sourceRunId);
+  const summary = await computeLiveMetricsUncached(window);
 
   try {
     await redis.set(
