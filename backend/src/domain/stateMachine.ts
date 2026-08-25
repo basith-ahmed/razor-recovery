@@ -18,7 +18,17 @@ export type WorkflowState =
   | "DO_NOT_CONTACT";
 
 const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
-  DETECTED: ["CONTACTED", "RETRYING", "DO_NOT_CONTACT", "ESCALATED"],
+  // DETECTED can go straight to WRITTEN_OFF (hard_decline on first touch when
+  // attempt budgets are already exhausted) or COOLING_DOWN
+  // (pause_subscription on first touch).
+  DETECTED: [
+    "CONTACTED",
+    "RETRYING",
+    "COOLING_DOWN",
+    "DO_NOT_CONTACT",
+    "ESCALATED",
+    "WRITTEN_OFF",
+  ],
   CONTACTED: [
     "CONTACTED",
     "RETRYING",

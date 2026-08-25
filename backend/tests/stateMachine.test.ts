@@ -56,6 +56,14 @@ describe("stateMachine", () => {
       expect(canTransition("DETECTED", "ESCALATED")).toBe(true);
     });
 
+    it("DETECTED can transition to WRITTEN_OFF (first-touch hard decline)", () => {
+      expect(canTransition("DETECTED", "WRITTEN_OFF")).toBe(true);
+    });
+
+    it("DETECTED can transition to COOLING_DOWN (first-touch pause)", () => {
+      expect(canTransition("DETECTED", "COOLING_DOWN")).toBe(true);
+    });
+
     it("DETECTED cannot transition to RECOVERED", () => {
       expect(canTransition("DETECTED", "RECOVERED")).toBe(false);
     });
@@ -125,6 +133,16 @@ describe("stateMachine", () => {
 
     it("hard_decline from RETRYING → WRITTEN_OFF", () => {
       expect(nextState("RETRYING", "hard_decline")).toBe("WRITTEN_OFF");
+    });
+
+    it("hard_decline from DETECTED → WRITTEN_OFF", () => {
+      expect(nextState("DETECTED", "hard_decline")).toBe("WRITTEN_OFF");
+    });
+
+    it("subscription_paused from DETECTED → COOLING_DOWN", () => {
+      expect(nextState("DETECTED", "subscription_paused")).toBe(
+        "COOLING_DOWN"
+      );
     });
 
     it("dnc_skip from DETECTED → DO_NOT_CONTACT", () => {

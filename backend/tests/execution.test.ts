@@ -514,6 +514,44 @@ describe("auditService", () => {
     expect(causeUpsertCall.create.lastContactedAt).toBeInstanceOf(Date);
   });
 
+  it("transitions to WRITTEN_OFF for a successful hard_decline and closes the arc", async () => {
+    // Entity mid-arc (RETRYING) whose gateway_timeout budget is exhausted:
+    // policy's onMaxAction hard_decline must move the workflow state to the
+    // terminal WRITTEN_OFF — not leave it stale.
+    (mockedPrisma.entityWorkflowState.findUnique as jest.Mock).mockResolvedValueOnce({
+      entityId: "entity-1",
+      state: "RETRYING",
+    });
+
+    const event = makeEvent();
+    const diagnosis = makeDiagnosis({ causeLabel: "gateway_timeout" });
+    const decision = makeDecision({
+      legalActions: ["hard_decline"],
+      chosenAction: "hard_decline",
+      reasoning: "Attempt budget exhausted; declining.",
+    });
+    const action: ActionResult = {
+      actionType: "hard_decline",
+      result: "success",
+      integration: "MOCK",
+    };
+
+    await recordAuditEntry({ event, diagnosis, decision, action });
+
+    const upsertCall = (mockedPrisma.entityWorkflowState.upsert as jest.Mock).mock
+      .calls[0][0];
+    expect(upsertCall.create.state).toBe("WRITTEN_OFF");
+    expect(upsertCall.update.state).toBe("WRITTEN_OFF");
+
+    const createCall = (mockedPrisma.auditEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createCall.data.outcome).toBe("written_off");
+
+    // Terminal arc closure wipes all per-cause budgets
+    expect(mockedPrisma.entityCauseState.deleteMany).toHaveBeenCalledWith({
+      where: { entityId: "entity-1" },
+    });
+  });
+
   it("derives outcome 'escalated' for escalate_to_human action", async () => {
     const event = makeEvent();
     const diagnosis = makeDiagnosis({ causeLabel: "invoice_disputed" });

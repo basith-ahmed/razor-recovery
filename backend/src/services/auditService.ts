@@ -24,6 +24,13 @@ function deriveOutcome(action: ActionResult): string {
   if (action.result === "skipped") return "skipped";
   if (action.result === "failed") return "failed";
   if (action.actionType === "escalate_to_human") return "escalated";
+  // Terminal write-off actions close the arc — they are not merely "pending".
+  if (
+    action.actionType === "hard_decline" ||
+    action.actionType === "auto_cancel"
+  ) {
+    return "written_off";
+  }
   // Email sent, payment link sent, retry initiated — not yet confirmed recovered
   return "pending";
 }
@@ -58,6 +65,18 @@ function toStateMachineOutcome(action: ActionResult): string | null {
       return "payment_link_sent";
     case "escalate_to_human":
       return "escalation_triggered";
+    // Terminal write-off actions — the state machine maps these to WRITTEN_OFF
+    case "hard_decline":
+      return "hard_decline";
+    case "auto_cancel":
+      return "auto_cancel";
+    // Subscription lifecycle actions
+    case "pause_subscription":
+      return "subscription_paused";
+    case "send_winback_offer":
+      return "winback_sent";
+    case "start_promise_to_pay_tracking":
+      return "reminder_sent";
     default:
       return null;
   }

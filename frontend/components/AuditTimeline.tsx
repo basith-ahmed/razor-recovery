@@ -27,13 +27,29 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
       {entries.map((entry, idx) => {
         const isExpanded = expandedIndex === idx;
 
-        // Extract diagnosis/decision reasoning text safely
-        const rawReasoning =
+        // Extract diagnosis reasoning text safely (usually only present for
+        // LLM-based diagnoses; RULE-based ones store null).
+        const rawDiagnosisReasoning =
+          entry.diagnosisSnapshot?.reasoning ?? entry.event?.diagnosis?.reasoning;
+        const diagnosisReasoning: string | null =
+          typeof rawDiagnosisReasoning === "string" && rawDiagnosisReasoning
+            ? rawDiagnosisReasoning
+            : null;
+        const diagnosisMethod: string | null =
+          typeof entry.diagnosisSnapshot?.method === "string"
+            ? entry.diagnosisSnapshot.method
+            : typeof entry.event?.diagnosis?.method === "string"
+              ? (entry.event.diagnosis.method as string)
+              : null;
+
+        // Extract decision reasoning text safely
+        const rawDecisionReasoning =
           entry.decisionSnapshot?.reasoning ??
           entry.inputSnapshot?.reasoning ??
           entry.actionSnapshot?.reasoning ??
           entry.decisionSnapshot?.causeExplanation;
-        const reasoning: string | null = typeof rawReasoning === "string" ? rawReasoning : null;
+        const decisionReasoning: string | null =
+          typeof rawDecisionReasoning === "string" ? rawDecisionReasoning : null;
 
         // Extract payment link safely
         const rawShortUrl = entry.actionSnapshot?.shortUrl ?? entry.actionSnapshot?.paymentLinkShortUrl ?? entry.actionSnapshot?.paymentLink;
@@ -143,17 +159,36 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
               </div>
             </div>
 
-            {/* PROMINENT REASONING CALLOUT - Primary design requirement */}
-            {reasoning && (
+            {/* PROMINENT REASONING CALLOUTS - Primary design requirement */}
+            {diagnosisReasoning && (
+              <div className="my-3 bg-amber-50/60 border-l-4 border-amber-500 p-4 rounded-r-lg">
+                <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  AI Diagnosis Reasoning
+                  {diagnosisMethod && (
+                    <span className="text-[10px] font-mono normal-case bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+                      {diagnosisMethod}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-slate-800 italic font-serif leading-relaxed">
+                  &quot;{diagnosisReasoning}&quot;
+                </p>
+              </div>
+            )}
+
+            {decisionReasoning && (
               <div className="my-3 bg-blue-50/60 border-l-4 border-blue-500 p-4 rounded-r-lg">
                 <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  AI Diagnosis & Decision Reasoning
+                  AI Decision Reasoning
                 </div>
                 <p className="text-sm text-slate-800 italic font-serif leading-relaxed">
-                  &quot;{reasoning}&quot;
+                  &quot;{decisionReasoning}&quot;
                 </p>
               </div>
             )}
