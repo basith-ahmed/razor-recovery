@@ -19,11 +19,7 @@ import {
   EnrichedRevenueEvent,
 } from "../domain/types";
 
-const RETRY_ACTIONS = new Set([
-  "retry_payment",
-  "retry_payment_immediate",
-  "retry_payment_delayed",
-]);
+const RETRY_ACTIONS = new Set(["retry_payment", "retry_payment_immediate"]);
 
 const PAYMENT_LINK_ACTIONS = new Set(["send_payment_link", "send_sms_reminder"]);
 
@@ -196,6 +192,24 @@ export async function executeAction(
       actionType: "none",
       result: "skipped",
       integration: "MOCK",
+    };
+  } else if (chosenAction === "retry_payment_delayed") {
+    // Honest delayed retry: do NOT hit Razorpay now. Persist the intent as
+    // "scheduled"; the follow-up scheduler executes the real retry once this
+    // cause's cooldown window lapses. The scheduled action still starts the
+    // cooldown clock (see auditService) so nothing else contacts meanwhile.
+    if (!event.razorpayOrderId) {
+      throw new DomainError(
+        `Cannot schedule retry: event ${event.id} has no razorpayOrderId.`,
+        "MISSING_ORDER_ID",
+      );
+    }
+    actionResult = {
+      actionType: chosenAction,
+      result: "scheduled",
+      integration: "RAZORPAY",
+      detail:
+        "Retry deferred; will execute when the cause cooldown window lapses.",
     };
   } else if (RETRY_ACTIONS.has(chosenAction)) {
     if (!event.razorpayOrderId) {

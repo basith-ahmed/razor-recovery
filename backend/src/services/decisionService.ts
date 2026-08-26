@@ -53,6 +53,8 @@ export async function decide(
     customerLtv: number;
     priorFailures: number;
     daysSinceLastContact: number;
+    /** Set when this event is a scheduler-dispatched due deferred retry. */
+    dueScheduledRetry?: boolean;
   },
 ): Promise<DecisionResult> {
   const legalActions = filterLegalActions(filterCtx);
@@ -61,6 +63,27 @@ export async function decide(
   if (legalActions.length === 0) {
     return { legalActions, chosenAction: "none", reasoning: "Blocked by policy (DNC or dispute)", policyVersion };
   }
+
+  // Honor scheduled-retry commitments deterministically: when the scheduler
+  // dispatches a due deferred retry, execute the retry now (via the normal
+  // executor path) rather than re-asking the LLM what to do.
+  if (entityContext.dueScheduledRetry) {
+    const immediateRetry = legalActions.find(
+      (a) => a === "retry_payment_immediate" || a === "retry_payment",
+    );
+    if (immediateRetry) {
+      return {
+        legalActions,
+        chosenAction: immediateRetry,
+        reasoning:
+          "A deferred retry was scheduled for this cause and its cooldown window has lapsed; executing the retry now.",
+        policyVersion,
+      };
+    }
+    // No immediate retry is legal for this cause → fall through to the normal
+    // flow; the commitment degrades to whatever policy currently allows.
+  }
+
   if (legalActions.length === 1) {
     return {
       legalActions,

@@ -185,9 +185,15 @@ export async function recordAuditEntry(params: {
   // skipped (DNC/policy-blocked) and failed actions are not recovery attempts.
   if (smOutcome && !isTerminal(newState ?? "DETECTED")) {
     const countsAsAttempt = action.result === "success";
-    const cooldownUntil = countsAsAttempt
+    // A scheduled retry starts the cooldown clock immediately — that window
+    // IS the deferral the follow-up scheduler fires on — but it is not a
+    // contact yet, so it consumes no attempt budget and doesn't count as a
+    // customer touch.
+    const startsCooldown = countsAsAttempt || action.result === "scheduled";
+    const cooldownUntil = startsCooldown
       ? new Date(now.getTime() + cooldownTtlSeconds(diagnosis.causeLabel) * 1000)
       : undefined;
+    const touchesCustomer = countsAsAttempt;
 
     await prisma.entityCauseState.upsert({
       where: {
@@ -200,12 +206,12 @@ export async function recordAuditEntry(params: {
         entityId: event.entityId,
         causeLabel: diagnosis.causeLabel,
         attemptCount: countsAsAttempt ? 1 : 0,
-        lastContactedAt: now,
+        ...(touchesCustomer ? { lastContactedAt: now } : {}),
         cooldownUntil,
       },
       update: {
         ...(countsAsAttempt ? { attemptCount: { increment: 1 } } : {}),
-        lastContactedAt: now,
+        ...(touchesCustomer ? { lastContactedAt: now } : {}),
         ...(cooldownUntil ? { cooldownUntil } : {}),
       },
     });

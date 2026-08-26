@@ -47,7 +47,7 @@ export interface DecisionResult {
 
 export interface ActionResult {
   actionType: string;
-  result: "success" | "failed" | "skipped";
+  result: "success" | "failed" | "skipped" | "scheduled" | "cancelled";
   integration: "RAZORPAY" | "EMAIL" | "MOCK";
   razorpayPaymentLinkId?: string;
   paymentLinkShortUrl?: string;

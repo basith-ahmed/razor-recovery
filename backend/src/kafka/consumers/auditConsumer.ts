@@ -37,6 +37,13 @@ interface ActionPayload {
   diagnosis: DiagnosisResult;
   decision: DecisionResult;
   action: ActionResult;
+  /**
+   * Optional dedup override. Publishers that legitimately send multiple
+   * distinct messages for the same eventId (e.g. the scheduler executing a
+   * deferred retry after the original action was already audited) must set
+   * this, otherwise the eventId-based SETNX would swallow their message.
+   */
+  dedupToken?: string;
 }
 
 export async function startAuditConsumer(): Promise<void> {
@@ -54,8 +61,9 @@ export async function startAuditConsumer(): Promise<void> {
         payload = JSON.parse(message.value.toString()) as ActionPayload;
         const { event, diagnosis, decision, action } = payload;
 
-        // Idempotency: Redis SETNX dedup
-        const dedupKey = `razorrecovery:dedup:${event.id}:${STAGE}`;
+        // Idempotency: Redis SETNX dedup (dedupToken overrides eventId so
+        // distinct messages for the same event are not conflated)
+        const dedupKey = `razorrecovery:dedup:${payload.dedupToken ?? event.id}:${STAGE}`;
         const isNew = await redis.set(dedupKey, "1", "EX", DEDUP_TTL, "NX");
         if (!isNew) {
           console.log(`[audit] Skipping duplicate event ${event.id}`);

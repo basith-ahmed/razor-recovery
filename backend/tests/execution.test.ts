@@ -342,6 +342,18 @@ describe("executorService", () => {
       ).rejects.toThrow("Unrecognized action");
     });
 
+    it("schedules retry_payment_delayed without calling Razorpay", async () => {
+      const result = await executeAction(
+        makeDecision({ chosenAction: "retry_payment_delayed" }),
+        makeEvent(),
+      );
+
+      expect(mockedRazorpay.orders.fetch).not.toHaveBeenCalled();
+      expect(result.result).toBe("scheduled");
+      expect(result.actionType).toBe("retry_payment_delayed");
+      expect(mockedPrisma.action.upsert).toHaveBeenCalledTimes(1);
+    });
+
     it("throws DomainError when retry has no razorpayOrderId", async () => {
       await expect(
         executeAction(
@@ -550,6 +562,31 @@ describe("auditService", () => {
     expect(mockedPrisma.entityCauseState.deleteMany).toHaveBeenCalledWith({
       where: { entityId: "entity-1" },
     });
+  });
+
+  it("starts the cooldown clock but consumes no budget for a scheduled retry", async () => {
+    const event = makeEvent();
+    const diagnosis = makeDiagnosis({ causeLabel: "gateway_timeout" });
+    const decision = makeDecision({ chosenAction: "retry_payment_delayed" });
+    const action: ActionResult = {
+      actionType: "retry_payment_delayed",
+      result: "scheduled",
+      integration: "RAZORPAY",
+    };
+
+    await recordAuditEntry({ event, diagnosis, decision, action });
+
+    expect(mockedPrisma.entityCauseState.upsert).toHaveBeenCalledTimes(1);
+    const upsertCall = (mockedPrisma.entityCauseState.upsert as jest.Mock).mock
+      .calls[0][0];
+    // Cooldown starts (that window is what the scheduler fires on)…
+    expect(upsertCall.create.cooldownUntil).toBeInstanceOf(Date);
+    expect(upsertCall.update.cooldownUntil).toBeInstanceOf(Date);
+    // …but no attempt is consumed and no customer touch is recorded yet
+    expect(upsertCall.create.attemptCount).toBe(0);
+    expect(upsertCall.update.attemptCount).toBeUndefined();
+    expect(upsertCall.create.lastContactedAt).toBeUndefined();
+    expect(upsertCall.update.lastContactedAt).toBeUndefined();
   });
 
   it("derives outcome 'escalated' for escalate_to_human action", async () => {

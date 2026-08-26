@@ -22,6 +22,10 @@ import {
   startAuditConsumer,
   stopAuditConsumer,
 } from "./kafka/consumers/auditConsumer";
+import {
+  startFollowUpScheduler,
+  stopFollowUpScheduler,
+} from "./scheduler/followUpScheduler";
 
 let shuttingDown = false;
 
@@ -49,6 +53,7 @@ async function shutdown(signal: string) {
       stopDecisionConsumer(),
       stopExecutorConsumer(),
       stopAuditConsumer(),
+      stopFollowUpScheduler(),
       disconnectProducer(),
       new Promise<void>((resolve) => server.close(() => resolve())),
     ]);
@@ -79,6 +84,10 @@ async function main() {
     startExecutorConsumer(),
     startAuditConsumer(),
   ]);
+
+  // Clock-driven follow-ups: re-inject synthesized events onto EVENTS_RAW
+  // when cooldowns lapse or no-response windows elapse on open arcs.
+  await startFollowUpScheduler();
 
   server.listen(env.PORT, () => {
     console.log(

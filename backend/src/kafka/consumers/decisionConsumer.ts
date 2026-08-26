@@ -122,6 +122,12 @@ export async function startDecisionConsumer(): Promise<void> {
             ? rawPayload.daysOverdue
             : undefined;
 
+        // The scheduler dispatches due deferred retries as synthesized events;
+        // when this IS one, the decision stage must honor the commitment and
+        // execute the retry now instead of re-asking the LLM.
+        const followUpMarker = rawPayload.followUp as { type?: string } | undefined;
+        const isDueScheduledRetry = followUpMarker?.type === "scheduled_retry_due";
+
         const filterCtx: FilterContext = {
           causeLabel: diagnosis.causeLabel,
           customerId: event.customerId,
@@ -149,6 +155,7 @@ export async function startDecisionConsumer(): Promise<void> {
           customerLtv: customer?.lifetimeValue ?? 0,
           priorFailures,
           daysSinceLastContact,
+          dueScheduledRetry: isDueScheduledRetry,
         });
 
         // Persist Decision row.

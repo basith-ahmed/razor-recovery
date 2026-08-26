@@ -9,6 +9,58 @@ import { decide } from "../src/services/decisionService";
 
 const mockedRequestJson = requestJson as jest.MockedFunction<typeof requestJson>;
 
+describe("decisionService — scheduled retry commitment", () => {
+  const ctx = {
+    causeLabel: "gateway_timeout",
+    customerId: "customer-1",
+    isDnc: false,
+    isDisputed: false,
+    attemptCount: 1,
+    isInCooldown: false,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("honors a due scheduled retry deterministically without an LLM call", async () => {
+    const decision = await decide(
+      { causeLabel: "gateway_timeout", confidence: 1, method: "RULE" },
+      ctx,
+      {
+        attemptCount: 1,
+        customerLtv: 25000,
+        priorFailures: 1,
+        daysSinceLastContact: 0,
+        dueScheduledRetry: true,
+      },
+    );
+
+    expect(decision.chosenAction).toBe("retry_payment_immediate");
+    expect(decision.reasoning).toMatch(/deferred retry/i);
+    expect(requestJson).not.toHaveBeenCalled();
+  });
+
+  it("does not force the retry path for ordinary events", async () => {
+    mockedRequestJson.mockResolvedValueOnce(
+      JSON.stringify({ chosen_action: "retry_payment_delayed", reasoning: "test" }),
+    );
+    const decision = await decide(
+      { causeLabel: "gateway_timeout", confidence: 1, method: "RULE" },
+      ctx,
+      {
+        attemptCount: 1,
+        customerLtv: 25000,
+        priorFailures: 1,
+        daysSinceLastContact: 0,
+      },
+    );
+    expect(decision.chosenAction).toBe("retry_payment_delayed");
+    expect(requestJson).toHaveBeenCalled();
+  });
+});
+
+
 function event(overrides: Partial<EnrichedRevenueEvent> = {}): EnrichedRevenueEvent {
   return {
     id: "event-1",
