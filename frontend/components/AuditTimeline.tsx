@@ -27,6 +27,16 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
       {entries.map((entry, idx) => {
         const isExpanded = expandedIndex === idx;
 
+        // Scheduler-synthesized events carry a followUp marker in rawPayload
+        const rawRawPayload = entry.inputSnapshot?.rawPayload as
+          | { synthesized?: boolean; followUp?: { type?: string } }
+          | undefined;
+        const isSynthesized = rawRawPayload?.synthesized === true;
+        const followUpType =
+          typeof rawRawPayload?.followUp?.type === "string"
+            ? (rawRawPayload.followUp.type as string)
+            : null;
+
         // Extract diagnosis reasoning text safely (usually only present for
         // LLM-based diagnoses; RULE-based ones store null).
         const rawDiagnosisReasoning =
@@ -76,12 +86,20 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                   {idx + 1}
                 </span>
                 <div>
-                  <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                  <div className="text-sm font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
                     <span>Actor: {entry.actor}</span>
                     <span className="text-xs font-mono text-slate-400">→</span>
                     <span className="text-xs font-mono uppercase bg-slate-100 px-2 py-0.5 rounded text-slate-700">
                       {entry.outcome}
                     </span>
+                    {isSynthesized && (
+                      <span
+                        className="text-[10px] font-semibold uppercase bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded"
+                        title="This event was synthesized by the follow-up scheduler, not a real payment failure"
+                      >
+                        ⟳ scheduler: {followUpType ?? "follow-up"}
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-slate-400 font-mono mt-0.5">
                     {new Date(entry.timestamp).toLocaleString("en-IN", {

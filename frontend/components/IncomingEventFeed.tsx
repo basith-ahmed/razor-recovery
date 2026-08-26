@@ -55,6 +55,14 @@ export function IncomingEventFeed({ items }: IncomingEventFeedProps) {
                 <span className="bg-slate-100 text-slate-400 px-2 py-0.5 rounded font-mono text-[10px] uppercase">
                   {item.eventType}
                 </span>
+                {item.synthesized && (
+                  <span
+                    className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded text-[10px] font-semibold uppercase"
+                    title={`Scheduler-generated follow-up (${item.followUpType ?? "unknown"})`}
+                  >
+                    ⟳ {item.followUpType ?? "follow-up"}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-3">

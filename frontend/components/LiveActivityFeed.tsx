@@ -85,6 +85,11 @@ export function LiveActivityFeed({ items }: LiveActivityFeedProps) {
                 <span className="text-slate-400 hidden md:inline">
                   Action: <strong className="text-slate-700 font-normal">{item.action}</strong>
                 </span>
+                {item.actionResult && item.actionResult !== "success" && (
+                  <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-[10px] uppercase">
+                    {item.actionResult}
+                  </span>
+                )}
                 <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${getOutcomeBadgeClass(item.outcome)}`}>
                   {item.outcome}
                 </span>

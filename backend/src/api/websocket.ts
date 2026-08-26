@@ -76,6 +76,7 @@ export async function emitLiveUpdate(eventId?: string): Promise<void> {
         eventType: latestAudit.event.eventType,
         cause: latestAudit.event.diagnosis?.causeLabel ?? "unknown",
         action: latestAudit.event.action?.actionType ?? "none",
+        actionResult: latestAudit.event.action?.result ?? null,
         outcome: latestAudit.outcome,
       });
     }
@@ -103,6 +104,9 @@ export function emitIncomingEvent(payload: {
   currency: string;
   occurredAt: string;
   riskScore?: number;
+  /** True for scheduler-synthesized events (cooldown expiry, deferred retry). */
+  synthesized?: boolean;
+  followUpType?: string;
 }): void {
   ioInstance?.emit("event:incoming", payload);
 }

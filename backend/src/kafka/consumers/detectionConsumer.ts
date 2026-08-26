@@ -148,6 +148,7 @@ export async function startDetectionConsumer(): Promise<void> {
 
         // Live ingestion feed: broadcast the event as soon as it has entered
         // the pipeline (observability only — no downstream stage depends on it)
+        const followUpMarker = payload.followUp as { type?: string } | undefined;
         emitIncomingEvent({
           eventId: event.id,
           entityId: event.entityId,
@@ -158,6 +159,9 @@ export async function startDetectionConsumer(): Promise<void> {
           currency: event.currency,
           occurredAt: new Date().toISOString(),
           riskScore,
+          synthesized: payload.synthesized === true,
+          followUpType:
+            typeof followUpMarker?.type === "string" ? followUpMarker.type : undefined,
         });
 
         console.log(

@@ -107,6 +107,8 @@ export interface IncomingEventItem {
   currency: string;
   occurredAt: string;
   riskScore?: number;
+  synthesized?: boolean;
+  followUpType?: string;
 }
 
 export interface ActivityItem {
@@ -118,6 +120,7 @@ export interface ActivityItem {
   eventType: string;
   cause: string;
   action: string;
+  actionResult?: string | null;
   outcome: string;
 }
 

@@ -29,6 +29,15 @@ const STAGE_BADGES: Record<string, string> = {
   EXECUTED: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
+const ACTION_RESULT_BADGES: Record<string, string> = {
+  success: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  scheduled: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  dispatched: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  cancelled: "bg-slate-100 text-slate-500 border-slate-300",
+  skipped: "bg-slate-100 text-slate-500 border-slate-300",
+  failed: "bg-red-50 text-red-700 border-red-200",
+};
+
 export function EntityTable({ entities, filters, pagination, onFilterChange, loading }: EntityTableProps) {
   const router = useRouter();
   const handleSortToggle = (field: string) => {
@@ -161,7 +170,6 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
               </th>
               <th className="p-3 font-medium">State</th>
               <th className="p-3 font-medium">Stage</th>
-              <th className="p-3 font-medium">Diagnosis Cause</th>
               <th
                 className="p-3 font-medium cursor-pointer hover:text-slate-900"
                 onClick={() => handleSortToggle("riskScore")}
@@ -169,6 +177,7 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                 Risk Score {filters.sort?.startsWith("riskScore") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
               </th>
               <th className="p-3 font-medium">Attempts</th>
+              <th className="p-3 font-medium">Action</th>
               <th
                 className="p-3 font-medium cursor-pointer hover:text-slate-900"
                 onClick={() => handleSortToggle("occurredAt")}
@@ -222,12 +231,19 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                     </span>
                   </td>
                   <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${STAGE_BADGES[item.stage] || STAGE_BADGES.DETECTED}`}>
-                      {item.stage}
-                    </span>
-                  </td>
-                  <td className="p-3 text-slate-700">
-                    {item.causeLabel || <span className="text-slate-500 font-italic">Unassigned</span>}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* Hide the stage echo when it adds nothing beyond the
+                          lifecycle state (both DETECTED) */}
+                      {!(item.stage === "DETECTED" && item.state === "DETECTED") && (
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                            STAGE_BADGES[item.stage] || STAGE_BADGES.DETECTED
+                          }`}
+                        >
+                          {item.stage}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-3 font-mono">
                     {item.riskScore !== null ? (
@@ -239,6 +255,21 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                     )}
                   </td>
                   <td className="p-3 font-mono text-slate-700">{item.attemptCount}</td>
+                  <td className="p-3">
+                    {item.actionResult ? (
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                          ACTION_RESULT_BADGES[item.actionResult] ??
+                          "bg-slate-100 text-slate-600 border-slate-300"
+                        }`}
+                        title={item.actionType ?? undefined}
+                      >
+                        {item.actionResult}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
                   <td className="p-3 text-slate-400 font-mono">
                     {new Date(item.occurredAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
                   </td>
