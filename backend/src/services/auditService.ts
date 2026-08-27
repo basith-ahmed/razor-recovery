@@ -302,6 +302,10 @@ export async function recordFailureAuditEntry(
       timestamp: new Date(),
     });
   });
+
+  // Ensure the UI updates live to show the pipeline failure
+  const { emitLiveUpdate } = require("../../api/websocket");
+  await emitLiveUpdate(event.id);
 }
 
 export interface VerifyChainResult {

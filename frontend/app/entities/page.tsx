@@ -5,11 +5,15 @@ import { listEntities } from "../../lib/api";
 import { EntityItem, EntityFilters } from "../../types";
 import { EntityTable } from "../../components/EntityTable";
 
+import { useLiveStream } from "../../lib/socket";
+
 export default function EntitiesPage() {
   const [entities, setEntities] = useState<EntityItem[]>([]);
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 20, totalPages: 1 });
   const [filters, setFilters] = useState<EntityFilters>({ page: 1, limit: 20 });
   const [loading, setLoading] = useState<boolean>(true);
+
+  const { activityFeed } = useLiveStream();
 
   useEffect(() => {
     let ignore = false;
@@ -36,7 +40,7 @@ export default function EntitiesPage() {
     return () => {
       ignore = true;
     };
-  }, [filters]);
+  }, [filters, activityFeed]);
 
   const handleFilterChange = (newFilters: Partial<EntityFilters>) => {
     setLoading(true);

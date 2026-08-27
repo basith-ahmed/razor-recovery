@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getEntityAudit } from "../../../lib/api";
 import { AuditEntry } from "../../../types";
 import { AuditTimeline } from "../../../components/AuditTimeline";
+import { useLiveStream } from "../../../lib/socket";
 
 interface EntityDetailPageProps {
   params: Promise<{ id: string }>;
@@ -15,28 +16,33 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  
+  const { activityFeed } = useLiveStream();
 
   useEffect(() => {
     let ignore = false;
-    getEntityAudit(id)
-      .then((data) => {
-        if (!ignore) {
-          setEntries(data);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!ignore) {
-          console.error("Failed to load entity audit trail:", err);
-          setError("Failed to load audit trail for entity " + id);
-          setLoading(false);
-        }
-      });
-
+    const load = () => {
+      getEntityAudit(id)
+        .then((data) => {
+          if (!ignore) {
+            setEntries(data);
+            setLoading(false);
+          }
+        })
+        .catch((err) => {
+          if (!ignore) {
+            console.error("Failed to load entity audit trail:", err);
+            setError("Failed to load audit trail for entity " + id);
+            setLoading(false);
+          }
+        });
+    };
+    
+    load();
     return () => {
       ignore = true;
     };
-  }, [id]);
+  }, [id, activityFeed]);
 
   const latestEntry = entries.length > 0 ? entries[entries.length - 1] : null;
   const event = latestEntry?.event;
