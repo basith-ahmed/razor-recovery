@@ -120,7 +120,6 @@ describe("filterLegalActions", () => {
       expect(result).toEqual([
         "retry_payment",
         "send_payment_link",
-        "send_sms_reminder",
         "escalate_to_human",
       ]);
     });
@@ -149,7 +148,6 @@ describe("filterLegalActions", () => {
       expect(result).toEqual([
         "retry_payment",
         "send_payment_link",
-        "send_sms_reminder",
         "escalate_to_human",
       ]);
     });

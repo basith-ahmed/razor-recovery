@@ -21,7 +21,7 @@ import {
 
 const RETRY_ACTIONS = new Set(["retry_payment", "retry_payment_immediate"]);
 
-const PAYMENT_LINK_ACTIONS = new Set(["send_payment_link", "send_sms_reminder"]);
+const PAYMENT_LINK_ACTIONS = new Set(["send_payment_link"]);
 
 const EMAIL_ACTIONS = new Set([
   "send_reminder_email",

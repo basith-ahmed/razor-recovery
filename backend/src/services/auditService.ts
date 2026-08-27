@@ -68,7 +68,6 @@ function toStateMachineOutcome(action: ActionResult): string | null {
     case "send_reminder":
       return "email_sent";
     case "send_payment_link":
-    case "send_sms_reminder":
       return "payment_link_sent";
     case "escalate_to_human":
       return "escalation_triggered";

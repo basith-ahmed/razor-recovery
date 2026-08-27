@@ -40,6 +40,7 @@ const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
   ],
   RETRYING: [
     "RETRYING",
+    "CONTACTED",
     "COOLING_DOWN",
     "RECOVERED",
     "ESCALATED",

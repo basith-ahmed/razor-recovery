@@ -122,43 +122,13 @@ async function main() {
   // Beat 7: hard write-off — entity has already burned its per-cause attempt
   // budgets (see EntityCauseState / policy.json). injectFailure picks a random
   // Razorpay error reason, so EVERY cause a payment failure can diagnose as is
-  // seeded at its maxAttempts: expired_card 3/3, insufficient_funds 3/3,
-  // gateway_timeout 2/2. (no_reason_signal has no attempt budget in policy —
-  // it stops on no-response timeout instead — so it can't be pre-exhausted.)
+  // Beat 7: another payment failure
   const writeOffCustomer = await pickCustomer({
     where: {
       dncFlag: false,
       invoices: { some: { status: "open", disputeFlag: false } },
     },
   });
-  const exhaustedInvoice = await prisma.invoice.findFirst({
-    where: { customerId: writeOffCustomer.id, status: "open", disputeFlag: false },
-    orderBy: { dueDate: "asc" },
-  });
-  if (!exhaustedInvoice)
-    throw new Error("Write-off beat: customer has no open invoice.");
-  await prisma.entityWorkflowState.upsert({
-    where: { entityId: exhaustedInvoice.id },
-    update: { state: "DETECTED" },
-    create: {
-      entityId: exhaustedInvoice.id,
-      customerId: writeOffCustomer.id,
-      state: "DETECTED",
-    },
-  });
-  for (const [causeLabel, attemptCount] of [
-    ["expired_card", 3],
-    ["insufficient_funds", 3],
-    ["gateway_timeout", 2],
-  ] as const) {
-    await prisma.entityCauseState.upsert({
-      where: {
-        entityId_causeLabel: { entityId: exhaustedInvoice.id, causeLabel },
-      },
-      update: { attemptCount },
-      create: { entityId: exhaustedInvoice.id, causeLabel, attemptCount },
-    });
-  }
   const writeOff = await injectFailure("payment_failed", writeOffCustomer.id);
   await emit(writeOff);
   await sleep(INTERVAL_MS);

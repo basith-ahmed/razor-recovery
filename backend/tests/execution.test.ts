@@ -668,7 +668,6 @@ describe("per-cause attempt/cooldown scoping", () => {
     expect(legalActions).toEqual([
       "retry_payment",
       "send_payment_link",
-      "send_sms_reminder",
       "escalate_to_human",
     ]);
   });

@@ -87,7 +87,12 @@ export async function startAuditConsumer(): Promise<void> {
         // Attempt to write a failure audit entry as a last resort
         if (payload?.event) {
           try {
-            await recordFailureAuditEntry(payload.event);
+            await recordFailureAuditEntry(payload.event, {
+              inputSnapshot: payload.event,
+              diagnosisSnapshot: payload.diagnosis,
+              decisionSnapshot: payload.decision,
+              actionSnapshot: payload.action,
+            });
           } catch (auditErr) {
             console.error("[audit] Failed to write failure audit entry:", auditErr);
           }
