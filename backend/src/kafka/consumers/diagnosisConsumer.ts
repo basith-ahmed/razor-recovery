@@ -17,6 +17,7 @@ import { diagnose } from "../../services/diagnosisService";
 import { DiagnosisResult, EnrichedRevenueEvent } from "../../domain/types";
 import { publish } from "../producer";
 import { TOPICS } from "../topics";
+import { recordFailureAuditEntry } from "../../services/auditService";
 
 const CONSUMER_GROUP = "diagnosis-service";
 const STAGE = "diagnosis";
@@ -109,16 +110,7 @@ export async function startDiagnosisConsumer(): Promise<void> {
         logError("diagnosis", error);
         if (event) {
           try {
-            await prisma.auditEntry.create({
-              data: {
-                eventId: event.id,
-                entityId: event.entityId,
-                actor: "system",
-                inputSnapshot: event as unknown as Prisma.InputJsonValue,
-                outcome: "failed",
-                timestamp: new Date(),
-              },
-            });
+            await recordFailureAuditEntry(event, { inputSnapshot: event });
           } catch (auditErr) {
             console.error("[diagnosis] Failed to write failure audit entry:", auditErr);
           }

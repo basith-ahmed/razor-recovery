@@ -374,4 +374,21 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       await expect(emitLiveUpdate()).resolves.not.toThrow();
     });
   });
+
+  describe("Phase 12 — Audit Chain Verification Endpoint", () => {
+    it("GET /audit/verify returns verification status and count", async () => {
+      const res = await fetch(`${baseUrl}/audit/verify`);
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as { valid: boolean; entriesChecked: number };
+      expect(typeof data.valid).toBe("boolean");
+      expect(typeof data.entriesChecked).toBe("number");
+    });
+
+    it("GET /audit/verify returns 400 on invalid sequence parameter", async () => {
+      const res = await fetch(`${baseUrl}/audit/verify?fromSequence=invalid`);
+      expect(res.status).toBe(400);
+      const data = (await res.json()) as { error: string };
+      expect(data.error).toBe("Invalid sequence number parameter");
+    });
+  });
 });

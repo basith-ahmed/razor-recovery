@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getPolicy } from "../../lib/api";
 import { PolicyResponse } from "../../types";
 import { PolicyTable } from "../../components/PolicyTable";
+import { AuditChainVerifier } from "../../components/AuditChainVerifier";
 
 export default function PolicyPage() {
   const [data, setData] = useState<PolicyResponse | null>(null);
@@ -41,6 +42,10 @@ export default function PolicyPage() {
         <p className="text-sm text-slate-400">
           Inspect declarative recovery rules, active Do-Not-Contact (DNC) registers, and compliance audit overrides.
         </p>
+      </div>
+
+      <div className="mb-6">
+        <AuditChainVerifier />
       </div>
 
       {loading && !data ? (

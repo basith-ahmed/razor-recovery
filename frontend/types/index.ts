@@ -163,3 +163,10 @@ export interface EntityFilters {
   page?: number;
   limit?: number;
 }
+
+export interface AuditVerifyResult {
+  valid: boolean;
+  entriesChecked: number;
+  brokenAtEntryId?: string;
+  brokenAtSequence?: number;
+}

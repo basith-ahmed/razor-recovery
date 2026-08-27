@@ -15,7 +15,7 @@ import { kafka } from "../../config/kafka";
 import { prisma } from "../../config/prisma";
 import { logError } from "../../config/logger";
 import { redis } from "../../config/redis";
-import { recordAuditEntry } from "../../services/auditService";
+import { recordAuditEntry, recordFailureAuditEntry } from "../../services/auditService";
 import {
   ActionResult,
   DecisionResult,
@@ -87,16 +87,7 @@ export async function startAuditConsumer(): Promise<void> {
         // Attempt to write a failure audit entry as a last resort
         if (payload?.event) {
           try {
-            await prisma.auditEntry.create({
-              data: {
-                eventId: payload.event.id,
-                entityId: payload.event.entityId,
-                actor: "system",
-                inputSnapshot: payload.event as unknown as Prisma.InputJsonValue,
-                outcome: "failed",
-                timestamp: new Date(),
-              },
-            });
+            await recordFailureAuditEntry(payload.event);
           } catch (auditErr) {
             console.error("[audit] Failed to write failure audit entry:", auditErr);
           }

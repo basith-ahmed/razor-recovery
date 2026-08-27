@@ -6,7 +6,12 @@ import { EntityItem, EntityFilters } from "../types";
 interface EntityTableProps {
   entities: EntityItem[];
   filters: EntityFilters;
-  pagination?: { total: number; page: number; limit: number; totalPages: number };
+  pagination?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
   onFilterChange: (newFilters: Partial<EntityFilters>) => void;
   loading: boolean;
 }
@@ -38,7 +43,13 @@ const ACTION_RESULT_BADGES: Record<string, string> = {
   failed: "bg-red-50 text-red-700 border-red-200",
 };
 
-export function EntityTable({ entities, filters, pagination, onFilterChange, loading }: EntityTableProps) {
+export function EntityTable({
+  entities,
+  filters,
+  pagination,
+  onFilterChange,
+  loading,
+}: EntityTableProps) {
   const router = useRouter();
   const handleSortToggle = (field: string) => {
     let newSort = `${field}_desc`;
@@ -107,7 +118,9 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
             <option value="gateway_timeout">Gateway Timeout</option>
             <option value="price_friction">Price Friction</option>
             <option value="no_reason_signal">No Reason Signal</option>
-            <option value="subscription_renewal_failed">Sub Renewal Failed</option>
+            <option value="subscription_renewal_failed">
+              Sub Renewal Failed
+            </option>
             <option value="invoice_overdue">Invoice Overdue</option>
             <option value="invoice_disputed">Invoice Disputed</option>
             <option value="dnc">Do Not Contact</option>
@@ -116,7 +129,9 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
 
         {/* Event Type */}
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Event Type</label>
+          <label className="block text-xs text-slate-400 mb-1">
+            Event Type
+          </label>
           <select
             value={filters.eventType || ""}
             onChange={(e) => onFilterChange({ eventType: e.target.value })}
@@ -132,7 +147,9 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
 
         {/* Min Amount */}
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Min Amount (₹)</label>
+          <label className="block text-xs text-slate-400 mb-1">
+            Min Amount (₹)
+          </label>
           <input
             type="number"
             placeholder="0"
@@ -144,7 +161,9 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
 
         {/* Max Amount */}
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Max Amount (₹)</label>
+          <label className="block text-xs text-slate-400 mb-1">
+            Max Amount (₹)
+          </label>
           <input
             type="number"
             placeholder="100000"
@@ -166,7 +185,12 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                 className="p-3 font-medium cursor-pointer hover:text-slate-900"
                 onClick={() => handleSortToggle("amount")}
               >
-                Amount {filters.sort?.startsWith("amount") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
+                Amount{" "}
+                {filters.sort?.startsWith("amount")
+                  ? filters.sort.endsWith("desc")
+                    ? "↓"
+                    : "↑"
+                  : ""}
               </th>
               <th className="p-3 font-medium">State</th>
               <th className="p-3 font-medium">Stage</th>
@@ -174,7 +198,12 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                 className="p-3 font-medium cursor-pointer hover:text-slate-900"
                 onClick={() => handleSortToggle("riskScore")}
               >
-                Risk Score {filters.sort?.startsWith("riskScore") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
+                Risk Score{" "}
+                {filters.sort?.startsWith("riskScore")
+                  ? filters.sort.endsWith("desc")
+                    ? "↓"
+                    : "↑"
+                  : ""}
               </th>
               <th className="p-3 font-medium">Attempts</th>
               <th className="p-3 font-medium">Action</th>
@@ -182,7 +211,12 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                 className="p-3 font-medium cursor-pointer hover:text-slate-900"
                 onClick={() => handleSortToggle("occurredAt")}
               >
-                Occurred At {filters.sort?.startsWith("occurredAt") ? (filters.sort.endsWith("desc") ? "↓" : "↑") : ""}
+                Occurred At{" "}
+                {filters.sort?.startsWith("occurredAt")
+                  ? filters.sort.endsWith("desc")
+                    ? "↓"
+                    : "↑"
+                  : ""}
               </th>
             </tr>
           </thead>
@@ -214,8 +248,12 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                   aria-label={`Open audit trail for ${item.customerName}`}
                 >
                   <td className="p-3">
-                    <div className="font-semibold text-slate-900">{item.customerName}</div>
-                    <div className="text-slate-400 text-[11px] font-mono">{item.customerEmail}</div>
+                    <div className="font-semibold text-slate-900">
+                      {item.customerName}
+                    </div>
+                    <div className="text-slate-400 text-[11px] font-mono">
+                      {item.customerEmail}
+                    </div>
                   </td>
                   <td className="p-3">
                     <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono text-[10px]">
@@ -223,10 +261,15 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                     </span>
                   </td>
                   <td className="p-3 font-mono font-semibold text-emerald-700">
-                    ₹{item.amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                    ₹
+                    {item.amount.toLocaleString("en-IN", {
+                      maximumFractionDigits: 2,
+                    })}
                   </td>
                   <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${STATE_BADGES[item.state] || STATE_BADGES.DETECTED}`}>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${STATE_BADGES[item.state] || STATE_BADGES.DETECTED}`}
+                    >
                       {item.state}
                     </span>
                   </td>
@@ -234,7 +277,9 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {/* Hide the stage echo when it adds nothing beyond the
                           lifecycle state (both DETECTED) */}
-                      {!(item.stage === "DETECTED" && item.state === "DETECTED") && (
+                      {!(
+                        item.stage === "DETECTED" && item.state === "DETECTED"
+                      ) && (
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
                             STAGE_BADGES[item.stage] || STAGE_BADGES.DETECTED
@@ -247,31 +292,46 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
                   </td>
                   <td className="p-3 font-mono">
                     {item.riskScore !== null ? (
-                      <span className={item.riskScore > 0.7 ? "text-red-700" : item.riskScore > 0.4 ? "text-amber-700" : "text-emerald-700"}>
+                      <span
+                        className={
+                          item.riskScore > 0.7
+                            ? "text-red-700"
+                            : item.riskScore > 0.4
+                              ? "text-amber-700"
+                              : "text-emerald-700"
+                        }
+                      >
                         {(item.riskScore * 100).toFixed(0)}%
                       </span>
                     ) : (
                       <span className="text-slate-500">N/A</span>
                     )}
                   </td>
-                  <td className="p-3 font-mono text-slate-700">{item.attemptCount}</td>
+                  <td className="p-3 font-mono text-slate-700">
+                    {item.attemptCount}
+                  </td>
                   <td className="p-3">
-                    {item.actionResult ? (
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                          ACTION_RESULT_BADGES[item.actionResult] ??
-                          "bg-slate-100 text-slate-600 border-slate-300"
-                        }`}
-                        title={item.actionType ?? undefined}
-                      >
-                        {item.actionResult}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {item.actionResult ? (
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                            ACTION_RESULT_BADGES[item.actionResult] ??
+                            "bg-slate-100 text-slate-600 border-slate-300"
+                          }`}
+                          title={item.actionType ?? undefined}
+                        >
+                          {item.actionResult}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-3 text-slate-400 font-mono">
-                    {new Date(item.occurredAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
+                    {new Date(item.occurredAt).toLocaleString("en-IN", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}
                   </td>
                 </tr>
               ))
@@ -284,13 +344,17 @@ export function EntityTable({ entities, filters, pagination, onFilterChange, loa
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-3 border-t border-slate-200">
         <div className="flex items-center gap-3 text-xs text-slate-500">
           <span>
-            Showing <strong className="text-slate-700">{startItem}</strong>–<strong className="text-slate-700">{endItem}</strong> of <strong className="text-slate-700">{total}</strong> items
+            Showing <strong className="text-slate-700">{startItem}</strong>–
+            <strong className="text-slate-700">{endItem}</strong> of{" "}
+            <strong className="text-slate-700">{total}</strong> items
           </span>
           <div className="flex items-center gap-1.5 ml-2">
             <span>Per page:</span>
             <select
               value={limit}
-              onChange={(e) => onFilterChange({ limit: parseInt(e.target.value, 10), page: 1 })}
+              onChange={(e) =>
+                onFilterChange({ limit: parseInt(e.target.value, 10), page: 1 })
+              }
               className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
             >
               <option value={10}>10</option>

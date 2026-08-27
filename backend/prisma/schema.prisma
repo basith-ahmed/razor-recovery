@@ -161,6 +161,15 @@ model AuditEntry {
   actionSnapshot    Json?
   outcome           String
   timestamp         DateTime     @default(now())
+  sequenceNumber    Int          @unique @default(autoincrement())
+  prevHash          String
+  hash              String
+}
+
+model AuditChainHead {
+  id        Int      @id @default(1)
+  hash      String
+  updatedAt DateTime @updatedAt
 }
 
 model EntityWorkflowState {

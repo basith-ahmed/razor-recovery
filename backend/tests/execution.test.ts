@@ -13,8 +13,8 @@
 // Must be declared before imports so jest.mock hoists correctly.
 
 jest.mock("../src/config/openai", () => ({ requestJson: jest.fn() }));
-jest.mock("../src/config/prisma", () => ({
-  prisma: {
+jest.mock("../src/config/prisma", () => {
+  const mockPrisma: Record<string, unknown> = {
     customer: { findUnique: jest.fn() },
     action: { create: jest.fn(), upsert: jest.fn(), count: jest.fn() },
     auditEntry: { create: jest.fn(), findMany: jest.fn() },
@@ -31,8 +31,14 @@ jest.mock("../src/config/prisma", () => ({
     invoice: { findFirst: jest.fn() },
     cart: { findFirst: jest.fn() },
     subscription: { findFirst: jest.fn() },
-  },
-}));
+    auditChainHead: { upsert: jest.fn(), update: jest.fn() },
+    $queryRaw: jest.fn().mockResolvedValue([
+      { hash: "d7c09e32ebdfa4ba13e9ef94a91b828552fe899d08ccd52969f4882651343b5d" },
+    ]),
+    $transaction: jest.fn((cb: (tx: unknown) => Promise<unknown>) => cb(mockPrisma)),
+  };
+  return { prisma: mockPrisma };
+});
 jest.mock("../src/config/redis", () => {
   const redisMock = { incr: jest.fn(), set: jest.fn(), get: jest.fn() };
   return { redis: redisMock };

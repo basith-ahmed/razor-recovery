@@ -19,6 +19,7 @@ import { EnrichedRevenueEvent, RawRevenueEvent } from "../../domain/types";
 import { publish } from "../producer";
 import { TOPICS } from "../topics";
 import { emitIncomingEvent } from "../../api/websocket";
+import { recordFailureAuditEntry } from "../../services/auditService";
 
 const CONSUMER_GROUP = "detection-service";
 const STAGE = "detection";
@@ -172,16 +173,7 @@ export async function startDetectionConsumer(): Promise<void> {
         // Write a failed audit entry so the failure is visible
         if (event) {
           try {
-            await prisma.auditEntry.create({
-              data: {
-                eventId: event.id,
-                entityId: event.entityId,
-                actor: "system",
-                inputSnapshot: event as unknown as Prisma.InputJsonValue,
-                outcome: "failed",
-                timestamp: new Date(),
-              },
-            });
+            await recordFailureAuditEntry(event, { inputSnapshot: event });
           } catch (auditErr) {
             console.error("[detection] Failed to write failure audit entry:", auditErr);
           }

@@ -2,6 +2,7 @@
 module.exports = {
   testEnvironment: "node",
   roots: ["<rootDir>/tests"],
+  maxWorkers: 1,
   moduleFileExtensions: ["ts", "js", "json"],
   transform: {
     "^.+\\.ts$": [

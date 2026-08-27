@@ -24,6 +24,7 @@ import {
 import { FilterContext } from "../../domain/stoppingRules";
 import { publish } from "../producer";
 import { TOPICS } from "../topics";
+import { recordFailureAuditEntry } from "../../services/auditService";
 
 const CONSUMER_GROUP = "decision-service";
 const STAGE = "decision";
@@ -191,16 +192,9 @@ export async function startDecisionConsumer(): Promise<void> {
         logError("decision", error);
         if (payload?.event) {
           try {
-            await prisma.auditEntry.create({
-              data: {
-                eventId: payload.event.id,
-                entityId: payload.event.entityId,
-                actor: "system",
-                inputSnapshot: payload.event as unknown as Prisma.InputJsonValue,
-                diagnosisSnapshot: payload.diagnosis as unknown as Prisma.InputJsonValue,
-                outcome: "failed",
-                timestamp: new Date(),
-              },
+            await recordFailureAuditEntry(payload.event, {
+              inputSnapshot: payload.event,
+              diagnosisSnapshot: payload.diagnosis,
             });
           } catch (auditErr) {
             console.error("[decision] Failed to write failure audit entry:", auditErr);

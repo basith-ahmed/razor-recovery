@@ -8,6 +8,7 @@ import {
   AuditEntry,
   PolicyResponse,
   PaginatedResponse,
+  AuditVerifyResult,
 } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -56,5 +57,16 @@ export async function getPolicy(
   const response = await apiClient.get<PolicyResponse>("/policy", {
     params: { page, limit, dncPage, dncLimit },
   });
+  return response.data;
+}
+
+export async function verifyAuditChain(
+  fromSequence?: number,
+  toSequence?: number
+): Promise<AuditVerifyResult> {
+  const params: Record<string, number> = {};
+  if (fromSequence !== undefined) params.fromSequence = fromSequence;
+  if (toSequence !== undefined) params.toSequence = toSequence;
+  const response = await apiClient.get<AuditVerifyResult>("/audit/verify", { params });
   return response.data;
 }

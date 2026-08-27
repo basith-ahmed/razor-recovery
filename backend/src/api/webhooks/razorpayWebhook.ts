@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { env } from "../../config/env";
 import { prisma } from "../../config/prisma";
 import { emitLiveUpdate } from "../websocket";
+import { writeChainedAuditEntry } from "../../services/auditService";
 
 export const razorpayWebhookRouter = Router();
 
@@ -93,32 +94,32 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
         // cycle, or an unrelated cause arriving while this one just resolved —
         // starts with a clean budget, not stale state from whatever cause just
         // recovered.
-        await prisma.entityCauseState.deleteMany({
-          where: { entityId: event.entityId },
-        });
+        await prisma.$transaction(async (tx) => {
+          await tx.entityCauseState.deleteMany({
+            where: { entityId: event.entityId },
+          });
 
-        await prisma.entityWorkflowState.upsert({
-          where: { entityId: event.entityId },
-          create: {
-            entityId: event.entityId,
-            customerId: event.customerId,
-            state: "RECOVERED",
-          },
-          update: {
-            state: "RECOVERED",
-          },
-        });
+          await tx.entityWorkflowState.upsert({
+            where: { entityId: event.entityId },
+            create: {
+              entityId: event.entityId,
+              customerId: event.customerId,
+              state: "RECOVERED",
+            },
+            update: {
+              state: "RECOVERED",
+            },
+          });
 
-        // Record AuditEntry for recovery
-        await prisma.auditEntry.create({
-          data: {
+          // Record AuditEntry for recovery
+          await writeChainedAuditEntry(tx, {
             eventId: event.id,
             entityId: event.entityId,
             actor: "razorpay_webhook",
             inputSnapshot: payload,
             outcome: "recovered",
             timestamp: new Date(),
-          },
+          });
         });
 
         // Trigger real-time WebSocket update on the global live channel
