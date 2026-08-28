@@ -4,8 +4,10 @@ import { Prisma } from "@prisma/client";
 import { env } from "../../config/env";
 import { prisma } from "../../config/prisma";
 import { emitLiveUpdate } from "../websocket";
-import { writeChainedAuditEntry } from "../../services/auditService";
+import { recordFailureAuditEntry, writeChainedAuditEntry } from "../../services/auditService";
 import { writeLedgerEntry } from "../../services/ledgerService";
+import { publish } from "../../kafka/producer";
+import { TOPICS } from "../../kafka/topics";
 
 export const razorpayWebhookRouter = Router();
 
@@ -95,7 +97,11 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
         // cycle, or an unrelated cause arriving while this one just resolved —
         // starts with a clean budget, not stale state from whatever cause just
         // recovered.
-        await prisma.$transaction(async (tx) => {
+        const recoveryAuditEntry = await prisma.$transaction(async (tx) => {
+          const [diagnosis, decision] = await Promise.all([
+            tx.diagnosis.findUnique({ where: { eventId: event.id } }),
+            tx.decision.findUnique({ where: { eventId: event.id } }),
+          ]);
           await tx.entityCauseState.deleteMany({
             where: { entityId: event.entityId },
           });
@@ -112,22 +118,41 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
             },
           });
 
-          // Record AuditEntry for recovery
-          await writeChainedAuditEntry(tx, {
+          const recoveryAction = {
+            actionType: "webhook_capture",
+            result: "success",
+            integration: "RAZORPAY",
+            detail: "Payment captured via Razorpay webhook.",
+            paymentId: paymentId || orderId || paymentLinkId,
+          };
+
+          // Record AuditEntry for recovery with the original diagnosis and
+          // decision so its embedding remains a complete historical case.
+          const auditEntry = await writeChainedAuditEntry(tx, {
             eventId: event.id,
             entityId: event.entityId,
             actor: "razorpay_webhook",
             inputSnapshot: payload,
+            diagnosisSnapshot: diagnosis
+              ? {
+                  causeLabel: diagnosis.causeLabel,
+                  confidence: diagnosis.confidence,
+                  method: diagnosis.method,
+                  reasoning: diagnosis.reasoning,
+                }
+              : undefined,
+            decisionSnapshot: decision
+              ? {
+                  legalActions: decision.legalActions,
+                  chosenAction: decision.chosenAction,
+                  reasoning: decision.reasoning,
+                  policyVersion: decision.policyVersion,
+                }
+              : undefined,
+            actionSnapshot: recoveryAction,
             outcome: "recovered",
             timestamp: new Date(),
           });
-          const action = {
-            actionType: "webhook_capture",
-            result: "success",
-            integration: "RAZORPAY",
-            detail: `Payment captured via Razorpay webhook.`,
-            paymentId: paymentId || orderId || paymentLinkId,
-          };
           await writeLedgerEntry(tx, {
             entityId: event.entityId,
             eventId: event.id,
@@ -136,7 +161,31 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
             currency: event.currency,
             referenceId: paymentId || orderId || paymentLinkId,
           });
+          return auditEntry;
         });
+
+        // Keep RAG indexing decoupled from the webhook write: the embedding
+        // consumer independently reacts to the finalized audit record.
+        try {
+          await publish(TOPICS.AUDIT, event.id, {
+            auditEntryId: recoveryAuditEntry.id,
+            event: { id: event.id, entityId: event.entityId },
+          });
+        } catch (publishError) {
+          // A webhook acknowledgement must not be rolled back after its
+          // recovery transaction commits. Startup connects the producer in
+          // production; this makes a disconnected producer visible in logs
+          // while preserving Razorpay's successful recovery acknowledgement.
+          console.error("[razorpayWebhook] Failed to publish recovery for embedding:", publishError);
+          try {
+            await recordFailureAuditEntry(
+              { id: event.id, entityId: event.entityId },
+              { inputSnapshot: { stage: "embedding_publish", payload } },
+            );
+          } catch (auditError) {
+            console.error("[razorpayWebhook] Failed to record publish failure audit entry:", auditError);
+          }
+        }
 
         // Trigger real-time WebSocket update on the global live channel
         await emitLiveUpdate(event.id);

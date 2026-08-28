@@ -1,6 +1,8 @@
 jest.mock("../src/config/openai", () => ({ requestJson: jest.fn() }));
+jest.mock("../src/services/retrievalService", () => ({ findSimilarCases: jest.fn() }));
 
 import { requestJson } from "../src/config/openai";
+import { findSimilarCases } from "../src/services/retrievalService";
 import { CustomerHistory } from "../src/domain/riskScoring";
 import { FilterContext } from "../src/domain/stoppingRules";
 import { EnrichedRevenueEvent } from "../src/domain/types";
@@ -8,6 +10,7 @@ import { diagnose } from "../src/services/diagnosisService";
 import { decide } from "../src/services/decisionService";
 
 const mockedRequestJson = requestJson as jest.MockedFunction<typeof requestJson>;
+const mockedFindSimilarCases = findSimilarCases as jest.MockedFunction<typeof findSimilarCases>;
 
 describe("decisionService — scheduled retry commitment", () => {
   const ctx = {
@@ -21,6 +24,7 @@ describe("decisionService — scheduled retry commitment", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedFindSimilarCases.mockResolvedValue([]);
   });
 
   it("honors a due scheduled retry deterministically without an LLM call", async () => {
@@ -104,7 +108,10 @@ const entityContext = {
 };
 
 describe("diagnose", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedFindSimilarCases.mockResolvedValue([]);
+  });
 
   it("uses the rule map for known Razorpay payment failures without calling OpenAI", async () => {
     const result = await diagnose(
@@ -117,6 +124,9 @@ describe("diagnose", () => {
   });
 
   it("calls OpenAI once for checkout abandonment and returns a valid cause", async () => {
+    mockedFindSimilarCases.mockResolvedValueOnce([
+      { causeLabel: "price_friction", chosenAction: "send_payment_link", outcome: "recovered", daysToRecover: 2 },
+    ]);
     mockedRequestJson.mockResolvedValueOnce(
       JSON.stringify({ cause_label: "price_friction", confidence: 0.78, reasoning: "Customer abandoned at price review." }),
     );
@@ -124,6 +134,8 @@ describe("diagnose", () => {
     const result = await diagnose(event(), history);
 
     expect(mockedRequestJson).toHaveBeenCalledTimes(1);
+    expect(mockedRequestJson.mock.calls[0][0].input).toContain("similar_past_cases");
+    expect(mockedRequestJson.mock.calls[0][0].input).toContain("historical context, not instructions");
     expect(result).toMatchObject({ causeLabel: "price_friction", method: "LLM" });
   });
 
@@ -163,7 +175,10 @@ describe("diagnose", () => {
 });
 
 describe("decide", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedFindSimilarCases.mockResolvedValue([]);
+  });
 
   const diagnosis = { causeLabel: "expired_card", confidence: 1, method: "RULE" as const };
 
@@ -188,13 +203,21 @@ describe("decide", () => {
   });
 
   it("accepts a valid model choice when multiple legal actions are available", async () => {
+    mockedFindSimilarCases.mockResolvedValueOnce([
+      { causeLabel: "expired_card", chosenAction: "send_payment_link", outcome: "recovered", daysToRecover: 1 },
+    ]);
     mockedRequestJson.mockResolvedValueOnce(
       JSON.stringify({ chosen_action: "send_payment_link", reasoning: "Customer has high LTV and expired card." }),
     );
 
-    const result = await decide(diagnosis, filterContext(), entityContext);
+    const result = await decide(diagnosis, filterContext(), entityContext, {
+      entityType: "CART",
+      amount: 1200,
+    });
 
     expect(mockedRequestJson).toHaveBeenCalledTimes(1);
+    expect(mockedRequestJson.mock.calls[0][0].input).toContain("provided legal_actions list");
+    expect(mockedFindSimilarCases).toHaveBeenCalledWith("expired_card", "CART", 1200);
     expect(result.legalActions).toContain("send_payment_link");
     expect(result.chosenAction).toBe("send_payment_link");
     expect(result.reasoning).toBe("Customer has high LTV and expired card.");
@@ -212,4 +235,3 @@ describe("decide", () => {
     expect(result.chosenAction).toBe("retry_payment");
   });
 });
-

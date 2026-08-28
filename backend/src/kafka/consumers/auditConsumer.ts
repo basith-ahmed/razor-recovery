@@ -72,13 +72,13 @@ export async function startAuditConsumer(): Promise<void> {
 
         // Record the audit entry (also transitions workflow state and updates
         // per-cause attempt/cooldown state in EntityCauseState)
-        await recordAuditEntry({ event, diagnosis, decision, action });
+        const auditEntry = await recordAuditEntry({ event, diagnosis, decision, action });
 
         // Trigger live WebSocket updates for the activity feed and metrics counters
         await emitLiveUpdate(event.id);
 
         // Publish to AUDIT topic for metrics + WebSocket consumers
-        await publish(TOPICS.AUDIT, event.id, payload);
+        await publish(TOPICS.AUDIT, event.id, { ...payload, auditEntryId: auditEntry.id });
         console.log(
           `[audit] Event ${event.id} → audit entry recorded, published to AUDIT`,
         );

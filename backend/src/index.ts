@@ -23,6 +23,10 @@ import {
   stopAuditConsumer,
 } from "./kafka/consumers/auditConsumer";
 import {
+  startEmbeddingConsumer,
+  stopEmbeddingConsumer,
+} from "./kafka/consumers/embeddingConsumer";
+import {
   startFollowUpScheduler,
   stopFollowUpScheduler,
 } from "./scheduler/followUpScheduler";
@@ -53,6 +57,7 @@ async function shutdown(signal: string) {
       stopDecisionConsumer(),
       stopExecutorConsumer(),
       stopAuditConsumer(),
+      stopEmbeddingConsumer(),
       stopFollowUpScheduler(),
       disconnectProducer(),
       new Promise<void>((resolve) => server.close(() => resolve())),
@@ -83,6 +88,7 @@ async function main() {
     startDecisionConsumer(),
     startExecutorConsumer(),
     startAuditConsumer(),
+    startEmbeddingConsumer(),
   ]);
 
   // Clock-driven follow-ups: re-inject synthesized events onto EVENTS_RAW

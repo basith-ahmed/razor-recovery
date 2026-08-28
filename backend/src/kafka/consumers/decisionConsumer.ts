@@ -157,6 +157,9 @@ export async function startDecisionConsumer(): Promise<void> {
           priorFailures,
           daysSinceLastContact,
           dueScheduledRetry: isDueScheduledRetry,
+        }, {
+          entityType: event.entityType,
+          amount: event.amount,
         });
 
         // Persist Decision row.

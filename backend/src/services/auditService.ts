@@ -192,14 +192,14 @@ export async function recordAuditEntry(params: {
   diagnosis: DiagnosisResult;
   decision: DecisionResult;
   action: ActionResult;
-}): Promise<void> {
+}) {
   const { event, diagnosis, decision, action } = params;
   const outcome = deriveOutcome(action);
   const now = new Date();
 
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     // 1. Write chained AuditEntry row
-    await writeChainedAuditEntry(tx, {
+    const auditEntry = await writeChainedAuditEntry(tx, {
       eventId: event.id,
       entityId: event.entityId,
       actor: "system",
@@ -294,6 +294,8 @@ export async function recordAuditEntry(params: {
         },
       });
     }
+
+    return auditEntry;
   });
 }
 

@@ -1,5 +1,6 @@
 /**
- * Consumer startup script — starts all five pipeline consumers in a
+ * Consumer startup script — starts the five pipeline consumers plus the
+ * independent audit-embedding consumer in a
  * single process for hackathon simplicity. Each still has its own
  * consumer group for independent scaling.
  *
@@ -12,6 +13,7 @@ import { startDiagnosisConsumer, stopDiagnosisConsumer } from "../kafka/consumer
 import { startDecisionConsumer, stopDecisionConsumer } from "../kafka/consumers/decisionConsumer";
 import { startExecutorConsumer, stopExecutorConsumer } from "../kafka/consumers/executorConsumer";
 import { startAuditConsumer, stopAuditConsumer } from "../kafka/consumers/auditConsumer";
+import { startEmbeddingConsumer, stopEmbeddingConsumer } from "../kafka/consumers/embeddingConsumer";
 
 async function start(): Promise<void> {
   console.log("Starting RazorRecovery Kafka consumers...\n");
@@ -26,9 +28,10 @@ async function start(): Promise<void> {
     startDecisionConsumer(),
     startExecutorConsumer(),
     startAuditConsumer(),
+    startEmbeddingConsumer(),
   ]);
 
-  console.log("\nAll 5 consumers are running. Press Ctrl+C to stop.\n");
+  console.log("\nAll 6 consumers are running. Press Ctrl+C to stop.\n");
 }
 
 async function shutdown(): Promise<void> {
@@ -39,6 +42,7 @@ async function shutdown(): Promise<void> {
     stopDecisionConsumer(),
     stopExecutorConsumer(),
     stopAuditConsumer(),
+    stopEmbeddingConsumer(),
   ]);
   await disconnectProducer();
   console.log("All consumers stopped. Goodbye.");

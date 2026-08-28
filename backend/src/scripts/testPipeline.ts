@@ -40,6 +40,10 @@ import {
   stopAuditConsumer,
 } from "../kafka/consumers/auditConsumer";
 import {
+  startEmbeddingConsumer,
+  stopEmbeddingConsumer,
+} from "../kafka/consumers/embeddingConsumer";
+import {
   injectFailure,
   SyntheticFailureType,
 } from "../simulator/injectFailure";
@@ -88,8 +92,8 @@ async function runPipelineTest() {
   });
   await admin.disconnect();
 
-  // Step 2: Start Producer & all 5 Consumers
-  console.log("\n2. Starting Kafka Producer & 5 Pipeline Consumers...");
+  // Step 2: Start Producer, five pipeline consumers, and the RAG indexer
+  console.log("\n2. Starting Kafka Producer & 6 Consumers...");
   await connectProducer();
   await Promise.all([
     startDetectionConsumer(),
@@ -97,8 +101,9 @@ async function runPipelineTest() {
     startDecisionConsumer(),
     startExecutorConsumer(),
     startAuditConsumer(),
+    startEmbeddingConsumer(),
   ]);
-  console.log("   All 5 consumers running!");
+  console.log("   All 6 consumers running!");
 
   // Step 3: Publish a paced stream of synthetic events
   console.log("\n3. Publishing a paced stream of 10 events via Kafka...");
@@ -191,6 +196,7 @@ async function runPipelineTest() {
     "decision-service",
     "executor-service",
     "audit-service",
+    "embedding-service",
   ];
   expectedGroups.forEach((g) => {
     const ok = groupIds.includes(g);
@@ -206,6 +212,7 @@ async function runPipelineTest() {
     stopDecisionConsumer(),
     stopExecutorConsumer(),
     stopAuditConsumer(),
+    stopEmbeddingConsumer(),
   ]);
   await disconnectProducer();
   console.log("   Test completed successfully.");

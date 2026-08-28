@@ -1,10 +1,10 @@
 # razorrecovery
 
-Autonomous revenue-recovery platform: ingests revenue-risk events (failed payments, abandoned checkouts, overdue invoices, failed subscriptions) through a continuous Kafka event pipeline, diagnoses the root cause (rule-based, with LLM fallback), decides a bounded, policy-compliant recovery action, executes it against real Razorpay Test Mode / email, and maintains a full audit trail with live windowed metrics.
+Autonomous revenue-recovery platform: ingests revenue-risk events (failed payments, abandoned checkouts, overdue invoices, failed subscriptions) through a continuous Kafka event pipeline, diagnoses the root cause (rule-based, with LLM fallback), decides a bounded, policy-compliant recovery action, executes it against real Razorpay Test Mode / email, and maintains a full audit trail with live windowed metrics. Terminal audit cases are embedded with Voyage AI and retrieved as non-authoritative historical context for LLM diagnosis and decisions.
 
 ## Architecture
 
-Once started, the backend is a **continuously running pipeline** — not a batch job. All five Kafka consumers start at process boot and run for the lifetime of the process. Events can arrive at any time, from any source:
+Once started, the backend is a **continuously running pipeline** — not a batch job. Five pipeline consumers and an independent audit-embedding consumer start at process boot and run for the lifetime of the process. Events can arrive at any time, from any source:
 
 ```
 upstream systems ──► revenue.events.raw ──► detection ──► revenue.events.enriched
@@ -21,7 +21,7 @@ There is no "run" concept anywhere in the core domain. Metrics are computed over
 ## Setup
 
 ```bash
-cp .env.example .env          # fill in Razorpay test keys + Anthropic API key
+cp .env.example .env          # fill in Razorpay test keys, LLM key, and VOYAGE_API_KEY
 docker compose up -d postgres redis redpanda mailhog
 
 cd backend
