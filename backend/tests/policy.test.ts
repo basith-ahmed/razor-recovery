@@ -254,7 +254,6 @@ describe("filterLegalActions", () => {
         "send_reminder_email",
         "send_soft_chase_email",
         "escalate_to_human",
-        "start_promise_to_pay_tracking",
       ]);
     });
 

@@ -286,8 +286,7 @@ export async function executeAction(
   } else if (
     chosenAction === "pause_subscription" ||
     chosenAction === "auto_cancel" ||
-    chosenAction === "hard_decline" ||
-    chosenAction === "start_promise_to_pay_tracking"
+    chosenAction === "hard_decline"
   ) {
     actionResult = {
       actionType: chosenAction,

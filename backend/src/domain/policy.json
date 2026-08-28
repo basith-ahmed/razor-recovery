@@ -33,7 +33,7 @@
     },
     {
       "cause": "invoice_overdue",
-      "actions": ["send_reminder_email", "send_soft_chase_email", "escalate_to_human", "start_promise_to_pay_tracking"],
+      "actions": ["send_reminder_email", "send_soft_chase_email", "escalate_to_human"],
       "stopping": {}
     }
   ]
