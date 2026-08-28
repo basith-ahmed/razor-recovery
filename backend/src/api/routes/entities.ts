@@ -8,6 +8,26 @@ export const entitiesRouter = Router();
 
 const WINDOWS: Window[] = ["1h", "24h", "7d", "all"];
 
+const RETRY_ACTION_TYPES = new Set(["retry_payment_immediate", "retry_payment_delayed"]);
+const ESCALATE_ACTION_TYPES = new Set(["escalate_to_human"]);
+const COOLDOWN_ACTION_TYPES = new Set(["pause_subscription"]);
+
+export function deriveEventState(outcome?: string | null, actionType?: string | null): string {
+  if (!outcome) return "DETECTED";
+  if (outcome === "recovered" || outcome === "payment_confirmed") return "RECOVERED";
+  if (outcome === "written_off" || outcome === "hard_decline" || outcome === "auto_cancel") return "WRITTEN_OFF";
+  if (outcome === "reversed") return "REVERSED";
+  if (outcome === "escalated" || (actionType && ESCALATE_ACTION_TYPES.has(actionType))) return "ESCALATED";
+  if (actionType && RETRY_ACTION_TYPES.has(actionType)) return "RETRYING";
+  if (actionType && COOLDOWN_ACTION_TYPES.has(actionType)) return "COOLING_DOWN";
+  if (outcome === "pending") return "CONTACTED";
+  if (outcome === "skipped") {
+    return actionType === "none" ? "DO_NOT_CONTACT" : "DETECTED";
+  }
+  if (outcome === "failed") return "DETECTED";
+  return "DETECTED";
+}
+
 // GET /entities?state=&cause=&eventType=&minAmount=&maxAmount=&search=&sort=&window=&page=&limit=
 entitiesRouter.get("/", async (req: Request, res: Response) => {
   try {
@@ -55,11 +75,23 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
     if (state && typeof state === "string" && Object.values(WorkflowState).includes(state.toUpperCase() as WorkflowState)) {
       const targetState = state.toUpperCase() as WorkflowState;
       if (targetState === "RECOVERED") {
-        where.auditEntries = { some: { outcome: "recovered" } };
+        where.auditEntries = { some: { outcome: { in: ["recovered", "payment_confirmed"] } } };
       } else if (targetState === "WRITTEN_OFF") {
-        where.auditEntries = { some: { outcome: "written_off" } };
+        where.auditEntries = { some: { outcome: { in: ["written_off", "hard_decline", "auto_cancel"] } } };
+      } else if (targetState === "RETRYING") {
+        where.auditEntries = { some: { outcome: "pending" } };
+        where.action = { actionType: { in: ["retry_payment_immediate", "retry_payment_delayed"] } };
+      } else if (targetState === "ESCALATED") {
+        where.OR = [
+          { auditEntries: { some: { outcome: "escalated" } } },
+          { auditEntries: { some: { outcome: "pending" } }, action: { actionType: "escalate_to_human" } },
+        ];
+      } else if (targetState === "COOLING_DOWN") {
+        where.auditEntries = { some: { outcome: "pending" } };
+        where.action = { actionType: "pause_subscription" };
       } else if (targetState === "CONTACTED") {
-        where.auditEntries = { some: { outcome: { in: ["pending", "escalated"] } } };
+        where.auditEntries = { some: { outcome: "pending" } };
+        where.action = { actionType: { notIn: ["retry_payment_immediate", "retry_payment_delayed", "escalate_to_human", "pause_subscription"] } };
       } else if (targetState === "DO_NOT_CONTACT") {
         where.auditEntries = { some: { outcome: "skipped" } };
         where.action = { actionType: "none" };
@@ -69,7 +101,7 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
           {
             OR: [
               { auditEntries: { none: { outcome: { in: ["recovered", "written_off", "pending", "escalated"] } } } },
-              { auditEntries: { some: { outcome: "skipped" } }, action: { actionType: { not: "none" } } }
+              { auditEntries: { some: { outcome: { in: ["skipped", "failed"] } } }, action: { actionType: { not: "none" } } }
             ]
           }
         ];
@@ -139,19 +171,13 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
             ? "DIAGNOSED"
             : "DETECTED";
 
-      let eventState = "DETECTED";
-      if (event.auditEntries && event.auditEntries.length > 0) {
-        const latestOutcome = event.auditEntries[0].outcome;
-        if (latestOutcome === "recovered") eventState = "RECOVERED";
-        else if (latestOutcome === "written_off") eventState = "WRITTEN_OFF";
-        else if (latestOutcome === "reversed") eventState = "REVERSED";
-        else if (latestOutcome === "pending" || latestOutcome === "escalated") eventState = "CONTACTED";
-        else if (latestOutcome === "skipped") {
-          if (event.action?.actionType === "none") eventState = "DO_NOT_CONTACT";
-          else eventState = "DETECTED";
-        }
-        else if (latestOutcome === "failed") eventState = "DETECTED";
-      }
+      const latestAudit = event.auditEntries?.[0];
+      const actionType =
+        event.action?.actionType ??
+        (latestAudit?.actionSnapshot as Record<string, unknown> | null)?.actionType as string | undefined ??
+        (latestAudit?.decisionSnapshot as Record<string, unknown> | null)?.chosenAction as string | undefined;
+
+      const eventState = deriveEventState(latestAudit?.outcome, actionType);
 
       return {
         id: event.id,
@@ -209,16 +235,17 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       },
     });
 
-    const targetEntityIds = Array.from(new Set(auditEntries.map((a) => a.entityId)));
-    const states = await prisma.entityWorkflowState.findMany({
-      where: { entityId: { in: targetEntityIds } },
-    });
-    const stateMap = new Map(states.map((s) => [s.entityId, s.state]));
+    const result = auditEntries.map((entry) => {
+      const actionType =
+        (entry.actionSnapshot as Record<string, unknown> | null)?.actionType as string | undefined ??
+        (entry.decisionSnapshot as Record<string, unknown> | null)?.chosenAction as string | undefined;
+      const state = deriveEventState(entry.outcome, actionType);
 
-    const result = auditEntries.map((entry) => ({
-      ...entry,
-      workflowState: stateMap.get(entry.entityId) ?? "DETECTED",
-    }));
+      return {
+        ...entry,
+        state,
+      };
+    });
 
     return res.status(200).json(result);
   } catch (error: unknown) {

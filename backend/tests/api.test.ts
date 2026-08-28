@@ -258,7 +258,7 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       await prisma.action.create({
         data: {
           eventId: event.id,
-          actionType: "send_reminder",
+          actionType: "send_reminder_email",
           result: "success",
           integration: "EMAIL",
         },

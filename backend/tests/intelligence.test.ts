@@ -232,6 +232,6 @@ describe("decide", () => {
 
     expect(mockedRequestJson).toHaveBeenCalledTimes(1);
     expect(result.legalActions).toContain(result.chosenAction);
-    expect(result.chosenAction).toBe("retry_payment");
+    expect(result.chosenAction).toBe("retry_payment_immediate");
   });
 });

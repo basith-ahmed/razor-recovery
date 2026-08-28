@@ -92,7 +92,7 @@ export async function decide(
   // executor path) rather than re-asking the LLM what to do.
   if (entityContext.dueScheduledRetry) {
     const immediateRetry = legalActions.find(
-      (a) => a === "retry_payment_immediate" || a === "retry_payment",
+      (a) => a === "retry_payment_immediate",
     );
     if (immediateRetry) {
       return {

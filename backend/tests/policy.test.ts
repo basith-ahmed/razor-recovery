@@ -45,7 +45,7 @@ describe("policy.ts", () => {
     const rule = getRuleForCause("expired_card");
     expect(rule).toBeDefined();
     expect(rule!.cause).toBe("expired_card");
-    expect(rule!.actions).toContain("retry_payment");
+    expect(rule!.actions).toContain("retry_payment_immediate");
   });
 
   it("getRuleForCause returns undefined for unknown cause", () => {
@@ -118,7 +118,7 @@ describe("filterLegalActions", () => {
         makeCtx({ causeLabel: "expired_card", attemptCount: 0 })
       );
       expect(result).toEqual([
-        "retry_payment",
+        "retry_payment_immediate",
         "send_payment_link",
         "escalate_to_human",
       ]);
@@ -129,7 +129,7 @@ describe("filterLegalActions", () => {
         makeCtx({ causeLabel: "expired_card", attemptCount: 3 })
       );
       expect(result).toEqual(["escalate_to_human"]);
-      expect(result).not.toContain("retry_payment");
+      expect(result).not.toContain("retry_payment_immediate");
     });
 
     it("returns [] when in cooldown", () => {
@@ -146,7 +146,7 @@ describe("filterLegalActions", () => {
         makeCtx({ causeLabel: "insufficient_funds", attemptCount: 1 })
       );
       expect(result).toEqual([
-        "retry_payment",
+        "retry_payment_immediate",
         "send_payment_link",
         "escalate_to_human",
       ]);
@@ -251,7 +251,7 @@ describe("filterLegalActions", () => {
         makeCtx({ causeLabel: "invoice_overdue", daysOverdue: 10 })
       );
       expect(result).toEqual([
-        "send_reminder",
+        "send_reminder_email",
         "send_soft_chase_email",
         "escalate_to_human",
         "start_promise_to_pay_tracking",

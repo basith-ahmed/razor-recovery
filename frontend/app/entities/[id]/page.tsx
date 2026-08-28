@@ -47,8 +47,7 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
   const latestEntry = entries.length > 0 ? entries[entries.length - 1] : null;
   const event = latestEntry?.event;
   const customer = event?.customer;
-  const rawState = latestEntry?.workflowState || latestEntry?.outcome;
-  const currentState = rawState ? rawState.toUpperCase() : "DETECTED";
+  const currentState = latestEntry?.state || "DETECTED";
 
   const STATE_BADGE_STYLES: Record<string, string> = {
     DETECTED: "bg-gray-800 text-gray-300 border-gray-700",

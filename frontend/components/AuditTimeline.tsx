@@ -45,12 +45,6 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
           typeof rawDiagnosisReasoning === "string" && rawDiagnosisReasoning
             ? rawDiagnosisReasoning
             : null;
-        const diagnosisMethod: string | null =
-          typeof entry.diagnosisSnapshot?.method === "string"
-            ? entry.diagnosisSnapshot.method
-            : typeof entry.event?.diagnosis?.method === "string"
-              ? (entry.event.diagnosis.method as string)
-              : null;
 
         // Extract decision reasoning text safely
         const rawDecisionReasoning =
@@ -185,11 +179,6 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   AI Diagnosis Reasoning
-                  {diagnosisMethod && (
-                    <span className="text-[10px] font-mono normal-case bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
-                      {diagnosisMethod}
-                    </span>
-                  )}
                 </div>
                 <p className="text-sm text-slate-800 italic font-serif leading-relaxed">
                   &quot;{diagnosisReasoning}&quot;

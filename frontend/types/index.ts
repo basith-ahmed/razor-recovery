@@ -75,7 +75,7 @@ export interface AuditEntry {
   decisionSnapshot: Record<string, unknown> | null;
   actionSnapshot: Record<string, unknown> | null;
   timestamp: string;
-  workflowState?: string;
+  state?: string;
   event?: {
     id: string;
     entityId: string;

@@ -26,7 +26,7 @@ export async function retryPayment(orderId: string): Promise<ActionResult> {
     const order = await razorpay.orders.fetch(orderId);
 
     return {
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
       detail: `Order ${order.id} is ready for a customer retry via Razorpay Checkout.`,
@@ -34,7 +34,7 @@ export async function retryPayment(orderId: string): Promise<ActionResult> {
   } catch (error: any) {
     if (orderId.startsWith("order_sim_") || orderId.startsWith("sim_")) {
       return {
-        actionType: "retry_payment",
+        actionType: "retry_payment_immediate",
         result: "success",
         integration: "RAZORPAY",
         detail: `[SIMULATED] Order ${orderId} prepared for retry via Razorpay Checkout.`,

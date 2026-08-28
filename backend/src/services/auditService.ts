@@ -57,7 +57,6 @@ function toStateMachineOutcome(action: ActionResult): string | null {
 
   // Successful actions
   switch (action.actionType) {
-    case "retry_payment":
     case "retry_payment_immediate":
     case "retry_payment_delayed":
       return "retry_initiated";
@@ -66,7 +65,6 @@ function toStateMachineOutcome(action: ActionResult): string | null {
     case "send_dunning_email_1":
     case "send_dunning_email_2":
     case "send_dunning_email_3":
-    case "send_reminder":
       return "email_sent";
     case "send_payment_link":
       return "payment_link_sent";

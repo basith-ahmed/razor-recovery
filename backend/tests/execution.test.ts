@@ -142,8 +142,8 @@ function makeDiagnosis(overrides: Partial<DiagnosisResult> = {}): DiagnosisResul
 
 function makeDecision(overrides: Partial<DecisionResult> = {}): DecisionResult {
   return {
-    legalActions: ["retry_payment", "send_payment_link"],
-    chosenAction: "retry_payment",
+    legalActions: ["retry_payment_immediate", "send_payment_link"],
+    chosenAction: "retry_payment_immediate",
     reasoning: "Customer has an expired card; retry is the safest first action.",
     policyVersion: "1.0.0",
     ...overrides,
@@ -171,7 +171,7 @@ describe("executorService", () => {
     (mockedPrisma.action.create as jest.Mock).mockResolvedValue({
       id: "action-1",
       eventId: "event-1",
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
     });
@@ -268,14 +268,14 @@ describe("executorService", () => {
       });
 
       const result = await executeAction(
-        makeDecision({ chosenAction: "retry_payment" }),
+        makeDecision({ chosenAction: "retry_payment_immediate" }),
         makeEvent(),
       );
 
       expect(mockedRazorpay.orders.fetch).toHaveBeenCalledWith("order_sim_xyz");
       expect(result.result).toBe("success");
       expect(result.integration).toBe("RAZORPAY");
-      expect(result.actionType).toBe("retry_payment");
+      expect(result.actionType).toBe("retry_payment_immediate");
       expect(mockedPrisma.action.upsert).toHaveBeenCalledTimes(1);
     });
 
@@ -372,7 +372,7 @@ describe("executorService", () => {
     it("throws DomainError when retry has no razorpayOrderId", async () => {
       await expect(
         executeAction(
-          makeDecision({ chosenAction: "retry_payment" }),
+          makeDecision({ chosenAction: "retry_payment_immediate" }),
           makeEvent({ razorpayOrderId: undefined }),
         ),
       ).rejects.toThrow("no razorpayOrderId");
@@ -401,7 +401,7 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis();
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
     };
@@ -421,7 +421,7 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis();
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
     };
@@ -462,7 +462,7 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis({ causeLabel: "gateway_timeout" });
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
     };
@@ -522,7 +522,7 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis({ causeLabel: "insufficient_funds" });
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
     };
@@ -675,7 +675,7 @@ describe("per-cause attempt/cooldown scoping", () => {
     // Full action list for insufficient_funds — NOT escalation-only, because
     // this cause's attemptCount is 0 regardless of gateway_timeout's 2.
     expect(legalActions).toEqual([
-      "retry_payment",
+      "retry_payment_immediate",
       "send_payment_link",
       "escalate_to_human",
     ]);
@@ -955,7 +955,7 @@ describe("Definition of Done — Full Pipeline", () => {
 
     // Mock Gemini LLM requestJson
     mockedRequestJson.mockResolvedValue(
-      JSON.stringify({ chosen_action: "retry_payment", reasoning: "Retry payment recommended by policy." }),
+      JSON.stringify({ chosen_action: "retry_payment_immediate", reasoning: "Retry payment recommended by policy." }),
     );
 
     // Mock Mailer

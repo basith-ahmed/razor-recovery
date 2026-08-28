@@ -140,7 +140,7 @@ describe("Integration Layer (Phase 4)", () => {
       const res = await retryPayment("order_test_999");
 
       expect(res).toEqual({
-        actionType: "retry_payment",
+        actionType: "retry_payment_immediate",
         result: "success",
         integration: "RAZORPAY",
         detail: "Order order_test_999 is ready for a customer retry via Razorpay Checkout.",

@@ -19,7 +19,7 @@ import {
   EnrichedRevenueEvent,
 } from "../domain/types";
 
-const RETRY_ACTIONS = new Set(["retry_payment", "retry_payment_immediate"]);
+const RETRY_ACTIONS = new Set(["retry_payment_immediate"]);
 
 const PAYMENT_LINK_ACTIONS = new Set(["send_payment_link"]);
 
@@ -29,7 +29,7 @@ const EMAIL_ACTIONS = new Set([
   "send_dunning_email_1",
   "send_dunning_email_2",
   "send_dunning_email_3",
-  "send_reminder",
+  
   "send_winback_offer",
 ]);
 
