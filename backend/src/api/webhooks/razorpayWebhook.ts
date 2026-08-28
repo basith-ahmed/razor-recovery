@@ -5,6 +5,7 @@ import { env } from "../../config/env";
 import { prisma } from "../../config/prisma";
 import { emitLiveUpdate } from "../websocket";
 import { writeChainedAuditEntry } from "../../services/auditService";
+import { writeLedgerEntry } from "../../services/ledgerService";
 
 export const razorpayWebhookRouter = Router();
 
@@ -120,6 +121,21 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
             outcome: "recovered",
             timestamp: new Date(),
           });
+          const action = {
+            actionType: "webhook_capture",
+            result: "success",
+            integration: "RAZORPAY",
+            detail: `Payment captured via Razorpay webhook.`,
+            paymentId: paymentId || orderId || paymentLinkId,
+          };
+          await writeLedgerEntry(tx, {
+            entityId: event.entityId,
+            eventId: event.id,
+            type: "RECOVERED",
+            amount: event.amount,
+            currency: event.currency,
+            referenceId: paymentId || orderId || paymentLinkId,
+          });
         });
 
         // Trigger real-time WebSocket update on the global live channel
@@ -128,6 +144,42 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
         console.log(`[razorpayWebhook] Entity ${event.entityId} marked RECOVERED via payment webhook.`);
       } else {
         console.log("[razorpayWebhook] No matching action found for payment webhook payload.");
+      }
+    } else if (eventName === "refund.processed" || eventName === "payment.refunded") {
+      const refundEntity = payload.payload?.refund?.entity;
+      const paymentId = refundEntity?.payment_id as string | undefined;
+      const refundId = refundEntity?.id as string | undefined;
+      const refundedAmount = refundEntity?.amount ? refundEntity.amount / 100 : undefined; // Amount is typically in paise, convert to major unit if needed, assuming our events use major units.
+      // Wait, our DB uses Float for amount (major units). Razorpay sends paise.
+      // We should check our DB event.amount. For simplicity, we just use the event's original amount if we can't reliably parse.
+      
+      if (paymentId) {
+        const recoveredLedger = await prisma.ledgerEntry.findFirst({
+          where: {
+            type: "RECOVERED",
+            referenceId: paymentId,
+          },
+          include: { event: true },
+        });
+
+        if (recoveredLedger) {
+          const event = recoveredLedger.event;
+          await prisma.$transaction(async (tx) => {
+            await writeLedgerEntry(tx, {
+              entityId: event.entityId,
+              eventId: event.id,
+              type: "REVERSED",
+              amount: refundedAmount || event.amount, // fallback to full amount
+              currency: event.currency,
+              referenceId: refundId || paymentId,
+            });
+          });
+          
+          await emitLiveUpdate(event.id);
+          console.log(`[razorpayWebhook] Refund processed for entity ${event.entityId}. Logged REVERSED ledger entry.`);
+        } else {
+          console.log(`[razorpayWebhook] No matching RECOVERED ledger entry found for refunded payment ${paymentId}.`);
+        }
       }
     }
 

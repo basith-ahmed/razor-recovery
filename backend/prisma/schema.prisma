@@ -109,10 +109,11 @@ model RevenueEvent {
   riskScore         Float?
   urgency           Float?
 
-  diagnosis    Diagnosis?
-  decision     Decision?
-  action       Action?
-  auditEntries AuditEntry[]
+  diagnosis     Diagnosis?
+  decision      Decision?
+  action        Action?
+  auditEntries  AuditEntry[]
+  ledgerEntries LedgerEntry[]
 }
 
 model Diagnosis {
@@ -195,6 +196,31 @@ model EntityCauseState {
 
   @@unique([entityId, causeLabel])
   @@index([entityId])
+}
+
+enum LedgerEntryType {
+  AT_RISK
+  RECOVERED
+  WRITTEN_OFF
+  REVERSED
+}
+
+model LedgerEntry {
+  id          String          @id @default(uuid())
+  entityId    String
+  eventId     String
+  type        LedgerEntryType
+  amount      Float
+  currency    String          @default("INR")
+  referenceId String?         // Idempotency key or external reference (e.g. payment_id)
+  createdAt   DateTime        @default(now())
+  
+  event       RevenueEvent    @relation(fields: [eventId], references: [id])
+
+  @@index([entityId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([eventId, type])
 }
 
 model Ticket {

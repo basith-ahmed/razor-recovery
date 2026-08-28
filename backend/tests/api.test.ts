@@ -325,11 +325,8 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       expect(remainingCauseState).toEqual([]);
 
       // Cleanup
-      await prisma.auditEntry.deleteMany({ where: { eventId: event.id } });
-      await prisma.entityCauseState.deleteMany({ where: { entityId } });
-      await prisma.entityWorkflowState.delete({ where: { entityId } });
-      await prisma.action.delete({ where: { eventId: event.id } });
-      await prisma.revenueEvent.delete({ where: { id: event.id } });
+      await prisma.$executeRawUnsafe(`TRUNCATE TABLE "RevenueEvent" CASCADE;`);
+      await prisma.$executeRawUnsafe(`TRUNCATE TABLE "LedgerEntry" CASCADE;`);
     });
 
     it("processes validly-signed payment.captured webhook correctly", async () => {

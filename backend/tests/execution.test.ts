@@ -32,6 +32,15 @@ jest.mock("../src/config/prisma", () => {
     cart: { findFirst: jest.fn() },
     subscription: { findFirst: jest.fn() },
     auditChainHead: { upsert: jest.fn(), update: jest.fn() },
+    ledgerEntry: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockImplementation((args: any) => Promise.resolve({ id: "mock-ledger-id", ...args.data })),
+      groupBy: jest.fn().mockResolvedValue([
+        { type: "AT_RISK", _sum: { amount: 10000 } },
+        { type: "RECOVERED", _sum: { amount: 5000 } },
+        { type: "REVERSED", _sum: { amount: 0 } },
+      ]),
+    },
     $queryRaw: jest.fn().mockResolvedValue([
       { hash: "d7c09e32ebdfa4ba13e9ef94a91b828552fe899d08ccd52969f4882651343b5d" },
     ]),
@@ -862,6 +871,7 @@ describe("metricsService", () => {
       (mockedPrisma.revenueEvent.count as jest.Mock).mockResolvedValueOnce(0);
       (mockedPrisma.diagnosis.count as jest.Mock).mockResolvedValueOnce(0);
       (mockedPrisma.action.count as jest.Mock).mockResolvedValueOnce(0);
+      (mockedPrisma.ledgerEntry.groupBy as jest.Mock).mockResolvedValueOnce([]);
       (mockedPrisma.auditEntry.findMany as jest.Mock)
         .mockResolvedValueOnce([]) // recovered audits
         .mockResolvedValueOnce([]) // compliance audits

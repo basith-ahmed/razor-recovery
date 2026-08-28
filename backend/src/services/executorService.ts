@@ -231,6 +231,8 @@ export async function executeAction(
       customerEmail: customer.email,
       customerPhone: customer.phone ?? undefined,
       description: `Recovery payment for ${event.eventType} — ${event.entityId}`,
+      eventId: event.id,
+      actionType: chosenAction,
     });
     actionResult = { ...actionResult, actionType: chosenAction };
   } else if (EMAIL_ACTIONS.has(chosenAction)) {
@@ -248,6 +250,8 @@ export async function executeAction(
         customerPhone: customer.phone ?? undefined,
         description: `Recovery payment for ${event.eventType} — ${event.entityId}`,
         notify: false, // Do not let Razorpay send its default email/SMS
+        eventId: event.id,
+        actionType: chosenAction,
       });
       paymentUrl = linkResult.paymentLinkShortUrl;
       paymentLinkId = linkResult.razorpayPaymentLinkId;

@@ -51,6 +51,7 @@ export interface ActionResult {
   integration: "RAZORPAY" | "EMAIL" | "MOCK";
   razorpayPaymentLinkId?: string;
   paymentLinkShortUrl?: string;
+  paymentId?: string;
   emailMessageId?: string;
   detail?: string;
 }

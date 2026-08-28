@@ -91,7 +91,7 @@ export async function recoveryFunnel(window: Window): Promise<FunnelStage[]> {
   ];
 }
 
-async function computeLiveMetricsUncached(
+export async function computeLiveMetricsUncached(
   window: Window,
 ): Promise<MetricsSummary> {
   const eventFilter = eventWindowFilter(window);
@@ -109,6 +109,20 @@ async function computeLiveMetricsUncached(
 
   let amountAtRisk = 0;
   let amountRecovered = 0;
+
+  const ledgerAgg = await prisma.ledgerEntry.groupBy({
+    by: ["type"],
+    where: eventFilter.occurredAt ? { createdAt: eventFilter.occurredAt } : {},
+    _sum: { amount: true },
+  });
+
+  const atRiskSum = ledgerAgg.find(g => g.type === "AT_RISK")?._sum.amount ?? 0;
+  const recoveredSum = ledgerAgg.find(g => g.type === "RECOVERED")?._sum.amount ?? 0;
+  const reversedSum = ledgerAgg.find(g => g.type === "REVERSED")?._sum.amount ?? 0;
+
+  amountAtRisk = atRiskSum;
+  amountRecovered = Math.max(0, recoveredSum - reversedSum);
+
   const causeMap: Record<
     string,
     { count: number; amountAtRisk: number; amountRecovered: number }
@@ -116,8 +130,6 @@ async function computeLiveMetricsUncached(
   const recoveryTimesMs: number[] = [];
 
   for (const event of events) {
-    amountAtRisk += event.amount;
-
     const causeLabel = event.diagnosis?.causeLabel ?? "unknown";
     if (!causeMap[causeLabel]) {
       causeMap[causeLabel] = {
@@ -135,7 +147,6 @@ async function computeLiveMetricsUncached(
     )[0];
 
     if (latestAudit?.outcome === "recovered") {
-      amountRecovered += event.amount;
       causeMap[causeLabel].amountRecovered += event.amount;
 
       // Time-to-recovery: Action.executedAt - RevenueEvent.occurredAt

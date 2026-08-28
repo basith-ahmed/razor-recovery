@@ -22,6 +22,7 @@ import {
   DiagnosisResult,
   EnrichedRevenueEvent,
 } from "../domain/types";
+import { writeLedgerEntry } from "./ledgerService";
 
 /**
  * Derive outcome from the action result for audit purposes.
@@ -241,6 +242,25 @@ export async function recordAuditEntry(params: {
         await tx.entityCauseState.deleteMany({
           where: { entityId: event.entityId },
         });
+
+        if (newState === "RECOVERED") {
+          await writeLedgerEntry(tx, {
+            entityId: event.entityId,
+            eventId: event.id,
+            type: "RECOVERED",
+            amount: event.amount,
+            currency: event.currency,
+            referenceId: action.razorpayPaymentLinkId ?? action.paymentId,
+          });
+        } else if (newState === "WRITTEN_OFF") {
+          await writeLedgerEntry(tx, {
+            entityId: event.entityId,
+            eventId: event.id,
+            type: "WRITTEN_OFF",
+            amount: event.amount,
+            currency: event.currency,
+          });
+        }
       }
     }
 

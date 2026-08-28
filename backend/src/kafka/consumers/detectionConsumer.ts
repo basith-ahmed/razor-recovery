@@ -20,6 +20,7 @@ import { publish } from "../producer";
 import { TOPICS } from "../topics";
 import { emitIncomingEvent } from "../../api/websocket";
 import { recordFailureAuditEntry } from "../../services/auditService";
+import { writeLedgerEntry } from "../../services/ledgerService";
 
 const CONSUMER_GROUP = "detection-service";
 const STAGE = "detection";
@@ -115,27 +116,40 @@ export async function startDetectionConsumer(): Promise<void> {
 
         // Persist the event (upsert makes the consumer self-sufficient: any
         // publisher can emit a complete RawRevenueEvent without pre-saving it)
-        // and write riskScore + urgency onto the row
-        await prisma.revenueEvent.upsert({
-          where: { id: event.id },
-          update: { riskScore, urgency },
-          create: {
-            id: event.id,
-            entityType: event.entityType,
-            entityId: event.entityId,
-            customerId: event.customerId,
-            eventType: event.eventType,
-            amount: event.amount,
-            currency: event.currency,
-            occurredAt: new Date(event.occurredAt),
-            razorpayPaymentId: event.razorpayPaymentId ?? null,
-            razorpayOrderId: event.razorpayOrderId ?? null,
-            errorCode: event.errorCode ?? null,
-            errorReason: event.errorReason ?? null,
-            rawPayload: event.rawPayload as Prisma.InputJsonValue,
-            riskScore,
-            urgency,
-          },
+        // Upsert the RevenueEvent row inside a transaction to also write the LedgerEntry
+        await prisma.$transaction(async (tx) => {
+          await tx.revenueEvent.upsert({
+            where: { id: event!.id },
+            update: {
+              riskScore,
+              urgency,
+            },
+            create: {
+              id: event!.id,
+              entityType: event!.entityType,
+              entityId: event!.entityId,
+              customerId: event!.customerId,
+              eventType: event!.eventType,
+              amount: event!.amount,
+              currency: event!.currency,
+              occurredAt: new Date(event!.occurredAt),
+              razorpayPaymentId: event!.razorpayPaymentId ?? null,
+              razorpayOrderId: event!.razorpayOrderId ?? null,
+              errorCode: event!.errorCode ?? null,
+              errorReason: event!.errorReason ?? null,
+              rawPayload: event!.rawPayload as Prisma.InputJsonValue,
+              riskScore,
+              urgency,
+            },
+          });
+
+          await writeLedgerEntry(tx, {
+            entityId: event!.entityId,
+            eventId: event!.id,
+            type: "AT_RISK",
+            amount: event!.amount,
+            currency: event!.currency,
+          });
         });
 
         // Build enriched event and publish

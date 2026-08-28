@@ -2,6 +2,8 @@ import { razorpay } from "../config/razorpay";
 import { logError } from "../config/logger";
 import { ActionResult, DomainError } from "../domain/types";
 
+import { createHash } from "crypto";
+
 export interface RecoveryPaymentLinkParams {
   amount: number;
   currency: string;
@@ -10,6 +12,8 @@ export interface RecoveryPaymentLinkParams {
   customerPhone?: string;
   description: string;
   notify?: boolean;
+  eventId?: string;
+  actionType?: string;
 }
 
 /**
@@ -51,10 +55,18 @@ export async function createRecoveryPaymentLink(
   try {
     const shouldNotify = params.notify ?? true;
     
+    // Idempotency: generate deterministic reference_id if event context is provided
+    let reference_id: string | undefined = undefined;
+    if (params.eventId && params.actionType) {
+      const hash = createHash("sha256").update(`${params.eventId}:${params.actionType}`).digest("hex");
+      reference_id = `rzp_${hash.slice(0, 32)}`;
+    }
+    
     const paymentLink = await razorpay.paymentLink.create({
       amount: Math.round(params.amount * 100),
       currency: params.currency,
       description: params.description,
+      reference_id,
       customer: {
         name: params.customerName,
         email: params.customerEmail,
