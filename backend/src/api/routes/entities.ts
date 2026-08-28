@@ -53,12 +53,18 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
     }
 
     if (state && typeof state === "string" && Object.values(WorkflowState).includes(state.toUpperCase() as WorkflowState)) {
-      const matchingStates = await prisma.entityWorkflowState.findMany({
-        where: { state: state.toUpperCase() as WorkflowState },
-        select: { entityId: true },
-      });
-      const matchingEntityIds = matchingStates.map((s) => s.entityId);
-      where.entityId = { in: matchingEntityIds };
+      const targetState = state.toUpperCase() as WorkflowState;
+      if (targetState === "RECOVERED") {
+        where.auditEntries = { some: { outcome: "recovered" } };
+      } else if (targetState === "WRITTEN_OFF") {
+        where.auditEntries = { some: { outcome: "written_off" } };
+      } else if (targetState === "CONTACTED") {
+        where.auditEntries = { some: { outcome: { in: ["pending", "escalated"] } } };
+      } else if (targetState === "DETECTED") {
+        where.auditEntries = {
+          none: { outcome: { in: ["recovered", "written_off", "pending", "escalated"] } }
+        };
+      }
     }
 
     let orderBy: Prisma.RevenueEventOrderByWithRelationInput = { occurredAt: "desc" };
@@ -89,15 +95,15 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
           diagnosis: true,
           decision: true,
           action: true,
+          auditEntries: {
+            orderBy: { sequenceNumber: "desc" },
+            take: 1,
+          },
         },
       }),
     ]);
 
     const entityIds = Array.from(new Set(events.map((e) => e.entityId)));
-    const workflowStates = await prisma.entityWorkflowState.findMany({
-      where: { entityId: { in: entityIds } },
-    });
-    const stateMap = new Map(workflowStates.map((s) => [s.entityId, s]));
 
     // Attempt/last-contact state is scoped per (entityId, causeLabel); resolve
     // each event against ITS OWN diagnosed cause.
@@ -109,7 +115,6 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
     );
 
     const result = events.map((event) => {
-      const stateRow = stateMap.get(event.entityId);
       const eventCause = event.diagnosis?.causeLabel ?? null;
       const causeStateRow = eventCause
         ? causeStateMap.get(`${event.entityId}|${eventCause}`)
@@ -125,6 +130,16 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
             ? "DIAGNOSED"
             : "DETECTED";
 
+      let eventState = "DETECTED";
+      if (event.auditEntries && event.auditEntries.length > 0) {
+        const latestOutcome = event.auditEntries[0].outcome;
+        if (latestOutcome === "recovered") eventState = "RECOVERED";
+        else if (latestOutcome === "written_off") eventState = "WRITTEN_OFF";
+        else if (latestOutcome === "reversed") eventState = "REVERSED";
+        else if (latestOutcome === "pending" || latestOutcome === "escalated") eventState = "CONTACTED";
+        else if (latestOutcome === "skipped" || latestOutcome === "failed") eventState = "DETECTED";
+      }
+
       return {
         id: event.id,
         entityType: event.entityType,
@@ -137,7 +152,7 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         currency: event.currency,
         occurredAt: event.occurredAt.toISOString(),
         riskScore: event.riskScore,
-        state: stateRow?.state ?? "DETECTED",
+        state: eventState,
         stage,
         causeLabel: event.diagnosis?.causeLabel ?? null,
         diagnosisMethod: event.diagnosis?.method ?? null,
