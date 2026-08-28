@@ -60,10 +60,19 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         where.auditEntries = { some: { outcome: "written_off" } };
       } else if (targetState === "CONTACTED") {
         where.auditEntries = { some: { outcome: { in: ["pending", "escalated"] } } };
+      } else if (targetState === "DO_NOT_CONTACT") {
+        where.auditEntries = { some: { outcome: "skipped" } };
+        where.action = { actionType: "none" };
       } else if (targetState === "DETECTED") {
-        where.auditEntries = {
-          none: { outcome: { in: ["recovered", "written_off", "pending", "escalated"] } }
-        };
+        where.AND = [
+          ...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []),
+          {
+            OR: [
+              { auditEntries: { none: { outcome: { in: ["recovered", "written_off", "pending", "escalated"] } } } },
+              { auditEntries: { some: { outcome: "skipped" } }, action: { actionType: { not: "none" } } }
+            ]
+          }
+        ];
       }
     }
 
@@ -137,7 +146,11 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         else if (latestOutcome === "written_off") eventState = "WRITTEN_OFF";
         else if (latestOutcome === "reversed") eventState = "REVERSED";
         else if (latestOutcome === "pending" || latestOutcome === "escalated") eventState = "CONTACTED";
-        else if (latestOutcome === "skipped" || latestOutcome === "failed") eventState = "DETECTED";
+        else if (latestOutcome === "skipped") {
+          if (event.action?.actionType === "none") eventState = "DO_NOT_CONTACT";
+          else eventState = "DETECTED";
+        }
+        else if (latestOutcome === "failed") eventState = "DETECTED";
       }
 
       return {

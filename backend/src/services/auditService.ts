@@ -324,7 +324,7 @@ export async function recordFailureAuditEntry(
   });
 
   // Ensure the UI updates live to show the pipeline failure
-  const { emitLiveUpdate } = require("../../api/websocket");
+  const { emitLiveUpdate } = require("../api/websocket");
   await emitLiveUpdate(event.id);
 }
 
