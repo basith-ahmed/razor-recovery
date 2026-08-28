@@ -79,8 +79,8 @@ export async function decide(
 
   if (legalActions.length === 0) {
     let reason = "Blocked by policy";
-    if (filterCtx.isDnc) reason = "Blocked by policy (Customer is DNC)";
-    else if (filterCtx.isDisputed) reason = "Blocked by policy (Invoice is disputed)";
+    if (filterCtx.isDnc || filterCtx.causeLabel === "dnc") reason = "Blocked by policy (Customer is DNC)";
+    else if (filterCtx.isDisputed || filterCtx.causeLabel === "invoice_disputed") reason = "Blocked by policy (Invoice is disputed)";
     else if (filterCtx.isInCooldown) reason = "Blocked by policy (In active cooldown window)";
     else reason = "Blocked by policy (Stopping condition reached)";
     

@@ -34,7 +34,7 @@ describe("policy.ts", () => {
   it("loadPolicy returns a valid PolicyConfig", () => {
     const policy = loadPolicy();
     expect(policy.version).toBe("1.0.0");
-    expect(policy.rules).toHaveLength(9);
+    expect(policy.rules).toHaveLength(7);
   });
 
   it("getPolicyVersion returns the version string", () => {
@@ -171,7 +171,7 @@ describe("filterLegalActions", () => {
       ]);
     });
 
-    it("returns hard_decline at maxAttempts (onMaxEscalate=false)", () => {
+    it("returns hard_decline at maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({ causeLabel: "gateway_timeout", attemptCount: 2 })
       );
@@ -206,7 +206,7 @@ describe("filterLegalActions", () => {
       expect(result).toEqual(["send_reminder_email"]);
     });
 
-    it("returns [] when noResponseWithinHours exceeded (onTimeoutAction=stop)", () => {
+    it("returns [] when noResponseWithinHours exceeded", () => {
       const result = filterLegalActions(
         makeCtx({
           causeLabel: "no_reason_signal",
@@ -246,7 +246,7 @@ describe("filterLegalActions", () => {
   });
 
   describe("invoice_overdue", () => {
-    it("returns all actions for overdue invoice under escalation threshold", () => {
+    it("returns all actions for overdue invoice", () => {
       const result = filterLegalActions(
         makeCtx({ causeLabel: "invoice_overdue", daysOverdue: 10 })
       );
@@ -258,7 +258,7 @@ describe("filterLegalActions", () => {
       ]);
     });
 
-    it("includes escalate_to_human when past escalateAtDays", () => {
+    it("includes escalate_to_human (already in actions list)", () => {
       const result = filterLegalActions(
         makeCtx({ causeLabel: "invoice_overdue", daysOverdue: 35 })
       );
@@ -267,18 +267,18 @@ describe("filterLegalActions", () => {
   });
 
   describe("invoice_disputed", () => {
-    it("returns only escalate_to_human (freezeWorkflow)", () => {
+    it("returns only escalate_to_human when isDisputed is true", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "invoice_disputed" })
+        makeCtx({ causeLabel: "some_cause", isDisputed: true })
       );
       expect(result).toEqual(["escalate_to_human"]);
     });
   });
 
   describe("dnc rule", () => {
-    it("returns [] for dnc cause (skipAndLog)", () => {
+    it("returns [] when customer is DNC", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "dnc" })
+        makeCtx({ causeLabel: "some_cause", isDnc: true })
       );
       expect(result).toEqual([]);
     });

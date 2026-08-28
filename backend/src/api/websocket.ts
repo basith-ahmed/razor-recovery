@@ -18,7 +18,7 @@ export function initWebSocket(server: http.Server): Server {
   // broadcast. There is no per-run room and no subscribe handshake, because
   // the pipeline itself has no run scope.
   ioInstance.on("connection", (socket) => {
-    console.log(`[websocket] Client connected: ${socket.id}`);
+    // console.log(`[websocket] Client connected: ${socket.id}`);
 
     // Push an initial metrics snapshot so the dashboard renders immediately
     computeLiveMetrics("all")
@@ -28,7 +28,7 @@ export function initWebSocket(server: http.Server): Server {
       );
 
     socket.on("disconnect", () => {
-      console.log(`[websocket] Client disconnected: ${socket.id}`);
+      // console.log(`[websocket] Client disconnected: ${socket.id}`);
     });
   });
 

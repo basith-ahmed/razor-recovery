@@ -4,27 +4,27 @@
     {
       "cause": "expired_card",
       "actions": ["retry_payment", "send_payment_link", "escalate_to_human"],
-      "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxEscalate": true }
+      "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxAction": "escalate_to_human" }
     },
     {
       "cause": "insufficient_funds",
       "actions": ["retry_payment", "send_payment_link", "escalate_to_human"],
-      "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxEscalate": true }
+      "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxAction": "escalate_to_human" }
     },
     {
       "cause": "gateway_timeout",
       "actions": ["retry_payment_immediate", "retry_payment_delayed"],
-      "stopping": { "maxAttempts": 2, "windowHours": 1, "onMaxEscalate": false, "onMaxAction": "hard_decline" }
+      "stopping": { "maxAttempts": 2, "windowHours": 1, "onMaxAction": "hard_decline" }
     },
     {
       "cause": "price_friction",
       "actions": ["send_reminder_email"],
-      "stopping": { "maxAttempts": 2, "windowDays": 7, "onMaxEscalate": true }
+      "stopping": { "maxAttempts": 2, "windowDays": 7, "onMaxAction": "escalate_to_human" }
     },
     {
       "cause": "no_reason_signal",
       "actions": ["send_reminder_email"],
-      "stopping": { "noResponseWithinHours": 48, "onTimeoutAction": "stop" }
+      "stopping": { "noResponseWithinHours": 48 }
     },
     {
       "cause": "subscription_renewal_failed",
@@ -34,17 +34,7 @@
     {
       "cause": "invoice_overdue",
       "actions": ["send_reminder", "send_soft_chase_email", "escalate_to_human", "start_promise_to_pay_tracking"],
-      "stopping": { "escalateAtDays": 30, "always": true }
-    },
-    {
-      "cause": "invoice_disputed",
-      "actions": ["escalate_to_human"],
-      "stopping": { "freezeWorkflow": true, "overridesAll": true }
-    },
-    {
-      "cause": "dnc",
-      "actions": [],
-      "stopping": { "skipAndLog": true, "overridesAll": true, "checkedFirst": true }
+      "stopping": {}
     }
   ]
 }

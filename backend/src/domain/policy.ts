@@ -10,18 +10,11 @@ export interface StoppingConfig {
   maxAttempts?: number;
   windowDays?: number;
   windowHours?: number;
-  onMaxEscalate?: boolean;
   onMaxAction?: string;
   noResponseWithinHours?: number;
   onTimeoutAction?: string;
   hardStopDays?: number;
   onHardStopAction?: string;
-  escalateAtDays?: number;
-  always?: boolean;
-  freezeWorkflow?: boolean;
-  overridesAll?: boolean;
-  skipAndLog?: boolean;
-  checkedFirst?: boolean;
 }
 
 export interface PolicyRule {
