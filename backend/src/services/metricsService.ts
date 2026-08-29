@@ -168,15 +168,19 @@ export async function computeLiveMetricsUncached(
   };
 
   for (const event of events) {
-    const integration = event.action?.integration;
-    if (!integration) continue;
-    const keyLower = integration.toLowerCase();
-    const normKey: "razorpay" | "email" | "human" =
-      keyLower === "razorpay"
-        ? "razorpay"
-        : keyLower === "email"
-          ? "email"
-          : "human";
+    const action = event.action;
+    if (!action || action.result === "skipped") continue;
+
+    let normKey: "razorpay" | "email" | "human" | null = null;
+    if (action.integration === "RAZORPAY") {
+      normKey = "razorpay";
+    } else if (action.integration === "EMAIL") {
+      normKey = "email";
+    } else if (action.actionType === "escalate_to_human") {
+      normKey = "human";
+    }
+
+    if (!normKey) continue;
 
     channelMap[normKey].count += 1;
     const latestAudit = event.auditEntries.sort(

@@ -778,7 +778,7 @@ describe("metricsService", () => {
           amount: 3000,
           occurredAt: oneHourAgo,
           diagnosis: { causeLabel: "invoice_disputed" },
-          action: { integration: "MOCK", executedAt: now },
+          action: { integration: "MOCK", actionType: "escalate_to_human", result: "success", executedAt: now },
           auditEntries: [{ outcome: "escalated", timestamp: now }],
         },
         // Event 3: DNC-skipped
@@ -787,7 +787,7 @@ describe("metricsService", () => {
           amount: 2000,
           occurredAt: oneHourAgo,
           diagnosis: { causeLabel: "dnc" },
-          action: { integration: "MOCK", executedAt: now },
+          action: { integration: "MOCK", actionType: "none", result: "skipped", executedAt: now },
           auditEntries: [{ outcome: "skipped", timestamp: now }],
         },
       ];
@@ -847,7 +847,7 @@ describe("metricsService", () => {
       expect(summary.byChannel).toEqual([
         { channel: "razorpay", count: 1, recoveredCount: 1, recoveredAmount: 5000 },
         { channel: "email", count: 0, recoveredCount: 0, recoveredAmount: 0 },
-        { channel: "human", count: 2, recoveredCount: 0, recoveredAmount: 0 },
+        { channel: "human", count: 1, recoveredCount: 0, recoveredAmount: 0 },
       ]);
 
       // Median time-to-recovery = 1 hour

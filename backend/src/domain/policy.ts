@@ -46,6 +46,20 @@ export function getRuleForCause(cause: string): PolicyRule | undefined {
   return policy.rules.find((r) => r.cause === cause);
 }
 
+export function cooldownTtlSeconds(causeLabel: string): number {
+  const rule = getRuleForCause(causeLabel);
+  if (!rule) return 3600; // 1h default
+
+  const stopping = rule.stopping;
+  if (stopping.windowHours !== undefined) {
+    return stopping.windowHours * 3600;
+  }
+  if (stopping.windowDays !== undefined) {
+    return stopping.windowDays * 86400;
+  }
+  return 3600; // 1h default
+}
+
 export function getPolicyVersion(): string {
   return loadPolicy().version;
 }

@@ -152,19 +152,26 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
 
     const entityIds = Array.from(new Set(events.map((e) => e.entityId)));
 
-    // Fetch all successful actions for these entities to compute chronological attempt sequence
-    const allActions = await prisma.action.findMany({
-      where: {
-        event: { entityId: { in: entityIds } },
-        result: "success",
-      },
-      select: {
-        eventId: true,
-        executedAt: true,
-        event: { select: { entityId: true } },
-      },
-      orderBy: { executedAt: "asc" },
-    });
+    // Fetch all successful actions and workflow states for these entities to compute chronological attempt sequence
+    const [allActions, workflowStates] = await Promise.all([
+      prisma.action.findMany({
+        where: {
+          event: { entityId: { in: entityIds } },
+          result: "success",
+        },
+        select: {
+          eventId: true,
+          executedAt: true,
+          event: { select: { entityId: true } },
+        },
+        orderBy: { executedAt: "asc" },
+      }),
+      prisma.entityWorkflowState.findMany({
+        where: { entityId: { in: entityIds } },
+      }),
+    ]);
+
+    const workflowMap = new Map(workflowStates.map((w) => [w.entityId, w]));
 
     const entityActionsMap = new Map<string, typeof allActions>();
     for (const act of allActions) {
@@ -181,17 +188,18 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         event.decision?.reasoning ??
         ((latestAudit?.decisionSnapshot as Record<string, unknown> | null)?.reasoning as string | undefined);
 
+      const workflow = workflowMap.get(event.entityId);
       const entityActs = entityActionsMap.get(event.entityId) ?? [];
-      const thisEventExecutedAt = event.action?.result === "success" ? (event.action.executedAt ?? event.occurredAt) : null;
+      const eventTimestamp = event.action?.executedAt ?? latestAudit?.timestamp ?? event.occurredAt;
       
-      const priorOrCurrentActs = thisEventExecutedAt
-        ? entityActs.filter((a) => a.executedAt <= thisEventExecutedAt)
-        : entityActs.filter((a) => a.executedAt <= event.occurredAt);
+      const priorOrCurrentActs = entityActs.filter((a) => a.executedAt <= eventTimestamp);
 
-      const attemptCount = priorOrCurrentActs.length;
+      const attemptCount = priorOrCurrentActs.length > 0
+        ? priorOrCurrentActs.length
+        : (workflow?.attemptCount ?? 0);
       const lastContactedAt = priorOrCurrentActs.length > 0
         ? priorOrCurrentActs[priorOrCurrentActs.length - 1].executedAt.toISOString()
-        : null;
+        : (workflow?.lastContactedAt?.toISOString() ?? null);
 
       return {
         id: event.id,
@@ -275,9 +283,9 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       if (eventPayload) {
         eventPayload = {
           ...eventPayload,
-          attemptCount: runningAttempts,
-          cooldownUntil: isSuccessfulAttempt ? workflow?.cooldownUntil : null,
-          lastContactedAt: latestContactDate ? latestContactDate.toISOString() : null,
+          attemptCount: runningAttempts > 0 ? runningAttempts : (workflow?.attemptCount ?? 0),
+          cooldownUntil: workflow?.cooldownUntil,
+          lastContactedAt: latestContactDate ? latestContactDate.toISOString() : (workflow?.lastContactedAt?.toISOString() ?? null),
         } as any;
       }
       

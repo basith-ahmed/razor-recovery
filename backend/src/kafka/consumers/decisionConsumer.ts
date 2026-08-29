@@ -22,6 +22,7 @@ import {
   EnrichedRevenueEvent,
 } from "../../domain/types";
 import { FilterContext } from "../../domain/stoppingRules";
+import { cooldownTtlSeconds } from "../../domain/policy";
 import { publish } from "../producer";
 import { TOPICS } from "../topics";
 import { recordFailureAuditEntry } from "../../services/auditService";
@@ -98,7 +99,20 @@ export async function startDecisionConsumer(): Promise<void> {
 
         const now = new Date();
         const isDnc = customer?.dncFlag ?? false;
-        const cooldownUntil = workflowState?.cooldownUntil ?? causeState?.cooldownUntil;
+
+        // Check Redis fast-cooldown lock first (provides immediate protection
+        // against rapid-fire stream events for the same entity)
+        const redisCooldownKey = `${REDIS_PREFIX}:cooldown:${event.entityId}`;
+        const redisCooldownVal = await redis.get(redisCooldownKey);
+        let redisCooldownUntil: Date | null = null;
+        if (redisCooldownVal) {
+          const parsed = new Date(redisCooldownVal);
+          if (!Number.isNaN(parsed.getTime())) {
+            redisCooldownUntil = parsed;
+          }
+        }
+
+        const cooldownUntil = redisCooldownUntil ?? workflowState?.cooldownUntil ?? causeState?.cooldownUntil;
         const isInCooldown = cooldownUntil ? cooldownUntil > now : false;
         const attemptCount = workflowState?.attemptCount ?? causeState?.attemptCount ?? 0;
         const lastContactedAt = workflowState?.lastContactedAt ?? causeState?.lastContactedAt;
@@ -162,6 +176,20 @@ export async function startDecisionConsumer(): Promise<void> {
           entityType: event.entityType,
           amount: event.amount,
         });
+
+        // If a recovery or retry action was chosen, start the cooldown in Redis immediately
+        // so that any rapid-fire events for this entity that arrive in the same batch/stream
+        // immediately see the active cooldown window.
+        if (
+          decision.chosenAction !== "none" &&
+          decision.chosenAction !== "escalate_to_human" &&
+          decision.chosenAction !== "auto_cancel" &&
+          decision.chosenAction !== "hard_decline"
+        ) {
+          const ttlSec = cooldownTtlSeconds(diagnosis.causeLabel);
+          const cooldownEnd = new Date(now.getTime() + ttlSec * 1000);
+          await redis.set(redisCooldownKey, cooldownEnd.toISOString(), "EX", ttlSec);
+        }
 
         // Persist Decision row.
         const eventExists = await prisma.revenueEvent.findUnique({
