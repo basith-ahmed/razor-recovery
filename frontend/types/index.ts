@@ -8,7 +8,12 @@ export interface MetricsSummary {
   eventsProcessed: number;
   funnel: { stage: string; count: number }[];
   byCause: { cause: string; recovered: number; atRisk: number }[];
-  byChannel: { channel: string; count: number; recoveredAmount: number }[];
+  byChannel: {
+    channel: string;
+    count: number;
+    recoveredCount?: number;
+    recoveredAmount: number;
+  }[];
   medianTimeToRecoveryHours: number;
   compliance: { dncBlocked: number; autoEscalated: number; cooldownStopped: number };
 }

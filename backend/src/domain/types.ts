@@ -69,6 +69,7 @@ export interface MetricsSummary {
   byChannel: {
     channel: "razorpay" | "email" | "human";
     count: number;
+    recoveredCount: number;
     recoveredAmount: number;
   }[];
   medianTimeToRecoveryHours: number;

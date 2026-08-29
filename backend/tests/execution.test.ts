@@ -845,9 +845,9 @@ describe("metricsService", () => {
 
       // byChannel breakdown
       expect(summary.byChannel).toEqual([
-        { channel: "razorpay", count: 1, recoveredAmount: 5000 },
-        { channel: "email", count: 0, recoveredAmount: 0 },
-        { channel: "human", count: 2, recoveredAmount: 0 },
+        { channel: "razorpay", count: 1, recoveredCount: 1, recoveredAmount: 5000 },
+        { channel: "email", count: 0, recoveredCount: 0, recoveredAmount: 0 },
+        { channel: "human", count: 2, recoveredCount: 0, recoveredAmount: 0 },
       ]);
 
       // Median time-to-recovery = 1 hour

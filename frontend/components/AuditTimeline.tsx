@@ -99,116 +99,139 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
               </button>
             </div>
 
-            {/* Pipeline summary: detection → diagnosis → decision → action */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-xs">
-              <div className="border border-slate-200 rounded p-2">
-                <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                  Detection
-                </div>
-                <div className="text-slate-700">
-                  Risk:{" "}
-                  {typeof entry.inputSnapshot?.riskScore === "number"
-                    ? (entry.inputSnapshot.riskScore as number).toFixed(3)
-                    : "N/A"}
-                  {typeof entry.inputSnapshot?.urgency === "number" && (
-                    <> · Urgency: {(entry.inputSnapshot.urgency as number).toFixed(2)}</>
-                  )}
-                </div>
-              </div>
-
-              <div className="border border-slate-200 rounded p-2">
-                <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                  Diagnosis
-                </div>
-                <div className="text-slate-700">
-                  {entry.event?.diagnosis ? (
-                    <>
-                      <span className="font-mono">{entry.event.diagnosis.causeLabel}</span>{" "}
-                      ({entry.event.diagnosis.method}
-                      {typeof entry.event.diagnosis.confidence === "number" &&
-                        `, ${(entry.event.diagnosis.confidence * 100).toFixed(0)}%`}
-                      )
-                    </>
-                  ) : (
-                    "N/A"
-                  )}
-                </div>
-              </div>
-
-              <div className="border border-slate-200 rounded p-2">
-                <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                  Decision
-                </div>
-                <div className="text-slate-700">
-                  {typeof entry.decisionSnapshot?.chosenAction === "string"
-                    ? `${entry.decisionSnapshot.chosenAction} (${(entry.decisionSnapshot.legalActions as string[])?.length ?? 0} legal)`
-                    : "N/A"}
-                </div>
-              </div>
-
-              <div className="border border-slate-200 rounded p-2">
-                <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                  Action
-                </div>
-                <div className="text-slate-700">
-                  {entry.actionSnapshot ? (
-                    <span className={entry.actionSnapshot.result === "failed" ? "text-red-700 font-medium" : ""}>
-                      {String(entry.actionSnapshot.actionType ?? "")} · {String(entry.actionSnapshot.result ?? "")} · {String(entry.actionSnapshot.integration ?? "")}
-                    </span>
-                  ) : (
-                    "Not executed"
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* PROMINENT REASONING CALLOUTS - Primary design requirement */}
-            {entry.outcome === "failed" && (
-              <div className="my-3 bg-red-50/70 border-l-4 border-red-500 p-4 rounded-r-lg">
-                <div className="text-xs font-semibold text-red-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            {/* Webhook settlement vs AI Dunning Pipeline */}
+            {entry.actor === "razorpay_webhook" ? (
+              <div className="my-3 bg-emerald-50/70 border-l-4 border-emerald-500 p-4 rounded-r-lg">
+                <div className="text-xs font-semibold text-emerald-800 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Action Execution Failed
+                  Payment Settlement Confirmed (Razorpay Webhook)
                 </div>
-                <p className="text-sm text-red-900 leading-relaxed">
-                  The chosen action{" "}
-                  <code className="font-mono bg-red-100 text-red-800 px-1 py-0.5 rounded text-xs">
-                    {typeof entry.decisionSnapshot?.chosenAction === "string"
-                      ? entry.decisionSnapshot.chosenAction
-                      : "action"}
-                  </code>{" "}
-                  failed during execution before completion. The failure has been immutably recorded in this audit trail.
+                <p className="text-sm text-emerald-900 leading-relaxed">
+                  Received verified webhook payment confirmation. Recovery workflow closed and entity marked as <span className="font-semibold text-emerald-950">RECOVERED</span>.
                 </p>
+                {entry.actionSnapshot && (
+                  <div className="mt-2 text-xs font-mono text-emerald-800 bg-emerald-100/60 px-2.5 py-1.5 rounded inline-block">
+                    Action: {String(entry.actionSnapshot.actionType ?? "webhook_capture")} · Result: {String(entry.actionSnapshot.result ?? "success")} · Integration: {String(entry.actionSnapshot.integration ?? "RAZORPAY")}
+                    {Boolean(entry.actionSnapshot.paymentId) ? ` · Payment Ref: ${String(entry.actionSnapshot.paymentId)}` : ""}
+                  </div>
+                )}
               </div>
-            )}
+            ) : (
+              <>
+                {/* Pipeline summary: detection → diagnosis → decision → action */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-xs">
+                  <div className="border border-slate-200 rounded p-2">
+                    <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Detection
+                    </div>
+                    <div className="text-slate-700">
+                      Risk:{" "}
+                      {typeof entry.inputSnapshot?.riskScore === "number"
+                        ? (entry.inputSnapshot.riskScore as number).toFixed(3)
+                        : "N/A"}
+                      {typeof entry.inputSnapshot?.urgency === "number" && (
+                        <> · Urgency: {(entry.inputSnapshot.urgency as number).toFixed(2)}</>
+                      )}
+                    </div>
+                  </div>
 
-            {diagnosisReasoning && (
-              <div className="my-3 bg-amber-50/60 border-l-4 border-amber-500 p-4 rounded-r-lg">
-                <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Diagnosis Reasoning
-                </div>
-                <p className="text-sm text-slate-800 italic font-serif leading-relaxed">
-                  &quot;{diagnosisReasoning}&quot;
-                </p>
-              </div>
-            )}
+                  <div className="border border-slate-200 rounded p-2">
+                    <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Diagnosis
+                    </div>
+                    <div className="text-slate-700">
+                      {entry.event?.diagnosis ? (
+                        <>
+                          <span className="font-mono">{entry.event.diagnosis.causeLabel}</span>{" "}
+                          ({entry.event.diagnosis.method}
+                          {typeof entry.event.diagnosis.confidence === "number" &&
+                            `, ${(entry.event.diagnosis.confidence * 100).toFixed(0)}%`}
+                          )
+                        </>
+                      ) : (
+                        "N/A"
+                      )}
+                    </div>
+                  </div>
 
-            {decisionReasoning && (
-              <div className="my-3 bg-blue-50/60 border-l-4 border-blue-500 p-4 rounded-r-lg">
-                <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Decision Reasoning
+                  <div className="border border-slate-200 rounded p-2">
+                    <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Decision
+                    </div>
+                    <div className="text-slate-700">
+                      {typeof entry.decisionSnapshot?.chosenAction === "string"
+                        ? `${entry.decisionSnapshot.chosenAction} (${(entry.decisionSnapshot.legalActions as string[])?.length ?? 0} legal)`
+                        : "N/A"}
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-200 rounded p-2">
+                    <div className="font-mono font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Action
+                    </div>
+                    <div className="text-slate-700">
+                      {entry.actionSnapshot ? (
+                        <span className={entry.actionSnapshot.result === "failed" ? "text-red-700 font-medium" : ""}>
+                          {String(entry.actionSnapshot.actionType ?? "")} · {String(entry.actionSnapshot.result ?? "")} · {String(entry.actionSnapshot.integration ?? "")}
+                        </span>
+                      ) : (
+                        "Not executed"
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <p className="text-sm text-slate-800 italic font-serif leading-relaxed">
-                  &quot;{decisionReasoning}&quot;
-                </p>
-              </div>
+
+                {/* PROMINENT REASONING CALLOUTS - Primary design requirement */}
+                {entry.outcome === "failed" && (
+                  <div className="my-3 bg-red-50/70 border-l-4 border-red-500 p-4 rounded-r-lg">
+                    <div className="text-xs font-semibold text-red-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      Action Execution Failed
+                    </div>
+                    <p className="text-sm text-red-900 leading-relaxed">
+                      The chosen action{" "}
+                      <code className="font-mono bg-red-100 text-red-800 px-1 py-0.5 rounded text-xs">
+                        {typeof entry.decisionSnapshot?.chosenAction === "string"
+                          ? entry.decisionSnapshot.chosenAction
+                          : "action"}
+                      </code>{" "}
+                      failed during execution before completion. The failure has been immutably recorded in this audit trail.
+                    </p>
+                  </div>
+                )}
+
+                {diagnosisReasoning && (
+                  <div className="my-3 bg-amber-50/60 border-l-4 border-amber-500 p-4 rounded-r-lg">
+                    <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Diagnosis Reasoning
+                    </div>
+                    <p className="text-sm text-slate-800 italic font-serif leading-relaxed">
+                      &quot;{diagnosisReasoning}&quot;
+                    </p>
+                  </div>
+                )}
+
+                {decisionReasoning && (
+                  <div className="my-3 bg-blue-50/60 border-l-4 border-blue-500 p-4 rounded-r-lg">
+                    <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Decision Reasoning
+                    </div>
+                    <p className="text-sm text-slate-800 italic font-serif leading-relaxed">
+                      &quot;{decisionReasoning}&quot;
+                    </p>
+                  </div>
+                )}
+              </>
             )}
 
             {/* EXPANDABLE RAW JSON VIEWER */}

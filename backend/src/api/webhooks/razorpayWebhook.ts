@@ -133,29 +133,14 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
             paymentId: paymentId || orderId || paymentLinkId,
           };
 
-          // Record AuditEntry for recovery with the original diagnosis and
-          // decision so its embedding remains a complete historical case.
+          // Record AuditEntry for recovery settlement from the incoming webhook
           const auditEntry = await writeChainedAuditEntry(tx, {
             eventId: event.id,
             entityId: event.entityId,
             actor: "razorpay_webhook",
             inputSnapshot: payload,
-            diagnosisSnapshot: diagnosis
-              ? {
-                  causeLabel: diagnosis.causeLabel,
-                  confidence: diagnosis.confidence,
-                  method: diagnosis.method,
-                  reasoning: diagnosis.reasoning,
-                }
-              : undefined,
-            decisionSnapshot: decision
-              ? {
-                  legalActions: decision.legalActions,
-                  chosenAction: decision.chosenAction,
-                  reasoning: decision.reasoning,
-                  policyVersion: decision.policyVersion,
-                }
-              : undefined,
+            diagnosisSnapshot: undefined,
+            decisionSnapshot: undefined,
             actionSnapshot: recoveryAction,
             outcome: "recovered",
             timestamp: new Date(),

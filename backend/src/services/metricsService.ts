@@ -160,11 +160,11 @@ export async function computeLiveMetricsUncached(
 
   const channelMap: Record<
     "razorpay" | "email" | "human",
-    { count: number; recoveredAmount: number }
+    { count: number; recoveredCount: number; recoveredAmount: number }
   > = {
-    razorpay: { count: 0, recoveredAmount: 0 },
-    email: { count: 0, recoveredAmount: 0 },
-    human: { count: 0, recoveredAmount: 0 },
+    razorpay: { count: 0, recoveredCount: 0, recoveredAmount: 0 },
+    email: { count: 0, recoveredCount: 0, recoveredAmount: 0 },
+    human: { count: 0, recoveredCount: 0, recoveredAmount: 0 },
   };
 
   for (const event of events) {
@@ -177,11 +177,13 @@ export async function computeLiveMetricsUncached(
         : keyLower === "email"
           ? "email"
           : "human";
+
     channelMap[normKey].count += 1;
     const latestAudit = event.auditEntries.sort(
       (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
     )[0];
     if (latestAudit?.outcome === "recovered") {
+      channelMap[normKey].recoveredCount += 1;
       channelMap[normKey].recoveredAmount += event.amount;
     }
   }
@@ -248,6 +250,7 @@ export async function computeLiveMetricsUncached(
     byChannel: (["razorpay", "email", "human"] as const).map((channel) => ({
       channel,
       count: channelMap[channel].count,
+      recoveredCount: channelMap[channel].recoveredCount,
       recoveredAmount: Number(
         channelMap[channel].recoveredAmount.toFixed(2),
       ),
