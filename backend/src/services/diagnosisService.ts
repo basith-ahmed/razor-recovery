@@ -129,7 +129,12 @@ export async function diagnose(
       : undefined;
 
   if (mappedCause) {
-    return { causeLabel: mappedCause, confidence: 1, method: "RULE" };
+    return {
+      causeLabel: mappedCause,
+      confidence: 1,
+      method: "RULE",
+      reasoning: `Deterministic rule mapping from gateway error reason "${event.errorReason}".`,
+    };
   }
 
   const payload = await userPayload(event, history);

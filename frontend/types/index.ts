@@ -170,3 +170,14 @@ export interface AuditVerifyResult {
   brokenAtEntryId?: string;
   brokenAtSequence?: number;
 }
+
+export interface AuditQueryRequest {
+  question: string;
+  entityId?: string;
+}
+
+export interface AuditQueryResponse {
+  answer: string;
+  citedEntityIds: string[];
+}
+

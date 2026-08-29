@@ -1,9 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
 enum EntityType {
@@ -165,6 +167,16 @@ model AuditEntry {
   sequenceNumber    Int          @unique @default(autoincrement())
   prevHash          String
   hash              String
+
+  embedding         AuditEmbedding?
+}
+
+model AuditEmbedding {
+  id           String     @id @default(uuid())
+  auditEntryId String     @unique
+  auditEntry   AuditEntry @relation(fields: [auditEntryId], references: [id])
+  embedding    Unsupported("vector(1024)")
+  createdAt    DateTime   @default(now())
 }
 
 model AuditChainHead {

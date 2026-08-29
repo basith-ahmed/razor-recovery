@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getEntityAudit } from "../../../lib/api";
 import { AuditEntry } from "../../../types";
 import { AuditTimeline } from "../../../components/AuditTimeline";
+import { AuditQueryPanel } from "../../../components/AuditQueryPanel";
 import { useLiveStream } from "../../../lib/socket";
 
 interface EntityDetailPageProps {
@@ -68,7 +69,7 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
           href="/entities"
           className="text-xs text-slate-400 hover:text-slate-900 flex items-center gap-1 transition-colors"
         >
-          ← Back to Entities List
+          Back to Entities List
         </Link>
       </div>
 
@@ -119,19 +120,28 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
                        Do Not Contact (DNC)
                     </span>
                   )}
-
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Audit Timeline Section */}
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 mb-1">Audit Trail & Decision Sequence</h2>
-            <p className="text-xs text-slate-400 mb-4">
-              Immutable step-by-step history of detection, diagnosis, AI reasoning, and executed dunning actions.
-            </p>
-            <AuditTimeline entries={entries} />
+          {/* 2-Column Layout: Main Audit Timeline on Left, AI Assistant Sidebar on Right */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* Left 2 Columns: Audit Timeline */}
+            <div className="lg:col-span-2">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-slate-900 mb-1">Audit Trail & Decision Sequence</h2>
+                <p className="text-xs text-slate-400 mb-4">
+                  Immutable step-by-step history of detection, diagnosis, AI reasoning, and executed dunning actions.
+                </p>
+                <AuditTimeline entries={entries} />
+              </div>
+            </div>
+
+            {/* Right Column: Permanent AI Audit Assistant Sidebar */}
+            <div className="lg:col-span-1 lg:sticky lg:top-6">
+              <AuditQueryPanel entityId={id} />
+            </div>
           </div>
         </div>
       )}

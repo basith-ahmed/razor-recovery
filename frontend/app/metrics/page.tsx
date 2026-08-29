@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getMetricsSummary, getMetricsTrend } from "../../lib/api";
 import { MetricsSummary, MetricsWindow, TrendPoint } from "../../types";
 import { WindowSelector } from "../../components/WindowSelector";
+import { AuditQueryPanel } from "../../components/AuditQueryPanel";
 
 const CHANNEL_COST_MAP: Record<string, number> = {
   email: 0.5,
@@ -280,6 +281,14 @@ export default function MetricsPage() {
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Cross-Entity Natural Language Audit Query Assistant */}
+          <div className="mt-6">
+            <AuditQueryPanel
+              title="System-Wide Audit Intelligence"
+              description="Ask natural-language questions across historical decisions, recovery patterns, and policy compliance."
+            />
           </div>
         </div>
       )}

@@ -119,7 +119,12 @@ describe("diagnose", () => {
       history,
     );
 
-    expect(result).toEqual({ causeLabel: "expired_card", confidence: 1, method: "RULE" });
+    expect(result).toEqual({
+      causeLabel: "expired_card",
+      confidence: 1,
+      method: "RULE",
+      reasoning: 'Deterministic rule mapping from gateway error reason "card_expired".',
+    });
     expect(mockedRequestJson).not.toHaveBeenCalled();
   });
 

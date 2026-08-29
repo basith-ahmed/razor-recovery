@@ -9,6 +9,7 @@ import {
   PolicyResponse,
   PaginatedResponse,
   AuditVerifyResult,
+  AuditQueryResponse,
 } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -70,3 +71,15 @@ export async function verifyAuditChain(
   const response = await apiClient.get<AuditVerifyResult>("/audit/verify", { params });
   return response.data;
 }
+
+export async function askAuditQuery(
+  question: string,
+  entityId?: string
+): Promise<AuditQueryResponse> {
+  const response = await apiClient.post<AuditQueryResponse>("/query", {
+    question,
+    entityId,
+  });
+  return response.data;
+}
+
