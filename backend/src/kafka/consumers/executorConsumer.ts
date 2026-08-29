@@ -79,10 +79,32 @@ export async function startExecutorConsumer(): Promise<void> {
         logError("executor", error);
         if (payload?.event) {
           try {
+            const failedAction = {
+              actionType: payload.decision?.chosenAction ?? "unknown",
+              result: "failed",
+              integration: "RAZORPAY" as const,
+            };
+
+            await prisma.action.upsert({
+              where: { eventId: payload.event.id },
+              update: {
+                actionType: failedAction.actionType,
+                result: "failed",
+                integration: "RAZORPAY",
+              },
+              create: {
+                eventId: payload.event.id,
+                actionType: failedAction.actionType,
+                result: "failed",
+                integration: "RAZORPAY",
+              },
+            });
+
             await recordFailureAuditEntry(payload.event, {
               inputSnapshot: payload.event,
               diagnosisSnapshot: payload.diagnosis,
               decisionSnapshot: payload.decision,
+              actionSnapshot: failedAction,
             });
           } catch (auditErr) {
             console.error("[executor] Failed to write failure audit entry:", auditErr);

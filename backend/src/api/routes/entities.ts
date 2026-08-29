@@ -12,7 +12,11 @@ const RETRY_ACTION_TYPES = new Set(["retry_payment_immediate", "retry_payment_de
 const ESCALATE_ACTION_TYPES = new Set(["escalate_to_human"]);
 const COOLDOWN_ACTION_TYPES = new Set(["pause_subscription"]);
 
-export function deriveEventState(outcome?: string | null, actionType?: string | null): string {
+export function deriveEventState(
+  outcome?: string | null,
+  actionType?: string | null,
+  reasoning?: string | null,
+): string {
   if (!outcome) return "DETECTED";
   if (outcome === "recovered" || outcome === "payment_confirmed") return "RECOVERED";
   if (outcome === "written_off" || outcome === "hard_decline" || outcome === "auto_cancel") return "WRITTEN_OFF";
@@ -22,7 +26,9 @@ export function deriveEventState(outcome?: string | null, actionType?: string | 
   if (actionType && COOLDOWN_ACTION_TYPES.has(actionType)) return "COOLING_DOWN";
   if (outcome === "pending") return "CONTACTED";
   if (outcome === "skipped") {
-    return actionType === "none" ? "DO_NOT_CONTACT" : "DETECTED";
+    if (reasoning?.includes("cooldown")) return "COOLING_DOWN";
+    if (reasoning?.includes("DNC") || actionType === "dnc") return "DO_NOT_CONTACT";
+    return "DO_NOT_CONTACT";
   }
   if (outcome === "failed") return "DETECTED";
   return "DETECTED";
@@ -156,28 +162,13 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
     );
 
     const result = events.map((event) => {
-      const eventCause = event.diagnosis?.causeLabel ?? null;
-      const causeStateRow = eventCause
-        ? causeStateMap.get(`${event.entityId}|${eventCause}`)
+      const causeState = event.diagnosis
+        ? causeStateMap.get(`${event.entityId}|${event.diagnosis.causeLabel}`)
         : undefined;
-      // Pipeline progress for THIS event, derived from which stage rows
-      // exist yet. Independent of EntityWorkflowState, which only moves when
-      // the audit consumer records the action's outcome.
-      const stage = event.action
-        ? "EXECUTED"
-        : event.decision
-          ? "DECIDED"
-          : event.diagnosis
-            ? "DIAGNOSED"
-            : "DETECTED";
-
       const latestAudit = event.auditEntries?.[0];
-      const actionType =
-        event.action?.actionType ??
-        (latestAudit?.actionSnapshot as Record<string, unknown> | null)?.actionType as string | undefined ??
-        (latestAudit?.decisionSnapshot as Record<string, unknown> | null)?.chosenAction as string | undefined;
-
-      const eventState = deriveEventState(latestAudit?.outcome, actionType);
+      const decisionReasoning =
+        event.decision?.reasoning ??
+        ((latestAudit?.decisionSnapshot as Record<string, unknown> | null)?.reasoning as string | undefined);
 
       return {
         id: event.id,
@@ -191,8 +182,8 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         currency: event.currency,
         occurredAt: event.occurredAt.toISOString(),
         riskScore: event.riskScore,
-        state: eventState,
-        stage,
+        state: deriveEventState(latestAudit?.outcome, event.action?.actionType, decisionReasoning),
+        stage: event.action ? "EXECUTED" : event.decision ? "DECIDED" : event.diagnosis ? "DIAGNOSED" : "DETECTED",
         causeLabel: event.diagnosis?.causeLabel ?? null,
         diagnosisMethod: event.diagnosis?.method ?? null,
         actionType: event.action?.actionType ?? null,
@@ -200,8 +191,8 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         actionIntegration: event.action?.integration ?? null,
         razorpayPaymentId: event.razorpayPaymentId ?? null,
         razorpayOrderId: event.razorpayOrderId ?? null,
-        lastContactedAt: causeStateRow?.lastContactedAt?.toISOString() ?? null,
-        attemptCount: causeStateRow?.attemptCount ?? 0,
+        lastContactedAt: causeState?.lastContactedAt?.toISOString() ?? null,
+        attemptCount: causeState?.attemptCount ?? 0,
       };
     });
 
@@ -236,14 +227,11 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
     });
 
     const result = auditEntries.map((entry) => {
-      const actionType =
-        (entry.actionSnapshot as Record<string, unknown> | null)?.actionType as string | undefined ??
-        (entry.decisionSnapshot as Record<string, unknown> | null)?.chosenAction as string | undefined;
-      const state = deriveEventState(entry.outcome, actionType);
-
+      const actionType = (entry.actionSnapshot as Record<string, unknown> | null)?.actionType as string | undefined;
+      const reasoning = (entry.decisionSnapshot as Record<string, unknown> | null)?.reasoning as string | undefined;
       return {
         ...entry,
-        state,
+        state: deriveEventState(entry.outcome, actionType, reasoning),
       };
     });
 

@@ -164,14 +164,38 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                   Action
                 </div>
                 <div className="text-slate-700">
-                  {entry.actionSnapshot
-                    ? `${entry.actionSnapshot.actionType} · ${entry.actionSnapshot.result} · ${entry.actionSnapshot.integration}`
-                    : "Not executed (failed before action)"}
+                  {entry.actionSnapshot ? (
+                    <span className={entry.actionSnapshot.result === "failed" ? "text-red-700 font-medium" : ""}>
+                      {String(entry.actionSnapshot.actionType ?? "")} · {String(entry.actionSnapshot.result ?? "")} · {String(entry.actionSnapshot.integration ?? "")}
+                    </span>
+                  ) : (
+                    "Not executed"
+                  )}
                 </div>
               </div>
             </div>
 
             {/* PROMINENT REASONING CALLOUTS - Primary design requirement */}
+            {entry.outcome === "failed" && (
+              <div className="my-3 bg-red-50/70 border-l-4 border-red-500 p-4 rounded-r-lg">
+                <div className="text-xs font-semibold text-red-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Action Execution Failed
+                </div>
+                <p className="text-sm text-red-900 leading-relaxed">
+                  The chosen action{" "}
+                  <code className="font-mono bg-red-100 text-red-800 px-1 py-0.5 rounded text-xs">
+                    {typeof entry.decisionSnapshot?.chosenAction === "string"
+                      ? entry.decisionSnapshot.chosenAction
+                      : "action"}
+                  </code>{" "}
+                  failed during execution before completion. The failure has been immutably recorded in this audit trail.
+                </p>
+              </div>
+            )}
+
             {diagnosisReasoning && (
               <div className="my-3 bg-amber-50/60 border-l-4 border-amber-500 p-4 rounded-r-lg">
                 <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">

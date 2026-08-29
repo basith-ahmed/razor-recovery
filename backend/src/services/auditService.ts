@@ -47,12 +47,22 @@ function deriveOutcome(action: ActionResult): string {
  * Map (actionType, result) to the state machine's action outcome string.
  * Returns null if no state transition should occur (e.g. failed action).
  */
-function toStateMachineOutcome(action: ActionResult): string | null {
+function toStateMachineOutcome(
+  action: ActionResult,
+  decision?: DecisionResult,
+  diagnosis?: DiagnosisResult,
+): string | null {
   if (action.result === "failed") return null;
 
-  // Skipped with actionType 'none' means DNC or policy-blocked
+  // Skipped with actionType 'none'
   if (action.result === "skipped" && action.actionType === "none") {
-    return "dnc_skip";
+    if (decision?.reasoning?.includes("DNC") || diagnosis?.causeLabel === "dnc") {
+      return "dnc_skip";
+    }
+    if (decision?.reasoning?.includes("cooldown")) {
+      return "cooldown_started";
+    }
+    return null;
   }
 
   // Successful actions
@@ -208,7 +218,7 @@ export async function recordAuditEntry(params: {
     });
 
     // 2. Update EntityWorkflowState via state machine
-    const smOutcome = toStateMachineOutcome(action);
+    const smOutcome = toStateMachineOutcome(action, decision, diagnosis);
     let newState: WorkflowState | null = null;
 
     if (smOutcome) {
