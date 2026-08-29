@@ -55,19 +55,6 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
         const decisionReasoning: string | null =
           typeof rawDecisionReasoning === "string" ? rawDecisionReasoning : null;
 
-        // Extract payment link safely
-        const rawShortUrl = entry.actionSnapshot?.shortUrl ?? entry.actionSnapshot?.paymentLinkShortUrl ?? entry.actionSnapshot?.paymentLink;
-        const rawLinkId = entry.actionSnapshot?.razorpayPaymentLinkId;
-
-        let paymentLinkUrl: string | null = null;
-        if (typeof rawShortUrl === "string" && rawShortUrl) {
-          paymentLinkUrl = rawShortUrl;
-        } else if (typeof rawLinkId === "string" && rawLinkId) {
-          paymentLinkUrl = rawLinkId.startsWith("http")
-            ? rawLinkId
-            : `https://razorpay.com/pay/${rawLinkId}`;
-        }
-
         return (
           <div
             key={entry.id}
@@ -221,24 +208,6 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 <p className="text-sm text-slate-800 italic font-serif leading-relaxed">
                   &quot;{decisionReasoning}&quot;
                 </p>
-              </div>
-            )}
-
-            {/* Razorpay Payment Link if generated */}
-            {paymentLinkUrl && (
-              <div className="my-3 bg-emerald-50/70 border border-emerald-200/80 p-3 rounded-lg flex items-center justify-between">
-                <div className="text-xs text-emerald-800 flex items-center gap-2">
-                  <span className="font-semibold">Razorpay Payment Link Generated:</span>
-                  <span className="font-mono text-emerald-700 truncate max-w-xs">{paymentLinkUrl}</span>
-                </div>
-                <a
-                  href={paymentLinkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-slate-900 text-xs font-medium px-3 py-1 rounded transition-colors"
-                >
-                  Open Link 
-                </a>
               </div>
             )}
 
