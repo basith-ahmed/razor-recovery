@@ -104,14 +104,16 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
         data.items.forEach((e) => expect(e.eventType).toBe("PAYMENT_FAILED"));
       });
 
-      it("returns ordered audit entries for an entity", async () => {
+      it("returns ordered audit entries and event history for an entity", async () => {
         const sampleEvent = await prisma.revenueEvent.findFirst();
         expect(sampleEvent).not.toBeNull();
 
         const res = await fetch(`${baseUrl}/entities/${sampleEvent!.entityId}/audit`);
         expect(res.status).toBe(200);
-        const data = (await res.json()) as unknown[];
-        expect(Array.isArray(data)).toBe(true);
+        const data = (await res.json()) as { events: unknown[]; auditEntries: unknown[]; entityId: string };
+        expect(Array.isArray(data.auditEntries)).toBe(true);
+        expect(Array.isArray(data.events)).toBe(true);
+        expect(data.entityId).toBe(sampleEvent!.entityId);
       });
     });
 

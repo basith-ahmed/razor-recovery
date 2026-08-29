@@ -22,9 +22,14 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
     );
   }
 
+  // Sort entries newest first (reverse chronological order)
+  const sortedEntries = [...entries].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
+
   return (
     <div className="space-y-4">
-      {entries.map((entry, idx) => {
+      {sortedEntries.map((entry, idx) => {
         const isExpanded = expandedIndex === idx;
 
         // Scheduler-synthesized events carry a followUp marker in rawPayload
@@ -64,7 +69,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-3">
                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-mono text-xs flex items-center justify-center font-bold">
-                  {idx + 1}
+                  {sortedEntries.length - idx}
                 </span>
                 <div>
                   <div className="text-sm font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
@@ -73,6 +78,11 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                     <span className="text-xs font-mono uppercase bg-slate-100 px-2 py-0.5 rounded text-slate-700">
                       {entry.outcome}
                     </span>
+                    {idx === 0 && sortedEntries.length > 1 && (
+                      <span className="text-[10px] font-semibold uppercase bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-mono">
+                        LATEST
+                      </span>
+                    )}
                     {isSynthesized && (
                       <span
                         className="text-[10px] font-semibold uppercase bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded"

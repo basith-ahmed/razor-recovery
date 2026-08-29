@@ -11,6 +11,7 @@ export interface FilterContext {
   customerId: string;
   isDnc: boolean;
   isDisputed: boolean;
+  isRecovered?: boolean;
   attemptCount: number;
   isInCooldown: boolean;
   daysOverdue?: number;
@@ -20,6 +21,11 @@ export interface FilterContext {
 }
 
 export function filterLegalActions(ctx: FilterContext): string[] {
+  // 0. Recovered entities are closed — no further recovery action is legal → return []
+  if (ctx.isRecovered) {
+    return [];
+  }
+
   // 1. DNC always checked first → return []
   if (ctx.isDnc || ctx.causeLabel === "dnc") {
     return [];

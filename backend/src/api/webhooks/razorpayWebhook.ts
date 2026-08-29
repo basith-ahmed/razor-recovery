@@ -8,6 +8,7 @@ import { writeChainedAuditEntry, recordFailureAuditEntry } from "../../services/
 import { writeLedgerEntry } from "../../services/ledgerService";
 import { emitLiveUpdate } from "../websocket";
 import { env } from "../../config/env";
+import { redis } from "../../config/redis";
 
 export const razorpayWebhookRouter = Router();
 
@@ -124,6 +125,8 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
               cooldownUntil: null,
             },
           });
+
+          await redis.set(`razorrecovery:recovered:${event.entityId}`, "true", "EX", 86400 * 30);
 
           const recoveryAction = {
             actionType: "webhook_capture",

@@ -103,6 +103,25 @@ describe("filterLegalActions", () => {
     }
   });
 
+  it("already recovered entity always gets [] regardless of cause", () => {
+    const causes = [
+      "expired_card",
+      "insufficient_funds",
+      "gateway_timeout",
+      "price_friction",
+      "no_reason_signal",
+      "subscription_renewal_failed",
+      "invoice_overdue",
+    ];
+
+    for (const cause of causes) {
+      const result = filterLegalActions(
+        makeCtx({ causeLabel: cause, isRecovered: true })
+      );
+      expect(result).toEqual([]);
+    }
+  });
+
   it("DNC takes priority over dispute", () => {
     const result = filterLegalActions(
       makeCtx({ isDnc: true, isDisputed: true })

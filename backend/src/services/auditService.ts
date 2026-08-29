@@ -8,6 +8,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
+import { redis } from "../config/redis";
 import { logError } from "../config/logger";
 import { getRuleForCause } from "../domain/policy";
 import { isTerminal, nextState, WorkflowState } from "../domain/stateMachine";
@@ -272,6 +273,7 @@ export async function recordAuditEntry(params: {
         });
 
         if (newState === "RECOVERED") {
+          await redis.set(`razorrecovery:recovered:${event.entityId}`, "true", "EX", 86400 * 30);
           await writeLedgerEntry(tx, {
             entityId: event.entityId,
             eventId: event.id,

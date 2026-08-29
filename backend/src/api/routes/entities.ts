@@ -130,30 +130,36 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
       orderBy = { riskScore: "asc" };
     }
 
-    const [total, events] = await Promise.all([
-      prisma.revenueEvent.count({ where }),
-      prisma.revenueEvent.findMany({
-        where,
-        orderBy,
-        skip,
-        take: limit,
-        include: {
-          customer: true,
-          diagnosis: true,
-          decision: true,
-          action: true,
-          auditEntries: {
-            orderBy: { sequenceNumber: "desc" },
-            take: 1,
-          },
+    // Total unique entities matching filter criteria
+    const distinctEntityGroups = await prisma.revenueEvent.groupBy({
+      by: ["entityId"],
+      where,
+    });
+    const total = distinctEntityGroups.length;
+
+    // Fetch the latest event for each distinct entity
+    const events = await prisma.revenueEvent.findMany({
+      where,
+      distinct: ["entityId"],
+      orderBy: [orderBy, { occurredAt: "desc" }, { id: "desc" }],
+      skip,
+      take: limit,
+      include: {
+        customer: true,
+        diagnosis: true,
+        decision: true,
+        action: true,
+        auditEntries: {
+          orderBy: { sequenceNumber: "desc" },
+          take: 1,
         },
-      }),
-    ]);
+      },
+    });
 
     const entityIds = Array.from(new Set(events.map((e) => e.entityId)));
 
-    // Fetch all successful actions and workflow states for these entities to compute chronological attempt sequence
-    const [allActions, workflowStates] = await Promise.all([
+    // Fetch all successful actions, workflow states, and event counts for these entities
+    const [allActions, workflowStates, eventCounts] = await Promise.all([
       prisma.action.findMany({
         where: {
           event: { entityId: { in: entityIds } },
@@ -169,9 +175,15 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
       prisma.entityWorkflowState.findMany({
         where: { entityId: { in: entityIds } },
       }),
+      prisma.revenueEvent.groupBy({
+        by: ["entityId"],
+        where: { entityId: { in: entityIds } },
+        _count: { id: true },
+      }),
     ]);
 
     const workflowMap = new Map(workflowStates.map((w) => [w.entityId, w]));
+    const eventCountMap = new Map(eventCounts.map((g) => [g.entityId, g._count.id]));
 
     const entityActionsMap = new Map<string, typeof allActions>();
     for (const act of allActions) {
@@ -213,7 +225,7 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         currency: event.currency,
         occurredAt: event.occurredAt.toISOString(),
         riskScore: event.riskScore,
-        state: deriveEventState(latestAudit?.outcome, event.action?.actionType, decisionReasoning),
+        state: workflow?.state ?? deriveEventState(latestAudit?.outcome, event.action?.actionType, decisionReasoning),
         stage: event.action ? "EXECUTED" : event.decision ? "DECIDED" : event.diagnosis ? "DIAGNOSED" : "DETECTED",
         causeLabel: event.diagnosis?.causeLabel ?? null,
         diagnosisMethod: event.diagnosis?.method ?? null,
@@ -224,6 +236,7 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         razorpayOrderId: event.razorpayOrderId ?? null,
         lastContactedAt,
         attemptCount,
+        totalEventsCount: eventCountMap.get(event.entityId) ?? 1,
       };
     });
 
@@ -241,7 +254,7 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
   }
 });
 
-// GET /entities/:id/audit — full ordered audit entries for an entity or event
+// GET /entities/:id/audit — full ordered audit entries and event history for an entity or event
 entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
   try {
     const targetId = String(req.params.id);
@@ -252,17 +265,33 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       orderBy: { timestamp: "asc" },
       include: {
         event: {
-          include: { customer: true, diagnosis: true },
+          include: { customer: true, diagnosis: true, decision: true, action: true },
         },
       },
     });
 
-    // Fetch entity workflow states for the entities in the audit trail
-    const entityIds = Array.from(new Set(auditEntries.map(e => e.entityId)));
-    const workflowStates = await prisma.entityWorkflowState.findMany({
-      where: { entityId: { in: entityIds } },
-    });
-    const workflowMap = new Map(workflowStates.map((w) => [w.entityId, w]));
+    const targetEntityId = auditEntries[0]?.entityId ?? targetId;
+
+    // Fetch entity workflow state and all events for this entity (sorted latest first)
+    const [workflowState, entityEvents] = await Promise.all([
+      prisma.entityWorkflowState.findUnique({
+        where: { entityId: targetEntityId },
+      }),
+      prisma.revenueEvent.findMany({
+        where: { entityId: targetEntityId },
+        orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+        include: {
+          customer: true,
+          diagnosis: true,
+          decision: true,
+          action: true,
+          auditEntries: {
+            orderBy: { sequenceNumber: "desc" },
+            take: 1,
+          },
+        },
+      }),
+    ]);
 
     let runningAttempts = 0;
     let latestContactDate: Date | null = null;
@@ -271,7 +300,6 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       const actionType = (entry.actionSnapshot as Record<string, unknown> | null)?.actionType as string | undefined;
       const reasoning = (entry.decisionSnapshot as Record<string, unknown> | null)?.reasoning as string | undefined;
       const actionResult = (entry.actionSnapshot as Record<string, unknown> | null)?.result as string | undefined;
-      const workflow = workflowMap.get(entry.entityId);
       
       const isSuccessfulAttempt = actionResult === "success";
       if (isSuccessfulAttempt) {
@@ -283,9 +311,9 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       if (eventPayload) {
         eventPayload = {
           ...eventPayload,
-          attemptCount: runningAttempts > 0 ? runningAttempts : (workflow?.attemptCount ?? 0),
-          cooldownUntil: workflow?.cooldownUntil,
-          lastContactedAt: latestContactDate ? latestContactDate.toISOString() : (workflow?.lastContactedAt?.toISOString() ?? null),
+          attemptCount: runningAttempts > 0 ? runningAttempts : (workflowState?.attemptCount ?? 0),
+          cooldownUntil: workflowState?.cooldownUntil,
+          lastContactedAt: latestContactDate ? latestContactDate.toISOString() : (workflowState?.lastContactedAt?.toISOString() ?? null),
         } as any;
       }
       
@@ -296,7 +324,49 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       };
     });
 
-    return res.status(200).json(result);
+    const formattedEvents = entityEvents.map((ev) => {
+      const latestAudit = ev.auditEntries?.[0];
+      const decisionReasoning =
+        ev.decision?.reasoning ??
+        ((latestAudit?.decisionSnapshot as Record<string, unknown> | null)?.reasoning as string | undefined);
+
+      return {
+        id: ev.id,
+        entityType: ev.entityType,
+        entityId: ev.entityId,
+        customerId: ev.customerId,
+        customerName: ev.customer?.name ?? "Unknown Customer",
+        customerEmail: ev.customer?.email ?? "N/A",
+        eventType: ev.eventType,
+        amount: ev.amount,
+        currency: ev.currency,
+        occurredAt: ev.occurredAt.toISOString(),
+        riskScore: ev.riskScore,
+        urgency: ev.urgency,
+        state: deriveEventState(latestAudit?.outcome, ev.action?.actionType, decisionReasoning),
+        stage: ev.action ? "EXECUTED" : ev.decision ? "DECIDED" : ev.diagnosis ? "DIAGNOSED" : "DETECTED",
+        causeLabel: ev.diagnosis?.causeLabel ?? null,
+        diagnosisMethod: ev.diagnosis?.method ?? null,
+        diagnosisConfidence: ev.diagnosis?.confidence ?? null,
+        diagnosisReasoning: ev.diagnosis?.reasoning ?? null,
+        actionType: ev.action?.actionType ?? null,
+        actionResult: ev.action?.result ?? null,
+        actionIntegration: ev.action?.integration ?? null,
+        decisionReasoning: decisionReasoning ?? null,
+        chosenAction: ev.decision?.chosenAction ?? null,
+        legalActions: ev.decision?.legalActions ?? [],
+      };
+    });
+
+    const responsePayload = {
+      entityId: targetEntityId,
+      customer: entityEvents[0]?.customer ?? auditEntries[0]?.event?.customer ?? null,
+      workflowState: workflowState ?? null,
+      events: formattedEvents,
+      auditEntries: result,
+    };
+
+    return res.status(200).json(responsePayload);
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "Failed to fetch audit entries";
     console.error("[entitiesRouter] Error fetching audit entries:", error);

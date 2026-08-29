@@ -6,6 +6,7 @@ import {
   EntityItem,
   EntityFilters,
   AuditEntry,
+  EntityAuditResponse,
   PolicyResponse,
   PaginatedResponse,
   AuditVerifyResult,
@@ -44,8 +45,16 @@ export async function listEntities(filters?: EntityFilters): Promise<PaginatedRe
   return response.data;
 }
 
-export async function getEntityAudit(id: string): Promise<AuditEntry[]> {
-  const response = await apiClient.get<AuditEntry[]>(`/entities/${id}/audit`);
+export async function getEntityAudit(id: string): Promise<EntityAuditResponse> {
+  const response = await apiClient.get<EntityAuditResponse | AuditEntry[]>(`/entities/${id}/audit`);
+  if (Array.isArray(response.data)) {
+    return {
+      entityId: id,
+      events: [],
+      auditEntries: response.data,
+      workflowState: null,
+    };
+  }
   return response.data;
 }
 

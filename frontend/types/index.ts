@@ -47,6 +47,68 @@ export interface EntityItem {
   razorpayOrderId: string | null;
   lastContactedAt: string | null;
   attemptCount: number;
+  totalEventsCount?: number;
+}
+
+export interface EntityEventItem {
+  id: string;
+  entityType: string;
+  entityId: string;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  eventType: string;
+  amount: number;
+  currency: string;
+  occurredAt: string;
+  riskScore: number | null;
+  urgency?: number | null;
+  state: string;
+  stage: "DETECTED" | "DIAGNOSED" | "DECIDED" | "EXECUTED";
+  causeLabel: string | null;
+  diagnosisMethod: string | null;
+  diagnosisConfidence?: number | null;
+  diagnosisReasoning?: string | null;
+  actionType: string | null;
+  actionResult: string | null;
+  actionIntegration: string | null;
+  decisionReasoning: string | null;
+  chosenAction: string | null;
+  legalActions: string[];
+  attemptCount?: number;
+  cooldownUntil?: string | Date | null;
+  lastContactedAt?: string | Date | null;
+  customer?: {
+    id: string;
+    name: string;
+    email: string;
+    dncFlag?: boolean;
+  } | null;
+}
+
+export interface EntityWorkflowStateData {
+  id: string;
+  entityId: string;
+  customerId?: string | null;
+  state: string;
+  attemptCount: number;
+  lastContactedAt?: string | null;
+  cooldownUntil?: string | null;
+  updatedAt: string;
+}
+
+export interface EntityAuditResponse {
+  entityId: string;
+  customer?: {
+    id: string;
+    name: string;
+    email: string;
+    dncFlag?: boolean;
+    phone?: string | null;
+  } | null;
+  workflowState?: EntityWorkflowStateData | null;
+  events: EntityEventItem[];
+  auditEntries: AuditEntry[];
 }
 
 export interface PaginatedResponse<T> {

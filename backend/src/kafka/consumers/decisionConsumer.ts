@@ -100,6 +100,13 @@ export async function startDecisionConsumer(): Promise<void> {
         const now = new Date();
         const isDnc = customer?.dncFlag ?? false;
 
+        // Check if entity payment has already been recovered
+        const redisRecoveredKey = `${REDIS_PREFIX}:recovered:${event.entityId}`;
+        const redisRecoveredVal = await redis.get(redisRecoveredKey);
+        const isRecovered =
+          redisRecoveredVal === "true" ||
+          workflowState?.state === "RECOVERED";
+
         // Check Redis fast-cooldown lock first (provides immediate protection
         // against rapid-fire stream events for the same entity)
         const redisCooldownKey = `${REDIS_PREFIX}:cooldown:${event.entityId}`;
@@ -149,6 +156,7 @@ export async function startDecisionConsumer(): Promise<void> {
           customerId: event.customerId,
           isDnc,
           isDisputed,
+          isRecovered,
           attemptCount,
           isInCooldown,
           daysOverdue,

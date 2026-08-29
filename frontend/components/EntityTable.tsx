@@ -236,12 +236,12 @@ export function EntityTable({
             ) : (
               entities.map((item) => (
                 <tr
-                  key={item.id}
+                  key={item.entityId || item.id}
                   className="cursor-pointer hover:bg-slate-100/50 transition-colors"
-                  onClick={() => router.push(`/entities/${item.id}`)}
+                  onClick={() => router.push(`/entities/${item.entityId || item.id}`)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
-                      router.push(`/entities/${item.id}`);
+                      router.push(`/entities/${item.entityId || item.id}`);
                     }
                   }}
                   tabIndex={0}
@@ -256,9 +256,11 @@ export function EntityTable({
                     </div>
                   </td>
                   <td className="p-3">
-                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono text-[10px]">
-                      {item.eventType}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono text-[10px]">
+                        {item.eventType}
+                      </span>
+                    </div>
                   </td>
                   <td className="p-3 font-mono font-semibold text-emerald-700">
                     ₹
