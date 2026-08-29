@@ -84,6 +84,17 @@ export async function startDiagnosisConsumer(): Promise<void> {
         // Persist Diagnosis row.
         // Upsert: Kafka is at-least-once, so replays after a consumer restart
         // or rebalance must not fail on the eventId unique constraint.
+        const eventExists = await prisma.revenueEvent.findUnique({
+          where: { id: event.id },
+          select: { id: true },
+        });
+        if (!eventExists) {
+          console.warn(
+            `[diagnosis] Cannot persist Diagnosis for event ${event.id}: RevenueEvent does not exist in DB (orphaned Kafka message). Skipping.`,
+          );
+          return;
+        }
+
         await prisma.diagnosis.upsert({
           where: { eventId: event.id },
           update: {

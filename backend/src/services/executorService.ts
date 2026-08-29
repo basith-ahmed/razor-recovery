@@ -306,6 +306,18 @@ export async function executeAction(
   // rebalance must not fail on the eventId unique constraint. External side
   // effects above remain at-least-once; the stage dedup key is the first line
   // of defense against re-execution.
+  const eventExists = await prisma.revenueEvent.findUnique({
+    where: { id: event.id },
+    select: { id: true },
+  });
+
+  if (!eventExists) {
+    console.warn(
+      `[executor] Cannot persist Action for event ${event.id}: RevenueEvent does not exist in DB (orphaned Kafka message). Skipping.`,
+    );
+    return actionResult;
+  }
+
   await prisma.action.upsert({
     where: { eventId: event.id },
     update: {

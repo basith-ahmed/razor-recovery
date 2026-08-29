@@ -82,6 +82,9 @@ export interface AuditEntry {
     eventType: string;
     amount: number;
     currency: string;
+    attemptCount?: number;
+    cooldownUntil?: string | Date | null;
+    lastContactedAt?: string | Date | null;
     diagnosis?: {
       causeLabel: string;
       confidence: number;

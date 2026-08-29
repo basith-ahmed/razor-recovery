@@ -49,6 +49,8 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
   const event = latestEntry?.event;
   const customer = event?.customer;
   const currentState = latestEntry?.state || "DETECTED";
+  const actualEntityId = event?.entityId || latestEntry?.entityId || id;
+  const actualEventId = event?.id || latestEntry?.eventId || id;
 
   const STATE_BADGE_STYLES: Record<string, string> = {
     DETECTED: "bg-gray-800 text-gray-300 border-gray-700",
@@ -98,10 +100,12 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
                     {event?.eventType || "EVENT"}
                   </span>
                 </div>
-                <div className="text-xs text-slate-400 font-mono space-x-4">
-                  <span>Email: {customer?.email || "N/A"}</span>
-                  <span>•</span>
-                  <span>Entity ID: {id}</span>
+                <div className="text-left text-xs text-slate-500 font-mono mt-2 space-y-0.5">
+                  <div>Email: {customer?.email || "N/A"}</div>
+                  <div>Entity ID: {actualEntityId}</div>
+                  {actualEventId && actualEventId !== actualEntityId && (
+                    <div>Event ID: {actualEventId}</div>
+                  )}
                 </div>
               </div>
 
@@ -111,6 +115,15 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
                   <span className="text-xl font-bold font-mono text-emerald-700">
                     ₹{event?.amount ? event.amount.toLocaleString("en-IN") : "0"} {event?.currency || "INR"}
                   </span>
+                </div>
+                <div className="text-right text-xs text-slate-500 font-mono mt-1 space-y-0.5">
+                  <div>Attempts: {event?.attemptCount ?? 0}</div>
+                  {event?.cooldownUntil && (
+                    <div>Cooldown: {new Date(event.cooldownUntil).toLocaleString()}</div>
+                  )}
+                  {event?.lastContactedAt && (
+                    <div>Last Contact: {new Date(event.lastContactedAt).toLocaleString()}</div>
+                  )}
                 </div>
 
                 {/* DNC & Dispute Flags */}
@@ -140,7 +153,7 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
 
             {/* Right Column: Permanent AI Audit Assistant Sidebar */}
             <div className="lg:col-span-1 lg:sticky lg:top-6">
-              <AuditQueryPanel entityId={id} />
+              <AuditQueryPanel entityId={actualEntityId} />
             </div>
           </div>
         </div>

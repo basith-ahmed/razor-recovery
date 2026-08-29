@@ -25,7 +25,12 @@ jest.mock("../src/config/prisma", () => {
       deleteMany: jest.fn(),
       findMany: jest.fn(),
     },
-    revenueEvent: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
+    revenueEvent: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue({ id: "mock-event-id" }),
+    },
     diagnosis: { count: jest.fn() },
     ticket: { create: jest.fn() },
     invoice: { findFirst: jest.fn() },

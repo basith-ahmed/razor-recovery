@@ -79,6 +79,17 @@ export async function startExecutorConsumer(): Promise<void> {
         logError("executor", error);
         if (payload?.event) {
           try {
+            const eventExists = await prisma.revenueEvent.findUnique({
+              where: { id: payload.event.id },
+              select: { id: true },
+            });
+            if (!eventExists) {
+              console.warn(
+                `[executor] Skipping failure audit entry for ${payload.event.id}: RevenueEvent does not exist in DB (orphaned message).`,
+              );
+              return;
+            }
+
             const failedAction = {
               actionType: payload.decision?.chosenAction ?? "unknown",
               result: "failed",

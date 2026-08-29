@@ -164,8 +164,17 @@ export async function startDecisionConsumer(): Promise<void> {
         });
 
         // Persist Decision row.
-        // Upsert: Kafka is at-least-once, so replays after a consumer restart
-        // or rebalance must not fail on the eventId unique constraint.
+        const eventExists = await prisma.revenueEvent.findUnique({
+          where: { id: event.id },
+          select: { id: true },
+        });
+        if (!eventExists) {
+          console.warn(
+            `[decision] Cannot persist Decision for event ${event.id}: RevenueEvent does not exist in DB (orphaned Kafka message). Skipping.`,
+          );
+          return;
+        }
+
         await prisma.decision.upsert({
           where: { eventId: event.id },
           update: {

@@ -152,34 +152,46 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
 
     const entityIds = Array.from(new Set(events.map((e) => e.entityId)));
 
-    // Attempt/last-contact state is tracked globally per entity in EntityWorkflowState
-    // with fallback to EntityCauseState.
-    const [workflowStates, causeStates] = await Promise.all([
-      prisma.entityWorkflowState.findMany({
-        where: { entityId: { in: entityIds } },
-      }),
-      prisma.entityCauseState.findMany({
-        where: { entityId: { in: entityIds } },
-      }),
-    ]);
+    // Fetch all successful actions for these entities to compute chronological attempt sequence
+    const allActions = await prisma.action.findMany({
+      where: {
+        event: { entityId: { in: entityIds } },
+        result: "success",
+      },
+      select: {
+        eventId: true,
+        executedAt: true,
+        event: { select: { entityId: true } },
+      },
+      orderBy: { executedAt: "asc" },
+    });
 
-    const workflowMap = new Map(workflowStates.map((w) => [w.entityId, w]));
-    const causeStateMap = new Map(
-      causeStates.map((c) => [`${c.entityId}|${c.causeLabel}`, c]),
-    );
+    const entityActionsMap = new Map<string, typeof allActions>();
+    for (const act of allActions) {
+      const eid = act.event.entityId;
+      if (!entityActionsMap.has(eid)) {
+        entityActionsMap.set(eid, []);
+      }
+      entityActionsMap.get(eid)!.push(act);
+    }
 
     const result = events.map((event) => {
-      const workflow = workflowMap.get(event.entityId);
-      const causeState = event.diagnosis
-        ? causeStateMap.get(`${event.entityId}|${event.diagnosis.causeLabel}`)
-        : undefined;
       const latestAudit = event.auditEntries?.[0];
       const decisionReasoning =
         event.decision?.reasoning ??
         ((latestAudit?.decisionSnapshot as Record<string, unknown> | null)?.reasoning as string | undefined);
 
-      const attemptCount = workflow?.attemptCount ?? causeState?.attemptCount ?? 0;
-      const lastContactedAt = (workflow?.lastContactedAt ?? causeState?.lastContactedAt)?.toISOString() ?? null;
+      const entityActs = entityActionsMap.get(event.entityId) ?? [];
+      const thisEventExecutedAt = event.action?.result === "success" ? (event.action.executedAt ?? event.occurredAt) : null;
+      
+      const priorOrCurrentActs = thisEventExecutedAt
+        ? entityActs.filter((a) => a.executedAt <= thisEventExecutedAt)
+        : entityActs.filter((a) => a.executedAt <= event.occurredAt);
+
+      const attemptCount = priorOrCurrentActs.length;
+      const lastContactedAt = priorOrCurrentActs.length > 0
+        ? priorOrCurrentActs[priorOrCurrentActs.length - 1].executedAt.toISOString()
+        : null;
 
       return {
         id: event.id,
@@ -237,11 +249,41 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       },
     });
 
+    // Fetch entity workflow states for the entities in the audit trail
+    const entityIds = Array.from(new Set(auditEntries.map(e => e.entityId)));
+    const workflowStates = await prisma.entityWorkflowState.findMany({
+      where: { entityId: { in: entityIds } },
+    });
+    const workflowMap = new Map(workflowStates.map((w) => [w.entityId, w]));
+
+    let runningAttempts = 0;
+    let latestContactDate: Date | null = null;
+
     const result = auditEntries.map((entry) => {
       const actionType = (entry.actionSnapshot as Record<string, unknown> | null)?.actionType as string | undefined;
       const reasoning = (entry.decisionSnapshot as Record<string, unknown> | null)?.reasoning as string | undefined;
+      const actionResult = (entry.actionSnapshot as Record<string, unknown> | null)?.result as string | undefined;
+      const workflow = workflowMap.get(entry.entityId);
+      
+      const isSuccessfulAttempt = actionResult === "success";
+      if (isSuccessfulAttempt) {
+        runningAttempts += 1;
+        latestContactDate = entry.timestamp;
+      }
+      
+      let eventPayload = entry.event;
+      if (eventPayload) {
+        eventPayload = {
+          ...eventPayload,
+          attemptCount: runningAttempts,
+          cooldownUntil: isSuccessfulAttempt ? workflow?.cooldownUntil : null,
+          lastContactedAt: latestContactDate ? latestContactDate.toISOString() : null,
+        } as any;
+      }
+      
       return {
         ...entry,
+        event: eventPayload,
         state: deriveEventState(entry.outcome, actionType, reasoning),
       };
     });

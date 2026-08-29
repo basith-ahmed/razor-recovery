@@ -1,13 +1,13 @@
+import express, { Router, Request, Response } from "express";
 import crypto from "crypto";
-import { Router, Request, Response } from "express";
 import { Prisma } from "@prisma/client";
-import { env } from "../../config/env";
 import { prisma } from "../../config/prisma";
-import { emitLiveUpdate } from "../websocket";
-import { recordFailureAuditEntry, writeChainedAuditEntry } from "../../services/auditService";
-import { writeLedgerEntry } from "../../services/ledgerService";
 import { publish } from "../../kafka/producer";
 import { TOPICS } from "../../kafka/topics";
+import { writeChainedAuditEntry, recordFailureAuditEntry } from "../../services/auditService";
+import { writeLedgerEntry } from "../../services/ledgerService";
+import { emitLiveUpdate } from "../websocket";
+import { env } from "../../config/env";
 
 export const razorpayWebhookRouter = Router();
 
@@ -38,11 +38,8 @@ export function verifyWebhookSignature(
   }
 }
 
-// POST /webhooks/razorpay
-razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
+export async function handleRazorpayWebhook(req: Request, res: Response) {
   const signature = (req.headers["x-razorpay-signature"] || req.headers["X-Razorpay-Signature"]) as string | undefined;
-
-  // Retrieve raw body buffer if captured by body-parser verify hook, or stringify req.body
   const rawBody = (req as unknown as { rawBody?: Buffer }).rawBody ?? (typeof req.body === "string" ? req.body : JSON.stringify(req.body));
 
   const isValid = verifyWebhookSignature(rawBody, signature, env.RAZORPAY_WEBHOOK_SECRET);
@@ -55,8 +52,6 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
     const payload = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     const eventName = payload.event as string | undefined;
 
-    console.log(`[razorpayWebhook] Received valid webhook event: ${eventName}`);
-
     if (eventName === "payment.captured" || eventName === "payment_link.paid") {
       const paymentEntity = payload.payload?.payment?.entity;
       const linkEntity = payload.payload?.payment_link?.entity;
@@ -64,6 +59,9 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
       const paymentId = paymentEntity?.id as string | undefined;
       const orderId = paymentEntity?.order_id as string | undefined;
       const paymentLinkId = (linkEntity?.id || paymentEntity?.payment_link_id) as string | undefined;
+      const notes = ((paymentEntity?.notes || linkEntity?.notes || {}) as Record<string, unknown>);
+      const notesEntityId = (notes.entity_id || notes.entityId) as string | undefined;
+      const notesEventId = (notes.event_id || notes.eventId) as string | undefined;
 
       const conds: Prisma.ActionWhereInput[] = [];
       if (paymentLinkId) conds.push({ razorpayPaymentLinkId: paymentLinkId });
@@ -79,14 +77,17 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
           : null;
 
       let event = action?.event;
-      if (!event && (paymentId || orderId)) {
+      if (!event && (paymentId || orderId || notesEventId || notesEntityId)) {
         const eventConds: Prisma.RevenueEventWhereInput[] = [];
         if (paymentId) eventConds.push({ razorpayPaymentId: paymentId });
         if (orderId) eventConds.push({ razorpayOrderId: orderId });
+        if (notesEventId) eventConds.push({ id: notesEventId });
+        if (notesEntityId) eventConds.push({ entityId: notesEntityId });
         if (eventConds.length > 0) {
           event =
             (await prisma.revenueEvent.findFirst({
               where: { OR: eventConds },
+              orderBy: { occurredAt: "desc" },
             })) ?? undefined;
         }
       }
@@ -205,8 +206,6 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
       const paymentId = refundEntity?.payment_id as string | undefined;
       const refundId = refundEntity?.id as string | undefined;
       const refundedAmount = refundEntity?.amount ? refundEntity.amount / 100 : undefined; // Amount is typically in paise, convert to major unit if needed, assuming our events use major units.
-      // Wait, our DB uses Float for amount (major units). Razorpay sends paise.
-      // We should check our DB event.amount. For simplicity, we just use the event's original amount if we can't reliably parse.
       
       if (paymentId) {
         const recoveredLedger = await prisma.ledgerEntry.findFirst({
@@ -244,4 +243,7 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
     console.error("[razorpayWebhook] Internal error processing webhook:", error);
     return res.status(500).json({ error: errMessage });
   }
-});
+}
+
+razorpayWebhookRouter.post("/", handleRazorpayWebhook);
+

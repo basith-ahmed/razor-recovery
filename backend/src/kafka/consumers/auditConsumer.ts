@@ -70,6 +70,18 @@ export async function startAuditConsumer(): Promise<void> {
           return;
         }
 
+        // Verify RevenueEvent exists before writing AuditEntry
+        const eventExists = await prisma.revenueEvent.findUnique({
+          where: { id: event.id },
+          select: { id: true },
+        });
+        if (!eventExists) {
+          console.warn(
+            `[audit] Cannot record AuditEntry for event ${event.id}: RevenueEvent does not exist in DB (orphaned Kafka message). Skipping.`,
+          );
+          return;
+        }
+
         // Record the audit entry (also transitions workflow state and updates
         // per-cause attempt/cooldown state in EntityCauseState)
         const auditEntry = await recordAuditEntry({ event, diagnosis, decision, action });
