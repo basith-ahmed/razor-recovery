@@ -152,16 +152,24 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
 
     const entityIds = Array.from(new Set(events.map((e) => e.entityId)));
 
-    // Attempt/last-contact state is scoped per (entityId, causeLabel); resolve
-    // each event against ITS OWN diagnosed cause.
-    const causeStates = await prisma.entityCauseState.findMany({
-      where: { entityId: { in: entityIds } },
-    });
+    // Attempt/last-contact state is tracked globally per entity in EntityWorkflowState
+    // with fallback to EntityCauseState.
+    const [workflowStates, causeStates] = await Promise.all([
+      prisma.entityWorkflowState.findMany({
+        where: { entityId: { in: entityIds } },
+      }),
+      prisma.entityCauseState.findMany({
+        where: { entityId: { in: entityIds } },
+      }),
+    ]);
+
+    const workflowMap = new Map(workflowStates.map((w) => [w.entityId, w]));
     const causeStateMap = new Map(
       causeStates.map((c) => [`${c.entityId}|${c.causeLabel}`, c]),
     );
 
     const result = events.map((event) => {
+      const workflow = workflowMap.get(event.entityId);
       const causeState = event.diagnosis
         ? causeStateMap.get(`${event.entityId}|${event.diagnosis.causeLabel}`)
         : undefined;
@@ -169,6 +177,9 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
       const decisionReasoning =
         event.decision?.reasoning ??
         ((latestAudit?.decisionSnapshot as Record<string, unknown> | null)?.reasoning as string | undefined);
+
+      const attemptCount = workflow?.attemptCount ?? causeState?.attemptCount ?? 0;
+      const lastContactedAt = (workflow?.lastContactedAt ?? causeState?.lastContactedAt)?.toISOString() ?? null;
 
       return {
         id: event.id,
@@ -191,8 +202,8 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
         actionIntegration: event.action?.integration ?? null,
         razorpayPaymentId: event.razorpayPaymentId ?? null,
         razorpayOrderId: event.razorpayOrderId ?? null,
-        lastContactedAt: causeState?.lastContactedAt?.toISOString() ?? null,
-        attemptCount: causeState?.attemptCount ?? 0,
+        lastContactedAt,
+        attemptCount,
       };
     });
 

@@ -238,6 +238,23 @@ describe("scheduled retry decisions", () => {
       { actionId: "a1", verdict: "cancel", reason: "arc_closed" },
     ]);
   });
+
+  it("does not chase follow-ups when entity-level attemptCount budget is exhausted across all causes", () => {
+    const due = selectDueFollowUps(
+      // The entity itself has used 3 attempts across previous causes
+      [{ entityId: "e1", state: "RETRYING", attemptCount: 3 }],
+      [
+        // This specific cause has 0 attempts recorded locally, but entity total is 3 (exceeding maxAttempts 3)
+        cause("e1", "insufficient_funds", {
+          attemptCount: 0,
+          lastContactedAt: new Date(NOW.getTime() - 5 * H),
+          cooldownUntil: new Date(NOW.getTime() - H),
+        }),
+      ],
+      NOW,
+    );
+    expect(due).toEqual([]);
+  });
 });
 
 describe("suppressPendingScheduledRetries", () => {

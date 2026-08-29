@@ -112,9 +112,15 @@ razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
               entityId: event.entityId,
               customerId: event.customerId,
               state: "RECOVERED",
+              attemptCount: 0,
+              lastContactedAt: null,
+              cooldownUntil: null,
             },
             update: {
               state: "RECOVERED",
+              attemptCount: 0,
+              lastContactedAt: null,
+              cooldownUntil: null,
             },
           });
 

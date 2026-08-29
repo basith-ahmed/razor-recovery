@@ -53,7 +53,13 @@ export interface DueFollowUp {
  *   spend), but DO get no-response timeout handling per their policy.
  */
 export function selectDueFollowUps(
-  openArcs: Array<{ entityId: string; state: string }>,
+  openArcs: Array<{
+    entityId: string;
+    state: string;
+    attemptCount?: number;
+    lastContactedAt?: Date | null;
+    cooldownUntil?: Date | null;
+  }>,
   causeStates: Array<{
     entityId: string;
     causeLabel: string;
@@ -63,8 +69,10 @@ export function selectDueFollowUps(
   }>,
   now: Date,
 ): DueFollowUp[] {
-  const openEntityIds = new Set(
-    openArcs.filter((a) => !isTerminal(a.state as WorkflowState)).map((a) => a.entityId),
+  const openArcMap = new Map(
+    openArcs
+      .filter((a) => !isTerminal(a.state as WorkflowState))
+      .map((a) => [a.entityId, a]),
   );
   const escalated = new Set(
     openArcs.filter((a) => a.state === "ESCALATED").map((a) => a.entityId),
@@ -79,7 +87,7 @@ export function selectDueFollowUps(
 
   const due: DueFollowUp[] = [];
 
-  for (const entityId of openEntityIds) {
+  for (const [entityId, arc] of openArcMap.entries()) {
     if (escalated.has(entityId)) continue;
     const rows = causeStatesByEntity.get(entityId) ?? [];
 
@@ -88,12 +96,17 @@ export function selectDueFollowUps(
       if (!rule) continue;
       const stopping = rule.stopping;
 
+      const effectiveAttempts = arc.attemptCount ?? cs.attemptCount;
+      const effectiveCooldown = arc.cooldownUntil ?? cs.cooldownUntil;
+      const effectiveLastContact = arc.lastContactedAt ?? cs.lastContactedAt;
+
       // Cooldown expired while budget remains → worth another contact cycle
       if (
         typeof stopping.maxAttempts === "number" &&
-        cs.attemptCount < stopping.maxAttempts &&
-        cs.cooldownUntil !== null &&
-        cs.cooldownUntil <= now
+        effectiveAttempts < stopping.maxAttempts &&
+        effectiveCooldown !== null &&
+        effectiveCooldown !== undefined &&
+        effectiveCooldown <= now
       ) {
         due.push({ entityId, causeLabel: cs.causeLabel, type: "cooldown_expired" });
         continue;
@@ -103,8 +116,9 @@ export function selectDueFollowUps(
       // threshold elapses
       if (
         stopping.noResponseWithinHours !== undefined &&
-        cs.lastContactedAt !== null &&
-        now.getTime() - cs.lastContactedAt.getTime() >=
+        effectiveLastContact !== null &&
+        effectiveLastContact !== undefined &&
+        now.getTime() - effectiveLastContact.getTime() >=
           stopping.noResponseWithinHours * 3_600_000
       ) {
         due.push({ entityId, causeLabel: cs.causeLabel, type: "no_response_timeout" });
@@ -182,7 +196,13 @@ async function scanAndPublish(): Promise<void> {
   const now = new Date();
 
   const arcs = await prisma.entityWorkflowState.findMany({
-    select: { entityId: true, state: true },
+    select: {
+      entityId: true,
+      state: true,
+      attemptCount: true,
+      cooldownUntil: true,
+      lastContactedAt: true,
+    },
   });
   const openArcs = arcs.filter((a) => !isTerminal(a.state as WorkflowState));
   if (openArcs.length === 0) return;

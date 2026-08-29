@@ -217,7 +217,7 @@ export async function recordAuditEntry(params: {
       timestamp: now,
     });
 
-    // 2. Update EntityWorkflowState via state machine
+    // 2. Update EntityWorkflowState via state machine and unified attempt tracking
     const smOutcome = toStateMachineOutcome(action, decision, diagnosis);
     let newState: WorkflowState | null = null;
 
@@ -230,21 +230,43 @@ export async function recordAuditEntry(params: {
       const effectiveCurrent = isTerminal(currentState) ? "DETECTED" : currentState;
       newState = nextState(effectiveCurrent, smOutcome);
 
+      const isTerm = isTerminal(newState);
+      const countsAsAttempt = !isTerm && action.result === "success";
+      const startsCooldown = !isTerm && (countsAsAttempt || action.result === "scheduled");
+      const cooldownUntil = startsCooldown
+        ? new Date(now.getTime() + cooldownTtlSeconds(diagnosis.causeLabel) * 1000)
+        : isTerm ? null : undefined;
+      const touchesCustomer = !isTerm && countsAsAttempt;
+
       await tx.entityWorkflowState.upsert({
         where: { entityId: event.entityId },
         create: {
           entityId: event.entityId,
           customerId: event.customerId,
           state: newState,
+          attemptCount: countsAsAttempt ? 1 : 0,
+          lastContactedAt: touchesCustomer ? now : null,
+          cooldownUntil: cooldownUntil ?? null,
         },
         update: {
           state: newState,
+          ...(isTerm
+            ? {
+                attemptCount: 0,
+                lastContactedAt: null,
+                cooldownUntil: null,
+              }
+            : {
+                ...(countsAsAttempt ? { attemptCount: { increment: 1 } } : {}),
+                ...(touchesCustomer ? { lastContactedAt: now } : {}),
+                ...(cooldownUntil ? { cooldownUntil } : {}),
+              }),
         },
       });
 
       // Closing the arc for this entity wipes ALL of its per-cause
       // attempt/cooldown history
-      if (isTerminal(newState)) {
+      if (isTerm) {
         await tx.entityCauseState.deleteMany({
           where: { entityId: event.entityId },
         });
@@ -267,38 +289,29 @@ export async function recordAuditEntry(params: {
             currency: event.currency,
           });
         }
-      }
-    }
-
-    // 3. Per-cause attempt/cooldown tracking (only while arc is open)
-    if (smOutcome && !isTerminal(newState ?? "DETECTED")) {
-      const countsAsAttempt = action.result === "success";
-      const startsCooldown = countsAsAttempt || action.result === "scheduled";
-      const cooldownUntil = startsCooldown
-        ? new Date(now.getTime() + cooldownTtlSeconds(diagnosis.causeLabel) * 1000)
-        : undefined;
-      const touchesCustomer = countsAsAttempt;
-
-      await tx.entityCauseState.upsert({
-        where: {
-          entityId_causeLabel: {
+      } else {
+        // Maintain EntityCauseState for backwards compatibility
+        await tx.entityCauseState.upsert({
+          where: {
+            entityId_causeLabel: {
+              entityId: event.entityId,
+              causeLabel: diagnosis.causeLabel,
+            },
+          },
+          create: {
             entityId: event.entityId,
             causeLabel: diagnosis.causeLabel,
+            attemptCount: countsAsAttempt ? 1 : 0,
+            ...(touchesCustomer ? { lastContactedAt: now } : {}),
+            cooldownUntil,
           },
-        },
-        create: {
-          entityId: event.entityId,
-          causeLabel: diagnosis.causeLabel,
-          attemptCount: countsAsAttempt ? 1 : 0,
-          ...(touchesCustomer ? { lastContactedAt: now } : {}),
-          cooldownUntil,
-        },
-        update: {
-          ...(countsAsAttempt ? { attemptCount: { increment: 1 } } : {}),
-          ...(touchesCustomer ? { lastContactedAt: now } : {}),
-          ...(cooldownUntil ? { cooldownUntil } : {}),
-        },
-      });
+          update: {
+            ...(countsAsAttempt ? { attemptCount: { increment: 1 } } : {}),
+            ...(touchesCustomer ? { lastContactedAt: now } : {}),
+            ...(cooldownUntil ? { cooldownUntil } : {}),
+          },
+        });
+      }
     }
 
     return auditEntry;

@@ -1118,4 +1118,31 @@ describe("Definition of Done — DNC Compliance", () => {
       expect(result.html).toContain("Bob");
     });
   });
+
+  describe("Unified Entity-Level Attempt Counter & Cross-Cause Stopping Rules", () => {
+    it("increments the entity attempt counter across different cause events", async () => {
+      const entityId = "entity-multi-cause-1";
+      const event1 = makeEvent({ entityId, eventType: "PAYMENT_FAILED" });
+      const diag1 = makeDiagnosis({ causeLabel: "insufficient_funds" });
+      const dec1 = makeDecision({ chosenAction: "send_payment_link" });
+      const action1: ActionResult = {
+        actionType: "send_payment_link",
+        result: "success",
+        integration: "RAZORPAY",
+      };
+
+      // 1st Attempt: insufficient_funds
+      await recordAuditEntry({ event: event1, diagnosis: diag1, decision: dec1, action: action1 });
+      expect(mockedPrisma.entityWorkflowState.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { entityId },
+          create: expect.objectContaining({ attemptCount: 1 }),
+          update: expect.objectContaining({
+            attemptCount: { increment: 1 },
+          }),
+        }),
+      );
+    });
+  });
 });
+

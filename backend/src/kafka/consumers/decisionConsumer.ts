@@ -66,14 +66,15 @@ export async function startDecisionConsumer(): Promise<void> {
         }
 
         // Build FilterContext from Postgres.
-        // Attempt/cooldown/last-contact state is scoped per
-        // (entityId, causeLabel) in EntityCauseState — each cause gets its own
-        // independent budget per policy.json. Overall lifecycle status lives
-        // separately in EntityWorkflowState.state.
-        const [customer, causeState] = await Promise.all([
+        // Unified entity-level attempt tracking is stored in EntityWorkflowState
+        // with per-cause fallback in EntityCauseState.
+        const [customer, workflowState, causeState] = await Promise.all([
           prisma.customer.findUnique({
             where: { id: event.customerId },
             select: { dncFlag: true, lifetimeValue: true },
+          }),
+          prisma.entityWorkflowState.findUnique({
+            where: { entityId: event.entityId },
           }),
           prisma.entityCauseState.findUnique({
             where: {
@@ -97,16 +98,16 @@ export async function startDecisionConsumer(): Promise<void> {
 
         const now = new Date();
         const isDnc = customer?.dncFlag ?? false;
-        const isInCooldown = causeState?.cooldownUntil
-          ? causeState.cooldownUntil > now
-          : false;
-        const attemptCount = causeState?.attemptCount ?? 0;
+        const cooldownUntil = workflowState?.cooldownUntil ?? causeState?.cooldownUntil;
+        const isInCooldown = cooldownUntil ? cooldownUntil > now : false;
+        const attemptCount = workflowState?.attemptCount ?? causeState?.attemptCount ?? 0;
+        const lastContactedAt = workflowState?.lastContactedAt ?? causeState?.lastContactedAt;
 
-        // Elapsed time since last real contact for THIS cause, in hours
+        // Elapsed time since last real contact for THIS entity, in hours
         // (precise) and whole days (for LLM context readability)
         let hoursSinceLastContact: number | undefined;
-        if (causeState?.lastContactedAt) {
-          const elapsedMs = now.getTime() - causeState.lastContactedAt.getTime();
+        if (lastContactedAt) {
+          const elapsedMs = now.getTime() - lastContactedAt.getTime();
           if (!Number.isNaN(elapsedMs)) {
             hoursSinceLastContact = Math.max(0, elapsedMs / (1000 * 60 * 60));
           }
