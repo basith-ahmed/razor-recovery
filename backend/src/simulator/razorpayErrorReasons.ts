@@ -103,8 +103,41 @@ export const RAZORPAY_ERROR_REASONS: readonly RazorpayErrorReason[] = [
   },
 ] as const;
 
+export const RAZORPAY_MANDATE_ERROR_REASONS: readonly RazorpayErrorReason[] = [
+  {
+    errorCode: "BAD_REQUEST_ERROR",
+    errorReason: "mandate_cancelled",
+    errorDescription:
+      "The UPI Autopay mandate was cancelled by the customer via their UPI app or bank portal.",
+    errorSource: "customer",
+    errorStep: "payment_authorization",
+  },
+  {
+    errorCode: "BAD_REQUEST_ERROR",
+    errorReason: "mandate_creation_failed",
+    errorDescription:
+      "Mandate creation failed. The customer should retry or use a different payment method.",
+    errorSource: "customer",
+    errorStep: "payment_authorization",
+  },
+  {
+    errorCode: "BAD_REQUEST_ERROR",
+    errorReason: "subscription_halted",
+    errorDescription:
+      "The subscription has been halted after all automated retry attempts were exhausted.",
+    errorSource: "customer",
+    errorStep: "payment_authorization",
+  },
+] as const;
+
 export function randomRazorpayErrorReason(): RazorpayErrorReason {
   return RAZORPAY_ERROR_REASONS[
     Math.floor(Math.random() * RAZORPAY_ERROR_REASONS.length)
+  ];
+}
+
+export function randomRazorpayMandateErrorReason(): RazorpayErrorReason {
+  return RAZORPAY_MANDATE_ERROR_REASONS[
+    Math.floor(Math.random() * RAZORPAY_MANDATE_ERROR_REASONS.length)
   ];
 }

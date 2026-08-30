@@ -27,9 +27,21 @@
       "stopping": { "noResponseWithinHours": 48 }
     },
     {
-      "cause": "subscription_renewal_failed",
-      "actions": ["send_dunning_email_1", "send_dunning_email_2", "send_dunning_email_3", "pause_subscription", "send_winback_offer"],
-      "stopping": { "hardStopDays": 21, "onHardStopAction": "auto_cancel" }
+      "cause": "mandate_execution_failed_retryable",
+      "actions": ["retry_payment_delayed", "send_payment_link"],
+      "stopping": {
+        "maxAttempts": 3,
+        "windowDays": 7,
+        "onMaxAction": "send_payment_link"
+      }
+    },
+    {
+      "cause": "mandate_requires_reauthorization",
+      "actions": ["send_payment_link", "escalate_to_human"],
+      "stopping": {
+        "hardStopDays": 30,
+        "onHardStopAction": "escalate_to_human"
+      }
     },
     {
       "cause": "invoice_overdue",

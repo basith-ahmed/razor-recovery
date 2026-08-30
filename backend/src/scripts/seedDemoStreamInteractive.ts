@@ -129,6 +129,30 @@ async function main() {
   const writeOff = await injectFailure("payment_failed", writeOffCustomer.id);
   await emit(writeOff);
 
+  // Beat 8: mandate_halted — UPI Autopay mandate cancelled/exhausted → mandate_requires_reauthorization
+  await waitForEnter();
+  const mandateHaltedCustomer = await pickCustomer({
+    where: { dncFlag: false, subscriptions: { some: { status: "active" } } },
+  }).catch(() => null);
+  if (mandateHaltedCustomer) {
+    const mandateHalted = await injectFailure("mandate_halted", mandateHaltedCustomer.id);
+    await emit(mandateHalted);
+  }
+
+  // Beat 9: mandate_retryable_failure — transient bank error on active mandate → mandate_execution_failed_retryable
+  await waitForEnter();
+  const mandateRetryCustomer = await pickCustomer({
+    where: {
+      dncFlag: false,
+      subscriptions: { some: { status: "active" } },
+      NOT: mandateHaltedCustomer ? { id: mandateHaltedCustomer.id } : undefined,
+    },
+  }).catch(() => null);
+  if (mandateRetryCustomer) {
+    const mandateRetry = await injectFailure("mandate_retryable_failure", mandateRetryCustomer.id);
+    await emit(mandateRetry);
+  }
+
   console.log("\nDone — all beats published onto revenue.events.raw.");
   await disconnectProducer();
   await prisma.$disconnect();

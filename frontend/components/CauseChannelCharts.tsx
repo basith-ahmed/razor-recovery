@@ -25,6 +25,23 @@ interface CauseChannelChartsProps {
 
 const COLORS = ["#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#06b6d4", "#ec4899"];
 
+const CAUSE_DISPLAY_NAMES: Record<string, string> = {
+  expired_card: "Expired Card",
+  insufficient_funds: "Insufficient Funds",
+  gateway_timeout: "Gateway Timeout",
+  price_friction: "Price Friction",
+  no_reason_signal: "No Reason Signal",
+  mandate_execution_failed_retryable: "Mandate: Retryable Failure",
+  mandate_requires_reauthorization: "Mandate: Re-auth Required",
+  invoice_overdue: "Invoice Overdue",
+  invoice_disputed: "Invoice Disputed",
+  dnc: "DNC / Consent Block",
+};
+
+function displayCause(cause: string): string {
+  return CAUSE_DISPLAY_NAMES[cause] ?? cause.replace(/_/g, " ");
+}
+
 export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChannelChartsProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -51,7 +68,7 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
                   innerRadius={45}
                   paddingAngle={2}
                   label={(entry: { cause?: string; name?: string; percent?: number }) =>
-                    `${entry.cause || entry.name || ""} (${((entry.percent || 0) * 100).toFixed(0)}%)`
+                    `${displayCause(entry.cause || entry.name || "")} (${((entry.percent || 0) * 100).toFixed(0)}%)`
                   }
                 >
                   {byCause.map((entry, index) => (

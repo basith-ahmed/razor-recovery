@@ -10,7 +10,8 @@ export const CAUSE_LABELS = [
   "gateway_timeout",
   "price_friction",
   "no_reason_signal",
-  "subscription_renewal_failed",
+  "mandate_execution_failed_retryable",
+  "mandate_requires_reauthorization",
   "invoice_overdue",
   "invoice_disputed",
   "dnc",
@@ -18,8 +19,8 @@ export const CAUSE_LABELS = [
 
 export type CauseLabel = (typeof CAUSE_LABELS)[number];
 
-/** Exact Razorpay `error_reason` values supplied by the Phase 3 simulator. */
-export const CAUSE_MAP: Readonly<Record<string, CauseLabel>> = {
+/** Exact Razorpay `error_reason` values for standard one-time payment / checkout failures. */
+export const PAYMENT_CAUSE_MAP: Readonly<Record<string, CauseLabel>> = {
   insufficient_fund: "insufficient_funds",
   payment_timed_out: "gateway_timeout",
   card_expired: "expired_card",
@@ -33,7 +34,19 @@ export const CAUSE_MAP: Readonly<Record<string, CauseLabel>> = {
   gateway_technical_error: "gateway_timeout",
 };
 
-export const DIAGNOSIS_SYSTEM_PROMPT = `You are RazorRecovery's diagnosis service. Classify the revenue event into exactly one cause label. Do not recommend an action, contact a customer, or make policy decisions. Return JSON only with cause_label, confidence, and reasoning. cause_label must be one of: expired_card, insufficient_funds, gateway_timeout, price_friction, no_reason_signal, subscription_renewal_failed, invoice_overdue, invoice_disputed, dnc.`;
+/** Exact Razorpay `error_reason` values for UPI Autopay / e-NACH mandate and subscription failures. */
+export const MANDATE_CAUSE_MAP: Readonly<Record<string, CauseLabel>> = {
+  mandate_cancelled: "mandate_requires_reauthorization",
+  mandate_creation_failed: "mandate_requires_reauthorization",
+  mandate_creation_expired: "mandate_requires_reauthorization",
+  mandate_creation_timeout: "mandate_requires_reauthorization",
+  subscription_halted: "mandate_requires_reauthorization",
+};
+
+/** Exported alias for backward compatibility with general payment cause lookups */
+export const CAUSE_MAP = PAYMENT_CAUSE_MAP;
+
+export const DIAGNOSIS_SYSTEM_PROMPT = `You are RazorRecovery's diagnosis service. Classify the revenue event into exactly one cause label. Do not recommend an action, contact a customer, or make policy decisions. Return JSON only with cause_label, confidence, and reasoning. cause_label must be one of: expired_card, insufficient_funds, gateway_timeout, price_friction, no_reason_signal, mandate_execution_failed_retryable, mandate_requires_reauthorization, invoice_overdue, invoice_disputed, dnc.`;
 
 const diagnosisSchema = {
   type: "object",
@@ -123,9 +136,10 @@ export async function diagnose(
   event: EnrichedRevenueEvent,
   history: CustomerHistory,
 ): Promise<DiagnosisResult> {
+  // Rule-based path for PAYMENT_FAILED: deterministic from gateway error_reason
   const mappedCause =
     event.eventType === "PAYMENT_FAILED" && event.errorReason
-      ? CAUSE_MAP[event.errorReason]
+      ? PAYMENT_CAUSE_MAP[event.errorReason]
       : undefined;
 
   if (mappedCause) {
@@ -135,6 +149,47 @@ export async function diagnose(
       method: "RULE",
       reasoning: `Deterministic rule mapping from gateway error reason "${event.errorReason}".`,
     };
+  }
+
+  // Rule-based path for SUBSCRIPTION_FAILED: read mandate/subscription state from rawPayload.
+  // Priority: explicit subscription_status/mandate_status signals beat error_reason lookup,
+  // which in turn beats LLM. This ensures correct routing even when error_reason is absent.
+  if (event.eventType === "SUBSCRIPTION_FAILED") {
+    const raw = event.rawPayload as Record<string, unknown>;
+    const subscriptionStatus = raw.subscription_status as string | undefined;
+    const mandateStatus = raw.mandate_status as string | undefined;
+
+    // Halted state or explicit mandate cancellation → reauth required, gateway retries futile
+    if (subscriptionStatus === "halted" || mandateStatus === "cancelled") {
+      return {
+        causeLabel: "mandate_requires_reauthorization",
+        confidence: 1,
+        method: "RULE",
+        reasoning: `Subscription is ${subscriptionStatus ?? "unknown"} / mandate is ${mandateStatus ?? "unknown"} — re-authorization required, gateway retries suppressed.`,
+      };
+    }
+
+    // Pending state → retryable mandate failure (Razorpay subscription is in pending state awaiting retries)
+    if (subscriptionStatus === "pending") {
+      return {
+        causeLabel: "mandate_execution_failed_retryable",
+        confidence: 1,
+        method: "RULE",
+        reasoning: `Subscription in pending state with transient error reason "${event.errorReason ?? "unknown"}".`,
+      };
+    }
+
+    // Mandate-specific error_reason with no subscription_status context → map directly
+    if (event.errorReason && MANDATE_CAUSE_MAP[event.errorReason]) {
+      const mandateMapped = MANDATE_CAUSE_MAP[event.errorReason];
+      return {
+        causeLabel: mandateMapped,
+        confidence: 1,
+        method: "RULE",
+        reasoning: `Deterministic mandate cause mapping from error reason "${event.errorReason}".`,
+      };
+    }
+    // Fall through to LLM for ambiguous SUBSCRIPTION_FAILED cases
   }
 
   const payload = await userPayload(event, history);

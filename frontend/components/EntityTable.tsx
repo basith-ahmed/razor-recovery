@@ -118,8 +118,11 @@ export function EntityTable({
             <option value="gateway_timeout">Gateway Timeout</option>
             <option value="price_friction">Price Friction</option>
             <option value="no_reason_signal">No Reason Signal</option>
-            <option value="subscription_renewal_failed">
-              Sub Renewal Failed
+            <option value="mandate_execution_failed_retryable">
+              Mandate: Retryable Failure
+            </option>
+            <option value="mandate_requires_reauthorization">
+              Mandate: Re-auth Required
             </option>
             <option value="invoice_overdue">Invoice Overdue</option>
             <option value="invoice_disputed">Invoice Disputed</option>

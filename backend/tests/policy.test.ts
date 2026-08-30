@@ -34,7 +34,7 @@ describe("policy.ts", () => {
   it("loadPolicy returns a valid PolicyConfig", () => {
     const policy = loadPolicy();
     expect(policy.version).toBe("1.0.0");
-    expect(policy.rules).toHaveLength(7);
+    expect(policy.rules).toHaveLength(8);
   });
 
   it("getPolicyVersion returns the version string", () => {
@@ -73,7 +73,8 @@ describe("filterLegalActions", () => {
       "gateway_timeout",
       "price_friction",
       "no_reason_signal",
-      "subscription_renewal_failed",
+      "mandate_execution_failed_retryable",
+      "mandate_requires_reauthorization",
       "invoice_overdue",
       "invoice_disputed",
     ];
@@ -110,7 +111,8 @@ describe("filterLegalActions", () => {
       "gateway_timeout",
       "price_friction",
       "no_reason_signal",
-      "subscription_renewal_failed",
+      "mandate_execution_failed_retryable",
+      "mandate_requires_reauthorization",
       "invoice_overdue",
     ];
 
@@ -236,31 +238,53 @@ describe("filterLegalActions", () => {
     });
   });
 
-  describe("subscription_renewal_failed", () => {
-    it("returns all dunning actions when under hardStopDays", () => {
+  describe("mandate_execution_failed_retryable", () => {
+    it("returns retry_payment_delayed and send_payment_link when under maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({
-          causeLabel: "subscription_renewal_failed",
+          causeLabel: "mandate_execution_failed_retryable",
+          attemptCount: 1,
+        })
+      );
+      expect(result).toEqual([
+        "retry_payment_delayed",
+        "send_payment_link",
+      ]);
+    });
+
+    it("returns send_payment_link when at maxAttempts", () => {
+      const result = filterLegalActions(
+        makeCtx({
+          causeLabel: "mandate_execution_failed_retryable",
+          attemptCount: 3,
+        })
+      );
+      expect(result).toEqual(["send_payment_link"]);
+    });
+  });
+
+  describe("mandate_requires_reauthorization", () => {
+    it("returns send_payment_link and escalate_to_human without retries when under hardStopDays", () => {
+      const result = filterLegalActions(
+        makeCtx({
+          causeLabel: "mandate_requires_reauthorization",
           daysOverdue: 5,
         })
       );
       expect(result).toEqual([
-        "send_dunning_email_1",
-        "send_dunning_email_2",
-        "send_dunning_email_3",
-        "pause_subscription",
-        "send_winback_offer",
+        "send_payment_link",
+        "escalate_to_human",
       ]);
     });
 
-    it("returns auto_cancel when past hardStopDays", () => {
+    it("returns escalate_to_human when past hardStopDays", () => {
       const result = filterLegalActions(
         makeCtx({
-          causeLabel: "subscription_renewal_failed",
-          daysOverdue: 21,
+          causeLabel: "mandate_requires_reauthorization",
+          daysOverdue: 30,
         })
       );
-      expect(result).toEqual(["auto_cancel"]);
+      expect(result).toEqual(["escalate_to_human"]);
     });
   });
 

@@ -33,7 +33,7 @@ const EMAIL_ACTIONS = new Set([
   "send_winback_offer",
 ]);
 
-const EMAIL_DRAFT_SYSTEM_PROMPT = `You are RazorRecovery's email copywriter. Write a short, highly personalized, friendly billing-recovery email.
+const EMAIL_DRAFT_BASE_PROMPT = `You are RazorRecovery's email copywriter. Write a short, highly personalized, friendly billing-recovery email.
 Return JSON only with "subject" and "body_paragraphs" fields. 
 The "body_paragraphs" should be an array of simple text strings. Do not include HTML tags.
 
@@ -41,8 +41,30 @@ CRITICAL INSTRUCTIONS FOR PERSONALIZATION:
 - Analyze the "eventType" (e.g., PAYMENT_FAILED, SUBSCRIPTION_FAILED, INVOICE_OVERDUE).
 - Analyze the "errorReason" and "errorCode" (e.g., insufficient_balance, card_expired). Mention this specifically but politely in the email (e.g., "It looks like your card might have expired" or "It seems the payment failed due to insufficient funds").
 - Provide context (e.g., "your recent subscription renewal", "your pending invoice").
-- Include the "entityId" if it helps identify the transaction (e.g., "Order/Invoice #${`{entityId}`.slice(-6)}").
+- Include the "entityId" if it helps identify the transaction (e.g., "Order/Invoice #${`{entityId}`.slice(-6)}\").
 Keep the tone empathetic, professional, and action-oriented. Do not include unsubscribe links or legal disclaimers.`;
+
+const MANDATE_REAUTH_CONTEXT = `
+
+MANDATE RE-AUTHORIZATION CONTEXT (apply when cause is mandate_requires_reauthorization):
+- The customer's UPI Autopay standing instruction (mandate) has been paused or cancelled — either by the bank after repeated failures, or by the customer themselves in their UPI app.
+- Do NOT suggest they simply "try again" — retrying at the payment gateway will not work.
+- Do NOT use words like "failed", "declined", or "error" in the subject line.
+- Write a calm, action-oriented email: explain that their auto-debit subscription needs their attention, and that the payment link lets them re-authorize or switch to a new payment method.
+- Tone: reassuring, not alarming. The call-to-action is re-authorization, not a retry.`;
+
+function buildEmailSystemPrompt(cause: string): string {
+  if (
+    cause === "mandate_requires_reauthorization" ||
+    cause === "mandate_execution_failed_retryable"
+  ) {
+    return EMAIL_DRAFT_BASE_PROMPT + MANDATE_REAUTH_CONTEXT;
+  }
+  return EMAIL_DRAFT_BASE_PROMPT;
+}
+
+// Keep for backward compatibility with any direct references
+const EMAIL_DRAFT_SYSTEM_PROMPT = EMAIL_DRAFT_BASE_PROMPT;
 
 const emailDraftSchema = {
   type: "object",
@@ -125,7 +147,7 @@ export async function draftRecoveryEmail(
       hasPaymentLinkIncluded: !!paymentUrl,
     });
     const raw = await requestJson({
-      instructions: EMAIL_DRAFT_SYSTEM_PROMPT,
+      instructions: buildEmailSystemPrompt(cause),
       input,
       schemaName: "recovery_email_draft",
       schema: emailDraftSchema,
@@ -198,9 +220,18 @@ export async function executeAction(
     // "scheduled"; the follow-up scheduler executes the real retry once this
     // cause's cooldown window lapses. The scheduled action still starts the
     // cooldown clock (see auditService) so nothing else contacts meanwhile.
-    if (!event.razorpayOrderId) {
+    const hasIdentifier =
+      event.entityType === "SUBSCRIPTION"
+        ? Boolean(
+            event.entityId ||
+              (event.rawPayload as Record<string, unknown>)?.subscription_id ||
+              (event.rawPayload as Record<string, unknown>)?.razorpay_subscription_id,
+          )
+        : Boolean(event.razorpayOrderId);
+
+    if (!hasIdentifier) {
       throw new DomainError(
-        `Cannot schedule retry: event ${event.id} has no razorpayOrderId.`,
+        `Cannot schedule retry: event ${event.id} has no ${event.entityType === "SUBSCRIPTION" ? "subscription identifier" : "razorpayOrderId"}.`,
         "MISSING_ORDER_ID",
       );
     }
@@ -212,16 +243,29 @@ export async function executeAction(
         "Retry deferred; will execute when the cause cooldown window lapses.",
     };
   } else if (RETRY_ACTIONS.has(chosenAction)) {
-    if (!event.razorpayOrderId) {
-      throw new DomainError(
-        `Cannot retry payment: event ${event.id} has no razorpayOrderId.`,
-        "MISSING_ORDER_ID",
+    if (event.entityType === "SUBSCRIPTION") {
+      const subId =
+        ((event.rawPayload as Record<string, unknown>)?.razorpay_subscription_id as string) ||
+        ((event.rawPayload as Record<string, unknown>)?.subscription_id as string) ||
+        event.entityId;
+      actionResult = {
+        actionType: chosenAction,
+        result: "success",
+        integration: "RAZORPAY",
+        detail: `Subscription ${subId} queued for retry re-presentation via Razorpay.`,
+      };
+    } else {
+      if (!event.razorpayOrderId) {
+        throw new DomainError(
+          `Cannot retry payment: event ${event.id} has no razorpayOrderId.`,
+          "MISSING_ORDER_ID",
+        );
+      }
+      actionResult = await razorpayIntegration.retryPayment(
+        event.razorpayOrderId,
       );
+      actionResult = { ...actionResult, actionType: chosenAction };
     }
-    actionResult = await razorpayIntegration.retryPayment(
-      event.razorpayOrderId,
-    );
-    actionResult = { ...actionResult, actionType: chosenAction };
   } else if (PAYMENT_LINK_ACTIONS.has(chosenAction)) {
     const customer = await lookupCustomer(event.customerId);
     actionResult = await razorpayIntegration.createRecoveryPaymentLink({
