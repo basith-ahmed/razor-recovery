@@ -3,7 +3,7 @@ import "./globals.css";
 import { Nav } from "../components/Nav";
 
 export const metadata: Metadata = {
-  title: "RazorRecovery — Autonomous Revenue Recovery Platform",
+  title: "RazorRecovery",
   description: "Real-time AI revenue recovery and dunning orchestration platform powered by Razorpay",
 };
 

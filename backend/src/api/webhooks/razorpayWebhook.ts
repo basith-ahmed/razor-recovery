@@ -200,7 +200,54 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
 
         console.log(`[razorpayWebhook] Entity ${event.entityId} marked RECOVERED via payment webhook.`);
       } else {
-        console.log("[razorpayWebhook] No matching action found for payment webhook payload.");
+        // Check if matching PromiseToPay commitments exist without attached RevenueEvent
+        const matchingPromises = await prisma.promiseToPay.findMany({
+          where: {
+            OR: [
+              ...(paymentLinkId ? [{ razorpayPaymentLinkId: paymentLinkId }] : []),
+              ...(notesEntityId ? [{ entityId: notesEntityId }] : []),
+              ...(paymentEntity?.email ? [{ customer: { email: paymentEntity.email } }] : []),
+            ],
+            status: { in: ["pending", "reminder_sent"] },
+          },
+        });
+
+        if (matchingPromises.length > 0) {
+          await prisma.$transaction(async (tx) => {
+            for (const p of matchingPromises) {
+              await tx.promiseToPay.update({
+                where: { id: p.id },
+                data: { status: "kept" },
+              });
+              await tx.ledgerEntry.create({
+                data: {
+                  entityId: p.entityId,
+                  type: "RECOVERED",
+                  amount: p.promisedAmount,
+                  currency: p.currency,
+                  referenceId: paymentId || paymentLinkId || p.id,
+                },
+              });
+              await tx.entityWorkflowState.upsert({
+                where: { entityId: p.entityId },
+                create: {
+                  entityId: p.entityId,
+                  customerId: p.customerId,
+                  state: "RECOVERED",
+                  attemptCount: 0,
+                },
+                update: {
+                  state: "RECOVERED",
+                  attemptCount: 0,
+                },
+              });
+            }
+          });
+          await emitLiveUpdate(matchingPromises[0].entityId);
+          console.log(`[razorpayWebhook] Settled ${matchingPromises.length} standalone promise(s) to 'kept'.`);
+        } else {
+          console.log("[razorpayWebhook] No matching event or promise found for payment webhook payload.");
+        }
       }
     } else if (eventName === "refund.processed" || eventName === "payment.refunded") {
       const refundEntity = payload.payload?.refund?.entity;
