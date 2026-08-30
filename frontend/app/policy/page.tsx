@@ -5,6 +5,9 @@ import { getPolicy } from "../../lib/api";
 import { PolicyResponse } from "../../types";
 import { PolicyTable } from "../../components/PolicyTable";
 import { AuditChainVerifier } from "../../components/AuditChainVerifier";
+import { PageHeader } from "../../components/PageHeader";
+
+type PolicyTab = "rules" | "dnc" | "compliance";
 
 export default function PolicyPage() {
   const [data, setData] = useState<PolicyResponse | null>(null);
@@ -13,6 +16,7 @@ export default function PolicyPage() {
   const [dncPage, setDncPage] = useState<number>(1);
   const [dncLimit, setDncLimit] = useState<number>(10);
   const [loading, setLoading] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<PolicyTab>("rules");
 
   useEffect(() => {
     let ignore = false;
@@ -35,17 +39,62 @@ export default function PolicyPage() {
     };
   }, [logPage, logLimit, dncPage, dncLimit]);
 
+  const tabs: { id: PolicyTab; label: string; count?: number }[] = [
+    {
+      id: "rules",
+      label: "Policy Rules",
+      count: data?.policy.rules.length,
+    },
+    {
+      id: "dnc",
+      label: "DNC Register",
+      count: data?.dncList.total,
+    },
+    {
+      id: "compliance",
+      label: "Compliance Log",
+      count: data?.complianceLog.total,
+    },
+  ];
+
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Policy & Compliance Control</h1>
-        <p className="text-sm text-slate-500">
-          Inspect declarative recovery rules, active Do-Not-Contact (DNC) registers, and compliance audit overrides.
-        </p>
+      <PageHeader
+        title="Policy & Compliance Control"
+        description="Inspect declarative recovery rules, active Do-Not-Contact registers, and compliance audit overrides."
+      />
+
+      {/* Audit integrity — always visible at the top, above tabs */}
+      <div className="mb-5">
+        <AuditChainVerifier />
       </div>
 
-      <div className="mb-6">
-        <AuditChainVerifier />
+      {/* Tab navigation */}
+      <div className="flex items-center gap-0 border-b border-slate-200 mb-5">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === tab.id
+                ? "border-blue-600 text-blue-700"
+                : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+            }`}
+          >
+            {tab.label}
+            {tab.count !== undefined && (
+              <span
+                className={`ml-2 text-xs font-mono px-1.5 py-0.5 rounded ${
+                  activeTab === tab.id
+                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                    : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {tab.count}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {loading && !data ? (
@@ -53,179 +102,196 @@ export default function PolicyPage() {
           Loading policy settings...
         </div>
       ) : data ? (
-        <div className="space-y-6">
-          <PolicyTable rules={data.policy.rules} />
+        <>
+          {/* Tab: Policy Rules */}
+          {activeTab === "rules" && (
+            <PolicyTable rules={data.policy.rules} />
+          )}
 
-          <div className="bg-white border border-slate-200 rounded p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">Active Do-Not-Contact (DNC) Customer List</h3>
-                <p className="text-xs text-slate-500">Entities registered in Redis / Database to halt dunning communications</p>
-              </div>
-              <span className="text-xs font-mono bg-red-50 border border-red-200 text-red-800 px-2.5 py-1 rounded">
-                {data.dncList.total} DNC Customers
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                    <th className="p-3 font-medium">Customer ID</th>
-                    <th className="p-3 font-medium">Name</th>
-                    <th className="p-3 font-medium">Email</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {data.dncList.entries.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="text-center py-6 text-slate-500">
-                        No active DNC records.
-                      </td>
-                    </tr>
-                  ) : (
-                    data.dncList.entries.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-mono text-slate-500">{c.id}</td>
-                        <td className="p-3 font-semibold text-slate-900">{c.name || "N/A"}</td>
-                        <td className="p-3 font-mono text-slate-700">{c.email || "N/A"}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>Per page:</span>
-                <select
-                  value={dncLimit}
-                  onChange={(e) => {
-                    setDncLimit(parseInt(e.target.value, 10));
-                    setDncPage(1);
-                  }}
-                  className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-mono">
-                  Page {data.dncList.page} of {data.dncList.totalPages}
+          {/* Tab: DNC Register */}
+          {activeTab === "dnc" && (
+            <div className="bg-white border border-slate-200 rounded">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Active Do-Not-Contact Customer List
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Entities registered in Redis / Database to halt dunning communications
+                  </p>
+                </div>
+                <span className="text-xs font-mono bg-red-50 border border-red-200 text-red-800 px-2.5 py-1 rounded">
+                  {data.dncList.total} DNC Customers
                 </span>
-                <button
-                  disabled={dncPage <= 1}
-                  onClick={() => setDncPage((p) => Math.max(1, p - 1))}
-                  className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={dncPage >= data.dncList.totalPages}
-                  onClick={() => setDncPage((p) => p + 1)}
-                  className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
-                >
-                  Next
-                </button>
               </div>
-            </div>
-          </div>
 
-          <div className="bg-white border border-slate-200 rounded p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">Compliance Audit Log (Blocked / Escalated Actions)</h3>
-                <p className="text-xs text-slate-500">Audit entries stopped or escalated due to policy guardrails</p>
-              </div>
-              <span className="text-xs font-mono bg-amber-50 border border-amber-200 text-amber-800 px-2.5 py-1 rounded">
-                {data.complianceLog.total} Total Blocked Entries
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                    <th className="p-3 font-medium">Timestamp</th>
-                    <th className="p-3 font-medium">Customer / Entity</th>
-                    <th className="p-3 font-medium">Action Attempted</th>
-                    <th className="p-3 font-medium">Outcome</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {data.complianceLog.entries.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="text-center py-6 text-slate-500">
-                        No policy-blocked audit entries found.
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                      <th className="p-3 font-medium">Customer ID</th>
+                      <th className="p-3 font-medium">Name</th>
+                      <th className="p-3 font-medium">Email</th>
                     </tr>
-                  ) : (
-                    data.complianceLog.entries.map((entry) => (
-                      <tr key={entry.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-mono text-slate-500">
-                          {new Date(entry.timestamp).toLocaleString("en-IN")}
-                        </td>
-                        <td className="p-3 font-semibold text-slate-900">
-                          {entry.event?.customer?.name || entry.entityId}
-                        </td>
-                        <td className="p-3 font-mono text-amber-800">{entry.actor}</td>
-                        <td className="p-3">
-                          <span className="bg-red-50 border border-red-200 text-red-800 px-2 py-0.5 rounded font-mono text-[10px] uppercase">
-                            {entry.outcome}
-                          </span>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {data.dncList.entries.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="text-center py-6 text-slate-500">
+                          No active DNC records.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>Per page:</span>
-                <select
-                  value={logLimit}
-                  onChange={(e) => {
-                    setLogLimit(parseInt(e.target.value, 10));
-                    setLogPage(1);
-                  }}
-                  className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-                >
-                  <option value={10}>10</option>
-                  <option value={15}>15</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
+                    ) : (
+                      data.dncList.entries.map((c) => (
+                        <tr key={c.id} className="hover:bg-slate-50">
+                          <td className="p-3 font-mono text-slate-500">{c.id}</td>
+                          <td className="p-3 font-semibold text-slate-900">{c.name || "N/A"}</td>
+                          <td className="p-3 font-mono text-slate-700">{c.email || "N/A"}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-mono">
-                  Page {data.complianceLog.page} of {data.complianceLog.totalPages}
+              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span>Per page:</span>
+                  <select
+                    value={dncLimit}
+                    onChange={(e) => {
+                      setDncLimit(parseInt(e.target.value, 10));
+                      setDncPage(1);
+                    }}
+                    className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 font-mono">
+                    Page {data.dncList.page} of {data.dncList.totalPages}
+                  </span>
+                  <button
+                    disabled={dncPage <= 1}
+                    onClick={() => setDncPage((p) => Math.max(1, p - 1))}
+                    className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    disabled={dncPage >= data.dncList.totalPages}
+                    onClick={() => setDncPage((p) => p + 1)}
+                    className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab: Compliance Log */}
+          {activeTab === "compliance" && (
+            <div className="bg-white border border-slate-200 rounded">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Compliance Audit Log (Blocked / Escalated Actions)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Audit entries stopped or escalated due to policy guardrails
+                  </p>
+                </div>
+                <span className="text-xs font-mono bg-amber-50 border border-amber-200 text-amber-800 px-2.5 py-1 rounded">
+                  {data.complianceLog.total} Total Blocked Entries
                 </span>
-                <button
-                  disabled={logPage <= 1}
-                  onClick={() => setLogPage((p) => Math.max(1, p - 1))}
-                  className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={logPage >= data.complianceLog.totalPages}
-                  onClick={() => setLogPage((p) => p + 1)}
-                  className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
-                >
-                  Next
-                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                      <th className="p-3 font-medium">Timestamp</th>
+                      <th className="p-3 font-medium">Customer / Entity</th>
+                      <th className="p-3 font-medium">Action Attempted</th>
+                      <th className="p-3 font-medium">Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {data.complianceLog.entries.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center py-6 text-slate-500">
+                          No policy-blocked audit entries found.
+                        </td>
+                      </tr>
+                    ) : (
+                      data.complianceLog.entries.map((entry) => (
+                        <tr key={entry.id} className="hover:bg-slate-50">
+                          <td className="p-3 font-mono text-slate-500">
+                            {new Date(entry.timestamp).toLocaleString("en-IN")}
+                          </td>
+                          <td className="p-3 font-semibold text-slate-900">
+                            {entry.event?.customer?.name || entry.entityId}
+                          </td>
+                          <td className="p-3 font-mono text-amber-800">{entry.actor}</td>
+                          <td className="p-3">
+                            <span className="bg-red-50 border border-red-200 text-red-800 px-2 py-0.5 rounded font-mono text-[10px] uppercase">
+                              {entry.outcome}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span>Per page:</span>
+                  <select
+                    value={logLimit}
+                    onChange={(e) => {
+                      setLogLimit(parseInt(e.target.value, 10));
+                      setLogPage(1);
+                    }}
+                    className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 font-mono">
+                    Page {data.complianceLog.page} of {data.complianceLog.totalPages}
+                  </span>
+                  <button
+                    disabled={logPage <= 1}
+                    onClick={() => setLogPage((p) => Math.max(1, p - 1))}
+                    className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    disabled={logPage >= data.complianceLog.totalPages}
+                    onClick={() => setLogPage((p) => p + 1)}
+                    className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          )}
+        </>
       ) : null}
     </div>
   );

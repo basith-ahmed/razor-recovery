@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { getMetricsSummary, getMetricsTrend } from "../../lib/api";
 import { MetricsSummary, MetricsWindow, TrendPoint } from "../../types";
 import { WindowSelector } from "../../components/WindowSelector";
-import { AuditQueryPanel } from "../../components/AuditQueryPanel";
+import { PageHeader } from "../../components/PageHeader";
 
 const CHANNEL_COST_MAP: Record<string, number> = {
   email: 0.5,
@@ -90,38 +90,61 @@ export default function MetricsPage() {
   const maxTrendEvents = Math.max(1, ...trend.map((t) => t.eventsProcessed));
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Analytics & Performance Metrics</h1>
-          <p className="text-sm text-slate-500">
-            Deep recovery efficiency and financial unit economics over the live event stream.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <WindowSelector value={window} onChange={setWindow} />
-          <button
-            onClick={handleExportJSON}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-3 py-2 rounded border border-slate-300"
-          >
-            Export JSON
-          </button>
-          <button
-            onClick={handleExportCSV}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded"
-          >
-            Export CSV
-          </button>
-        </div>
-      </div>
+    <div className="pb-24">
+      <PageHeader
+        title="Analytics & Performance Metrics"
+        description="Deep recovery efficiency and financial unit economics over the live event stream."
+        actions={
+          <div className="flex items-center gap-2">
+            <WindowSelector value={window} onChange={setWindow} />
+            <button
+              onClick={handleExportJSON}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-3 py-2 rounded border border-slate-300"
+            >
+              Export JSON
+            </button>
+            <button
+              onClick={handleExportCSV}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded"
+            >
+              Export CSV
+            </button>
+          </div>
+        }
+      />
 
       {loading ? (
         <div className="bg-white border border-slate-200 rounded p-8 text-center text-slate-500 text-sm">
           Loading metrics analysis...
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
+
+          {/* Row 1: Key summary stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white border border-slate-200 rounded p-4">
+              <span className="text-xs text-slate-500 block mb-1">Median Time to Recovery</span>
+              <span className="text-2xl font-bold font-mono text-emerald-700">
+                {metrics?.amountRecovered && metrics.amountRecovered > 0 && metrics?.medianTimeToRecoveryHours != null
+                  ? `${metrics.medianTimeToRecoveryHours < 0.01 ? "< 0.01" : metrics.medianTimeToRecoveryHours.toFixed(2)} hrs`
+                  : "N/A"}
+              </span>
+            </div>
+            <div className="bg-white border border-slate-200 rounded p-4">
+              <span className="text-xs text-slate-500 block mb-1">Events Processed</span>
+              <span className="text-2xl font-bold font-mono text-blue-700">
+                {metrics?.eventsProcessed ?? 0}
+              </span>
+            </div>
+            <div className="bg-white border border-slate-200 rounded p-4">
+              <span className="text-xs text-slate-500 block mb-1">Overall Recovery Rate</span>
+              <span className="text-2xl font-bold font-mono text-amber-700">
+                {metrics ? (metrics.recoveryRate * 100).toFixed(1) : "0.0"}%
+              </span>
+            </div>
+          </div>
+
+          {/* Row 2: Trend chart — full width */}
           <div className="bg-white border border-slate-200 rounded p-4">
             <h3 className="text-sm font-semibold text-slate-900 mb-1">Stream Throughput Trend</h3>
             <p className="text-xs text-slate-500 mb-4">
@@ -158,6 +181,7 @@ export default function MetricsPage() {
             )}
           </div>
 
+          {/* Row 3: Recovery by cause — full width */}
           <div className="bg-white border border-slate-200 rounded p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-slate-900">Recovery Performance by Failure Cause</h3>
@@ -209,6 +233,7 @@ export default function MetricsPage() {
             </div>
           </div>
 
+          {/* Row 4: Channel economics — full width */}
           <div className="bg-white border border-slate-200 rounded p-4">
             <h3 className="text-sm font-semibold text-slate-900 mb-1">Channel Cost-Per-Recovery Unit Economics</h3>
             <p className="text-xs text-slate-500 mb-4">
@@ -252,39 +277,6 @@ export default function MetricsPage() {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-1">Time-to-Recovery Latency</h3>
-            <p className="text-xs text-slate-500 mb-4">Median elapsed time between failure detection and recovery resolution</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                <span className="text-xs text-slate-500 block mb-1">Median Time to Recovery</span>
-                <span className="text-xl font-bold font-mono text-emerald-700">
-                  {metrics?.amountRecovered && metrics.amountRecovered > 0 && metrics?.medianTimeToRecoveryHours != null
-                    ? `${metrics.medianTimeToRecoveryHours < 0.01 ? "< 0.01" : metrics.medianTimeToRecoveryHours.toFixed(2)} hrs`
-                    : "N/A"}
-                </span>
-              </div>
-              <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                <span className="text-xs text-slate-500 block mb-1">Events Processed</span>
-                <span className="text-xl font-bold font-mono text-blue-700">
-                  {metrics?.eventsProcessed ?? 0}
-                </span>
-              </div>
-              <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                <span className="text-xs text-slate-500 block mb-1">Overall Recovery Rate</span>
-                <span className="text-xl font-bold font-mono text-amber-700">
-                  {metrics ? (metrics.recoveryRate * 100).toFixed(1) : "0.0"}%
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <AuditQueryPanel
-              title="System-Wide Audit Intelligence"
-              description="Ask natural-language questions across historical decisions, recovery patterns, and policy compliance."
-            />
-          </div>
         </div>
       )}
     </div>

@@ -75,6 +75,29 @@ export function formatPromiseToPay(p: {
   };
 }
 
+export async function getPromise(id: string): Promise<FormattedPromiseToPay> {
+  const promise = await prisma.promiseToPay.findUnique({
+    where: { id },
+    include: {
+      customer: true,
+      event: {
+        select: {
+          id: true,
+          eventType: true,
+          amount: true,
+          occurredAt: true,
+        },
+      },
+    },
+  });
+
+  if (!promise) {
+    throw new DomainError("Promise-to-Pay record not found.", "PROMISE_NOT_FOUND");
+  }
+
+  return formatPromiseToPay(promise);
+}
+
 export async function getPromiseStats(): Promise<PromiseStats> {
   const [allPromises, keptPromises] = await Promise.all([
     prisma.promiseToPay.findMany({

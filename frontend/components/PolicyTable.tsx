@@ -8,7 +8,7 @@ interface PolicyTableProps {
 
 export function PolicyTable({ rules }: PolicyTableProps) {
   return (
-    <div className="bg-white border border-slate-200 rounded p-4 mb-6">
+    <div className="bg-white border border-slate-200 rounded p-4">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">Config-Driven Recovery Policy Engine</h3>

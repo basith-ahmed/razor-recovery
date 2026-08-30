@@ -7,7 +7,7 @@ export const queryRouter = Router();
 // POST /query — natural-language audit query with citation grounding
 queryRouter.post("/", async (req: Request, res: Response) => {
   try {
-    const { question, entityId } = req.body;
+    const { question, entityId, scope } = req.body;
 
     if (!question || typeof question !== "string" || !question.trim()) {
       return res.status(400).json({ error: "Field 'question' is required and must be a non-empty string." });
@@ -20,6 +20,7 @@ queryRouter.post("/", async (req: Request, res: Response) => {
     const result = await queryAuditTrail({
       question: question.trim(),
       entityId: entityId?.trim(),
+      scope: typeof scope === "string" ? scope.trim() : undefined,
     });
 
     return res.status(200).json(result);

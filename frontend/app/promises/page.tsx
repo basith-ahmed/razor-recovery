@@ -1,15 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLiveStream } from "../../lib/socket";
 import {
   listPromises,
   getPromiseStats,
   fetchPromiseCustomers,
   createPromise,
-  sendPromiseReminder,
-  updatePromise,
 } from "../../lib/api";
 import {
   PromiseToPayItem,
@@ -20,10 +18,12 @@ import {
 import { formatCurrency, formatDate, formatDateTime } from "../../lib/formatters";
 import { CountdownTimer } from "../../components/CountdownTimer";
 import { CreatePromiseModal } from "../../components/CreatePromiseModal";
-import { PromiseDetailsModal } from "../../components/PromiseDetailsModal";
 import { PaginationControl } from "../../components/PaginationControl";
+import { PageHeader } from "../../components/PageHeader";
+import { Badge } from "../../components/Badge";
 
 export default function PromisesPage() {
+  const router = useRouter();
   const { activityFeed } = useLiveStream();
   const [promises, setPromises] = useState<PromiseToPayItem[]>([]);
   const [stats, setStats] = useState<PromiseStats | null>(null);
@@ -36,9 +36,6 @@ export default function PromisesPage() {
   const [totalItems, setTotalItems] = useState(0);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [selectedPromiseForView, setSelectedPromiseForView] = useState<PromiseToPayItem | null>(null);
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   async function loadData() {
     try {
@@ -82,65 +79,27 @@ export default function PromisesPage() {
     setPromises((prev) => [created, ...prev]);
     const statsRes = await getPromiseStats();
     setStats(statsRes);
-  }
-
-  async function handleSendReminder(id: string) {
-    try {
-      setActionLoadingId(id);
-      const res = await sendPromiseReminder(id);
-      setPromises((prev) => prev.map((p) => (p.id === id ? res.promise : p)));
-      if (selectedPromiseForView?.id === id) {
-        setSelectedPromiseForView(res.promise);
-      }
-    } catch (err) {
-      console.error("Failed to send reminder:", err);
-    } finally {
-      setActionLoadingId(null);
-    }
-  }
-
-  async function handleMarkPaid(id: string) {
-    try {
-      setActionLoadingId(id);
-      const updated = await updatePromise(id, { status: "kept" });
-      setPromises((prev) => prev.map((p) => (p.id === id ? updated : p)));
-      if (selectedPromiseForView?.id === id) {
-        setSelectedPromiseForView(updated);
-      }
-      const statsRes = await getPromiseStats();
-      setStats(statsRes);
-    } catch (err) {
-      console.error("Failed to update status:", err);
-    } finally {
-      setActionLoadingId(null);
-    }
-  }
-
-  function handleCopyLink(id: string, url?: string | null) {
-    if (!url) return;
-    navigator.clipboard.writeText(url);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    // Navigate to the new promise detail page
+    router.push(`/promises/${created.id}`);
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Promise-to-Pay Tracker</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Track, schedule, and automate recovery commitments made by customers.
-          </p>
-        </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded"
-        >
-          + Record Promise to Pay
-        </button>
-      </div>
+    <div className="pb-24">
+      <PageHeader
+        title="Promise-to-Pay Tracker"
+        description="Track, schedule, and automate recovery commitments made by customers."
+        actions={
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded"
+          >
+            + Record Promise to Pay
+          </button>
+        }
+      />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
         <div className="bg-white border border-slate-200 rounded p-4">
           <div className="text-xs text-slate-500">Active Commitments</div>
           <div className="text-2xl font-bold text-slate-900 mt-1">
@@ -156,7 +115,9 @@ export default function PromisesPage() {
           <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
             {formatCurrency(stats?.totalPromisedAmount ?? 0)}
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Across {stats?.totalCount ?? 0} total records</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">
+            {stats?.totalCount ?? 0} total records
+          </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded p-4">
@@ -164,7 +125,9 @@ export default function PromisesPage() {
           <div className="text-2xl font-bold font-mono text-emerald-600 mt-1">
             {formatCurrency(stats?.totalRecoveredAmount ?? 0)}
           </div>
-          <div className="text-[11px] text-emerald-700 mt-0.5">{stats?.keptCount ?? 0} paid commitments</div>
+          <div className="text-[11px] text-emerald-700 mt-0.5">
+            {stats?.keptCount ?? 0} paid commitments
+          </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded p-4">
@@ -174,9 +137,11 @@ export default function PromisesPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded p-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+      {/* Table card */}
+      <div className="bg-white border border-slate-200 rounded">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-200">
+          <div className="flex items-center gap-1.5">
             {["all", "pending", "reminder_sent", "kept", "broken"].map((s) => (
               <button
                 key={s}
@@ -207,43 +172,41 @@ export default function PromisesPage() {
           />
         </div>
 
+        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left border-collapse">
             <thead className="text-slate-500 border-b border-slate-200 bg-slate-50">
               <tr>
                 <th className="py-2.5 px-3">Customer</th>
-                <th className="py-2.5 px-3">Entity</th>
                 <th className="py-2.5 px-3">Amount</th>
                 <th className="py-2.5 px-3">Promised Due Date</th>
                 <th className="py-2.5 px-3">Status & Timer</th>
                 <th className="py-2.5 px-3">Payment Link</th>
-                <th className="py-2.5 px-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-slate-400">
+                  <td colSpan={5} className="py-8 text-center text-slate-400">
                     Loading promises...
                   </td>
                 </tr>
               ) : promises.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-slate-400">
+                  <td colSpan={5} className="py-8 text-center text-slate-400">
                     No promise-to-pay records found.
                   </td>
                 </tr>
               ) : (
                 promises.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50">
+                  <tr
+                    key={p.id}
+                    className="hover:bg-slate-50 cursor-pointer"
+                    onClick={() => router.push(`/promises/${p.id}`)}
+                  >
                     <td className="py-2.5 px-3">
                       <div className="font-semibold text-slate-900">{p.customerName}</div>
                       <div className="text-[11px] text-slate-500 font-mono">{p.customerEmail}</div>
-                    </td>
-                    <td className="py-2.5 px-3 font-mono text-slate-600">
-                      <Link href={`/entities/${p.entityId}`} className="text-blue-600 hover:underline">
-                        {p.entityId}
-                      </Link>
                     </td>
                     <td className="py-2.5 px-3 font-mono font-semibold text-slate-900">
                       {formatCurrency(p.promisedAmount, p.currency)}
@@ -255,6 +218,11 @@ export default function PromisesPage() {
                       </div>
                     </td>
                     <td className="py-2.5 px-3">
+                      <div className="mb-1">
+                        <Badge type="promiseStatus" value={p.status}>
+                          {p.status.replace("_", " ")}
+                        </Badge>
+                      </div>
                       <CountdownTimer
                         promisedDate={p.promisedDate}
                         gracePeriodUntil={p.gracePeriodUntil}
@@ -263,57 +231,18 @@ export default function PromisesPage() {
                     </td>
                     <td className="py-2.5 px-3 font-mono text-[11px]">
                       {p.paymentLinkUrl ? (
-                        <div className="flex items-center gap-1.5">
-                          <a
-                            href={p.paymentLinkUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline truncate max-w-[140px]"
-                          >
-                            {p.paymentLinkUrl.replace("https://", "")}
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyLink(p.id, p.paymentLinkUrl)}
-                            className="text-[10px] text-slate-400 hover:text-slate-600 border border-slate-200 rounded px-1 py-0.5 bg-white"
-                          >
-                            {copiedId === p.id ? "✓" : "Copy"}
-                          </button>
-                        </div>
+                        <a
+                          href={p.paymentLinkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-blue-600 hover:underline truncate max-w-[160px] block"
+                        >
+                          {p.paymentLinkUrl.replace("https://", "")}
+                        </a>
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPromiseForView(p)}
-                          className="px-2.5 py-1 text-[11px] font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded"
-                        >
-                          View
-                        </button>
-                        {p.status === "pending" && (
-                          <button
-                            type="button"
-                            onClick={() => handleSendReminder(p.id)}
-                            disabled={actionLoadingId === p.id}
-                            className="px-2.5 py-1 text-[11px] font-medium border border-amber-300 bg-amber-50 text-amber-800 rounded hover:bg-amber-100 disabled:opacity-50"
-                          >
-                            Remind
-                          </button>
-                        )}
-                        {p.status !== "kept" && p.status !== "cancelled" && (
-                          <button
-                            type="button"
-                            onClick={() => handleMarkPaid(p.id)}
-                            disabled={actionLoadingId === p.id}
-                            className="px-2.5 py-1 text-[11px] font-medium border border-emerald-300 bg-emerald-50 text-emerald-800 rounded hover:bg-emerald-100 disabled:opacity-50"
-                          >
-                            Mark Paid
-                          </button>
-                        )}
-                      </div>
                     </td>
                   </tr>
                 ))
@@ -322,14 +251,17 @@ export default function PromisesPage() {
           </table>
         </div>
 
-        <PaginationControl
-          page={page}
-          totalPages={totalPages}
-          total={totalItems}
-          limit={20}
-          onPageChange={setPage}
-          disabled={loading}
-        />
+        {/* Pagination */}
+        <div className="px-4 py-3 border-t border-slate-200">
+          <PaginationControl
+            page={page}
+            totalPages={totalPages}
+            total={totalItems}
+            limit={20}
+            onPageChange={setPage}
+            disabled={loading}
+          />
+        </div>
       </div>
 
       <CreatePromiseModal
@@ -337,16 +269,6 @@ export default function PromisesPage() {
         onClose={() => setIsCreateModalOpen(false)}
         customers={customers}
         onSubmit={handleCreate}
-      />
-
-      <PromiseDetailsModal
-        promise={selectedPromiseForView}
-        onClose={() => setSelectedPromiseForView(null)}
-        onSendReminder={handleSendReminder}
-        onMarkPaid={handleMarkPaid}
-        actionLoadingId={actionLoadingId}
-        copiedId={copiedId}
-        onCopyLink={handleCopyLink}
       />
     </div>
   );

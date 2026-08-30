@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CheckCircle2, AlertTriangle, Info } from "lucide-react";
 import { AuditEntry } from "../types";
 import { formatDateTime } from "../lib/formatters";
 
@@ -104,9 +105,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
             {entry.actor === "razorpay_webhook" ? (
               <div className="my-3 bg-emerald-50 border-l-4 border-emerald-500 p-3 rounded">
                 <div className="text-xs font-semibold text-emerald-800 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                  <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   Payment Settlement Confirmed (Razorpay Webhook)
                 </div>
                 <p className="text-xs text-emerald-900">
@@ -186,9 +185,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 {entry.outcome === "failed" && (
                   <div className="my-3 bg-red-50 border-l-4 border-red-500 p-3 rounded">
                     <div className="text-xs font-semibold text-red-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
+                      <AlertTriangle className="w-4 h-4 text-red-600" />
                       Action Execution Failed
                     </div>
                     <p className="text-xs text-red-900">
@@ -206,9 +203,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 {diagnosisReasoning && (
                   <div className="my-3 bg-amber-50 border-l-4 border-amber-500 p-3 rounded">
                     <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                      <Info className="w-4 h-4 text-amber-600" />
                       Diagnosis Reasoning
                     </div>
                     <p className="text-xs text-slate-800 italic">
@@ -220,9 +215,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 {decisionReasoning && (
                   <div className="my-3 bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
                     <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                      <Info className="w-4 h-4 text-blue-600" />
                       Decision Reasoning
                     </div>
                     <p className="text-xs text-slate-800 italic">

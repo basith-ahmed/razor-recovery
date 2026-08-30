@@ -14,7 +14,7 @@ export function ComplianceStrip({ compliance }: ComplianceStripProps) {
   const cooldownStopped = compliance?.cooldownStopped ?? 0;
 
   return (
-    <div className="bg-white border border-slate-200 rounded p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div className="bg-white border border-slate-200 rounded p-4 h-full flex flex-col justify-between gap-4">
       <div>
         <h4 className="text-sm font-semibold text-slate-900">Policy & Compliance Guardrails</h4>
         <p className="text-xs text-slate-500">Autonomous stopping rules and customer protection status</p>

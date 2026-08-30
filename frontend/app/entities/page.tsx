@@ -5,6 +5,7 @@ import { listEntities } from "../../lib/api";
 import { EntityItem, EntityFilters } from "../../types";
 import { EntityTable } from "../../components/EntityTable";
 import { useLiveStream } from "../../lib/socket";
+import { PageHeader } from "../../components/PageHeader";
 
 export default function EntitiesPage() {
   const [entities, setEntities] = useState<EntityItem[]>([]);
@@ -55,17 +56,15 @@ export default function EntitiesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Revenue Entities</h1>
-          <p className="text-sm text-slate-500">
-            Query and inspect failed payment & recovery entities with real-time server-side filtering and pagination.
-          </p>
-        </div>
-        <div className="text-xs font-mono bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded">
-          Total Found: {pagination.total}
-        </div>
-      </div>
+      <PageHeader
+        title="Revenue Entities"
+        description="Query and inspect failed payment & recovery entities with real-time server-side filtering and pagination."
+        actions={
+          <span className="text-xs font-mono bg-white border border-slate-300 text-slate-600 px-3 py-1.5 rounded">
+            {pagination.total} total found
+          </span>
+        }
+      />
 
       <EntityTable
         entities={entities}

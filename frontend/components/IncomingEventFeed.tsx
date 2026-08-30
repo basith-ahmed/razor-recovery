@@ -15,7 +15,7 @@ export function IncomingEventFeed({ items }: IncomingEventFeedProps) {
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded p-4 mb-6">
+    <div className="bg-white border border-slate-200 rounded p-4 h-full flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
           <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />

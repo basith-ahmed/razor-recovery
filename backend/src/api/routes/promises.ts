@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { listLookupCustomers } from "../../services/customerService";
 import {
+  getPromise,
   getPromiseStats,
   listPromises,
   createPromise,
@@ -29,6 +30,17 @@ promisesRouter.get("/customers", async (_req: Request, res: Response) => {
     return res.status(200).json(customers);
   } catch (error) {
     return handleRouteError(res, error, "Failed to fetch customers list");
+  }
+});
+
+// GET /promises/:id
+promisesRouter.get("/:id", async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const promise = await getPromise(id);
+    return res.status(200).json(promise);
+  } catch (error) {
+    return handleRouteError(res, error, "Failed to fetch promise to pay");
   }
 });
 

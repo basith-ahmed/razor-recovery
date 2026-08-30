@@ -83,11 +83,13 @@ export async function verifyAuditChain(
 
 export async function askAuditQuery(
   question: string,
-  entityId?: string
+  entityId?: string,
+  scope?: string
 ): Promise<AuditQueryResponse> {
   const response = await apiClient.post<AuditQueryResponse>("/query", {
     question,
     entityId,
+    scope,
   });
   return response.data;
 }
@@ -158,6 +160,11 @@ export async function getPromiseStats(): Promise<import("../types").PromiseStats
 
 export async function fetchPromiseCustomers(): Promise<import("../types").CustomerLookupItem[]> {
   const response = await apiClient.get<import("../types").CustomerLookupItem[]>("/promises/customers");
+  return response.data;
+}
+
+export async function getPromise(id: string): Promise<import("../types").PromiseToPayItem> {
+  const response = await apiClient.get<import("../types").PromiseToPayItem>(`/promises/${id}`);
   return response.data;
 }
 
