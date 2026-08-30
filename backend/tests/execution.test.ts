@@ -32,7 +32,16 @@ jest.mock("../src/config/prisma", () => {
       findUnique: jest.fn().mockResolvedValue({ id: "mock-event-id" }),
     },
     diagnosis: { count: jest.fn() },
-    ticket: { create: jest.fn() },
+    ticket: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: "mock-ticket-id" }),
+      update: jest.fn().mockResolvedValue({ id: "mock-ticket-id" }),
+      findUnique: jest.fn().mockResolvedValue({ id: "mock-ticket-id" }),
+    },
+    ticketNote: {
+      create: jest.fn().mockResolvedValue({ id: "mock-note-id" }),
+      deleteMany: jest.fn(),
+    },
     invoice: { findFirst: jest.fn() },
     cart: { findFirst: jest.fn() },
     subscription: { findFirst: jest.fn() },

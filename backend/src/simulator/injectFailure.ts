@@ -195,8 +195,10 @@ export async function injectFailure(
     amount = subscription.mrr;
     eventType = "SUBSCRIPTION_FAILED";
 
+    const umn = `rzp.${subscription.id.replace(/-/g, "").slice(0, 16)}@bankpsp`;
+
     if (type === "mandate_halted") {
-      // Deterministic: mandate halted / cancelled → mandate_requires_reauthorization
+      // Deterministic: mandate halted / cancelled / revoked → mandate_requires_reauthorization
       errorCode = "BAD_REQUEST_ERROR";
       errorReason = "mandate_cancelled";
       payload = {
@@ -204,6 +206,7 @@ export async function injectFailure(
         event: "subscription.halted",
         subscription_id: subscription.id,
         razorpay_subscription_id: subscription.razorpaySubscriptionId,
+        umn,
         next_bill_date: subscription.nextBillDate.toISOString(),
         subscription_status: "halted",
         mandate_status: "cancelled",
@@ -212,14 +215,16 @@ export async function injectFailure(
     } else if (type === "mandate_retryable_failure") {
       // Deterministic: mandate pending with transient bank error → mandate_execution_failed_retryable
       errorCode = "GATEWAY_ERROR";
-      errorReason = "gateway_technical_error";
+      errorReason = "mandate_debit_failed";
       payload = {
         simulator: true,
         event: "subscription.pending",
         subscription_id: subscription.id,
         razorpay_subscription_id: subscription.razorpaySubscriptionId,
+        umn,
         next_bill_date: subscription.nextBillDate.toISOString(),
         subscription_status: "pending",
+        mandate_status: "initiated",
         daysOverdue: 2,
       };
     } else {
@@ -229,6 +234,7 @@ export async function injectFailure(
         event: "subscription.payment_failed",
         subscription_id: subscription.id,
         razorpay_subscription_id: subscription.razorpaySubscriptionId,
+        umn,
         next_bill_date: subscription.nextBillDate.toISOString(),
       };
     }

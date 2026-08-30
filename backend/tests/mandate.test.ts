@@ -77,6 +77,19 @@ describe("MANDATE_CAUSE_MAP & PAYMENT_CAUSE_MAP separation (no collisions)", () 
     expect(MANDATE_CAUSE_MAP["mandate_cancelled"]).toBe("mandate_requires_reauthorization");
   });
 
+  it("MANDATE_CAUSE_MAP maps TPAP mandate_revoked, mandate_rejected, mandate_paused, mandate_expired to mandate_requires_reauthorization", () => {
+    expect(MANDATE_CAUSE_MAP["mandate_revoked"]).toBe("mandate_requires_reauthorization");
+    expect(MANDATE_CAUSE_MAP["mandate_rejected"]).toBe("mandate_requires_reauthorization");
+    expect(MANDATE_CAUSE_MAP["mandate_paused"]).toBe("mandate_requires_reauthorization");
+    expect(MANDATE_CAUSE_MAP["mandate_expired"]).toBe("mandate_requires_reauthorization");
+    expect(MANDATE_CAUSE_MAP["invalid_umn"]).toBe("mandate_requires_reauthorization");
+  });
+
+  it("MANDATE_CAUSE_MAP maps mandate_debit_failed and mandate_execution_failed to mandate_execution_failed_retryable", () => {
+    expect(MANDATE_CAUSE_MAP["mandate_debit_failed"]).toBe("mandate_execution_failed_retryable");
+    expect(MANDATE_CAUSE_MAP["mandate_execution_failed"]).toBe("mandate_execution_failed_retryable");
+  });
+
   it("MANDATE_CAUSE_MAP maps mandate_creation_failed to mandate_requires_reauthorization", () => {
     expect(MANDATE_CAUSE_MAP["mandate_creation_failed"]).toBe("mandate_requires_reauthorization");
   });
@@ -117,9 +130,12 @@ describe("diagnose() — SUBSCRIPTION_FAILED mandate routing", () => {
     expect(result.confidence).toBe(1);
   });
 
-  it("Test 2: mandate_status=cancelled → mandate_requires_reauthorization (RULE)", async () => {
+  it("Test 2: mandate_status=cancelled / revoked with UMN → mandate_requires_reauthorization (RULE)", async () => {
     const event = makeSubscriptionEvent({
-      rawPayload: { mandate_status: "cancelled" },
+      rawPayload: {
+        mandate_status: "revoked",
+        umn: "XYZa977ccabb11e7abc4cec278b6b50a@mypsp",
+      },
     });
     const result = await diagnose(event, {
       priorFailures: 0,
@@ -128,6 +144,7 @@ describe("diagnose() — SUBSCRIPTION_FAILED mandate routing", () => {
     });
     expect(result.causeLabel).toBe("mandate_requires_reauthorization");
     expect(result.method).toBe("RULE");
+    expect(result.reasoning).toContain("XYZa977ccabb11e7abc4cec278b6b50a@mypsp");
   });
 
   it("Test 3: errorReason=mandate_creation_failed → mandate_requires_reauthorization (RULE)", async () => {
@@ -143,10 +160,10 @@ describe("diagnose() — SUBSCRIPTION_FAILED mandate routing", () => {
     expect(result.method).toBe("RULE");
   });
 
-  it("Test 4: subscription_status=pending + errorReason=gateway_technical_error → mandate_execution_failed_retryable (RULE)", async () => {
+  it("Test 4: subscription_status=pending + errorReason=mandate_debit_failed → mandate_execution_failed_retryable (RULE)", async () => {
     const event = makeSubscriptionEvent({
-      errorReason: "gateway_technical_error",
-      rawPayload: { subscription_status: "pending" },
+      errorReason: "mandate_debit_failed",
+      rawPayload: { subscription_status: "pending", umn: "rzp.test1234@bank" },
     });
     const result = await diagnose(event, {
       priorFailures: 0,

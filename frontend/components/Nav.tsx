@@ -10,18 +10,26 @@ export function Nav() {
   const pathname = usePathname();
   const { isConnected, metrics: socketMetrics } = useLiveStream();
   const [initialMetrics, setInitialMetrics] = useState<{ amountRecovered: number } | null>(null);
+  const [openTicketCount, setOpenTicketCount] = useState<number>(0);
 
   useEffect(() => {
     getMetricsSummary("all")
       .then((data) => setInitialMetrics(data))
       .catch((err) => console.error("Nav failed to fetch initial metrics:", err));
-  }, []);
+
+    import("../lib/api").then(({ getTicketStats }) => {
+      getTicketStats()
+        .then((stats) => setOpenTicketCount(stats.openCount))
+        .catch((err) => console.error("Nav failed to fetch ticket stats:", err));
+    });
+  }, [pathname]);
 
   const recoveredAmount = socketMetrics?.amountRecovered ?? initialMetrics?.amountRecovered ?? 0;
 
   const links = [
     { href: "/", label: "Overview" },
     { href: "/entities", label: "Entities" },
+    { href: "/tickets", label: "Escalations", badge: openTicketCount },
     { href: "/metrics", label: "Metrics" },
     { href: "/policy", label: "Policy & Compliance" },
   ];
@@ -41,13 +49,18 @@ export function Nav() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
                     isActive
                       ? "bg-slate-100 text-slate-900 font-semibold"
                       : "text-slate-400 hover:text-slate-800 hover:bg-slate-100/50"
                   }`}
                 >
-                  {link.label}
+                  <span>{link.label}</span>
+                  {typeof link.badge === "number" && link.badge > 0 && (
+                    <span className="bg-amber-100 text-amber-800 text-xs px-1.5 py-0.5 rounded-full font-mono font-bold">
+                      {link.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

@@ -251,3 +251,84 @@ export interface AuditQueryResponse {
   citedEntityIds: string[];
 }
 
+export interface TicketNoteItem {
+  id: string;
+  ticketId: string;
+  author: string;
+  content: string;
+  type: "note" | "email_sent" | "status_change";
+  createdAt: string;
+}
+
+export interface TicketItem {
+  id: string;
+  entityId: string;
+  reason: string;
+  status: "open" | "recovered" | "written_off" | "resolved" | "closed";
+  priority: "high" | "medium" | "low";
+  assignedTo?: string | null;
+  resolutionNotes?: string | null;
+  resolvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  customer?: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+    riskTier: string;
+    lifetimeValue: number;
+    dncFlag: boolean;
+  } | null;
+  event?: {
+    id: string;
+    eventType: string;
+    entityType: string;
+    amount: number;
+    currency: string;
+    errorReason?: string | null;
+    causeLabel?: string | null;
+    riskScore?: number | null;
+    occurredAt: string;
+  } | null;
+  notesCount: number;
+}
+
+export interface TicketDetailResponse {
+  ticket: {
+    id: string;
+    entityId: string;
+    reason: string;
+    status: string;
+    priority: string;
+    assignedTo: string | null;
+    resolutionNotes: string | null;
+    resolvedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    notes: TicketNoteItem[];
+  };
+  customer?: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+    riskTier: string;
+    lifetimeValue: number;
+    dncFlag: boolean;
+  } | null;
+  event?: EntityEventItem | null;
+  workflowState?: string | null;
+  auditEntries: AuditEntry[];
+}
+
+export interface TicketStats {
+  openCount: number;
+  writtenOffCount?: number;
+  resolvedCount?: number;
+  recoveredCount: number;
+  totalAtRisk: number;
+  totalRecovered: number;
+}
+
+

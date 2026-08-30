@@ -114,6 +114,38 @@ export const RAZORPAY_MANDATE_ERROR_REASONS: readonly RazorpayErrorReason[] = [
   },
   {
     errorCode: "BAD_REQUEST_ERROR",
+    errorReason: "mandate_revoked",
+    errorDescription:
+      "The mandate was revoked by the payer using their TPAP UPI application.",
+    errorSource: "customer",
+    errorStep: "payment_authorization",
+  },
+  {
+    errorCode: "BAD_REQUEST_ERROR",
+    errorReason: "mandate_rejected",
+    errorDescription:
+      "The mandate creation request was rejected by the customer during UPI authorization.",
+    errorSource: "customer",
+    errorStep: "payment_authorization",
+  },
+  {
+    errorCode: "BAD_REQUEST_ERROR",
+    errorReason: "mandate_paused",
+    errorDescription:
+      "The mandate is currently paused by the payer and cannot accept debit requests.",
+    errorSource: "customer",
+    errorStep: "payment_authorization",
+  },
+  {
+    errorCode: "BAD_REQUEST_ERROR",
+    errorReason: "mandate_expired",
+    errorDescription:
+      "The mandate validity end date has passed. Re-authorization is required.",
+    errorSource: "customer",
+    errorStep: "payment_authorization",
+  },
+  {
+    errorCode: "BAD_REQUEST_ERROR",
     errorReason: "mandate_creation_failed",
     errorDescription:
       "Mandate creation failed. The customer should retry or use a different payment method.",
@@ -127,6 +159,30 @@ export const RAZORPAY_MANDATE_ERROR_REASONS: readonly RazorpayErrorReason[] = [
       "The subscription has been halted after all automated retry attempts were exhausted.",
     errorSource: "customer",
     errorStep: "payment_authorization",
+  },
+  {
+    errorCode: "BAD_REQUEST_ERROR",
+    errorReason: "invalid_umn",
+    errorDescription:
+      "The specified Unique Mandate Number (UMN) was not found or is invalid.",
+    errorSource: "gateway",
+    errorStep: "payment_authorization",
+  },
+  {
+    errorCode: "GATEWAY_ERROR",
+    errorReason: "mandate_debit_failed",
+    errorDescription:
+      "Automated mandate debit execution failed due to a bank gateway timeout. Retryable.",
+    errorSource: "gateway",
+    errorStep: "payment_processing",
+  },
+  {
+    errorCode: "GATEWAY_ERROR",
+    errorReason: "mandate_execution_failed",
+    errorDescription:
+      "Transient mandate execution failure at the destination bank.",
+    errorSource: "gateway",
+    errorStep: "payment_processing",
   },
 ] as const;
 

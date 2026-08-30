@@ -8,6 +8,7 @@ import { metricsRouter } from "./routes/metrics";
 import { policyRouter } from "./routes/policy";
 import { auditRouter } from "./routes/audit";
 import { queryRouter } from "./routes/query";
+import { ticketsRouter } from "./routes/tickets";
 import { razorpayWebhookRouter } from "./webhooks/razorpayWebhook";
 
 export const app = express();
@@ -41,6 +42,7 @@ app.use("/metrics", metricsRouter);
 app.use("/policy", policyRouter);
 app.use("/audit", auditRouter);
 app.use("/query", queryRouter);
+app.use("/tickets", ticketsRouter);
 app.use("/webhooks/razorpay", razorpayWebhookRouter);
 
 // HTTP Server wrapping Express and Socket.io

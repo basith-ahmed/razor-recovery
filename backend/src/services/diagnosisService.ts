@@ -34,13 +34,21 @@ export const PAYMENT_CAUSE_MAP: Readonly<Record<string, CauseLabel>> = {
   gateway_technical_error: "gateway_timeout",
 };
 
-/** Exact Razorpay `error_reason` values for UPI Autopay / e-NACH mandate and subscription failures. */
+/** Exact Razorpay `error_reason` values for UPI Autopay / e-NACH / TPAP Pro mandate and subscription failures. */
 export const MANDATE_CAUSE_MAP: Readonly<Record<string, CauseLabel>> = {
   mandate_cancelled: "mandate_requires_reauthorization",
+  mandate_revoked: "mandate_requires_reauthorization",
+  mandate_rejected: "mandate_requires_reauthorization",
+  mandate_paused: "mandate_requires_reauthorization",
+  mandate_expired: "mandate_requires_reauthorization",
   mandate_creation_failed: "mandate_requires_reauthorization",
   mandate_creation_expired: "mandate_requires_reauthorization",
   mandate_creation_timeout: "mandate_requires_reauthorization",
   subscription_halted: "mandate_requires_reauthorization",
+  invalid_umn: "mandate_requires_reauthorization",
+  mandate_not_found: "mandate_requires_reauthorization",
+  mandate_debit_failed: "mandate_execution_failed_retryable",
+  mandate_execution_failed: "mandate_execution_failed_retryable",
 };
 
 /** Exported alias for backward compatibility with general payment cause lookups */
@@ -68,8 +76,7 @@ interface DiagnosisOutput {
 function parseJson(text: string): DiagnosisOutput | undefined {
   const normalized = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try {
-    const value: unknown = JSON.parse(normalized);
-    return value !== null && typeof value === "object" ? (value as DiagnosisOutput) : undefined;
+    return JSON.parse(normalized);
   } catch {
     return undefined;
   }
@@ -106,8 +113,6 @@ function similarCasesPrompt(cases: SimilarCase[]): string {
 }
 
 async function userPayload(event: EnrichedRevenueEvent, history: CustomerHistory): Promise<string> {
-  // Before a diagnosis exists, use the gateway reason/event type only as a
-  // retrieval hint; the model remains constrained to the fixed cause enum.
   const retrievalHint = event.errorReason ?? "unknown";
   let cases: SimilarCase[] = [];
   try {
@@ -158,24 +163,31 @@ export async function diagnose(
     const raw = event.rawPayload as Record<string, unknown>;
     const subscriptionStatus = raw.subscription_status as string | undefined;
     const mandateStatus = raw.mandate_status as string | undefined;
+    const umn = (raw.umn as string | undefined) ?? (raw.unique_mandate_number as string | undefined);
+    const umnRef = umn ? ` (UMN: ${umn})` : "";
 
-    // Halted state or explicit mandate cancellation → reauth required, gateway retries futile
-    if (subscriptionStatus === "halted" || mandateStatus === "cancelled") {
+    // Halted state or explicit non-executable TPAP mandate status → reauth required, gateway retries futile
+    const requiresReauthStatuses = new Set(["halted", "cancelled", "revoked", "rejected", "expired", "paused"]);
+    if (
+      (subscriptionStatus && requiresReauthStatuses.has(subscriptionStatus)) ||
+      (mandateStatus && requiresReauthStatuses.has(mandateStatus))
+    ) {
+      const statusDesc = mandateStatus ? `mandate is ${mandateStatus}` : `subscription is ${subscriptionStatus}`;
       return {
         causeLabel: "mandate_requires_reauthorization",
         confidence: 1,
         method: "RULE",
-        reasoning: `Subscription is ${subscriptionStatus ?? "unknown"} / mandate is ${mandateStatus ?? "unknown"} — re-authorization required, gateway retries suppressed.`,
+        reasoning: `TPAP Mandate/Subscription status signal: ${statusDesc}${umnRef} — re-authorization required, gateway retries suppressed.`,
       };
     }
 
-    // Pending state → retryable mandate failure (Razorpay subscription is in pending state awaiting retries)
-    if (subscriptionStatus === "pending") {
+    // Pending state → retryable mandate failure (Razorpay subscription/mandate is in pending state awaiting retries)
+    if (subscriptionStatus === "pending" || mandateStatus === "pending" || mandateStatus === "initiated") {
       return {
         causeLabel: "mandate_execution_failed_retryable",
         confidence: 1,
         method: "RULE",
-        reasoning: `Subscription in pending state with transient error reason "${event.errorReason ?? "unknown"}".`,
+        reasoning: `TPAP Mandate${umnRef} in pending/initiated state with transient error reason "${event.errorReason ?? "unknown"}".`,
       };
     }
 
@@ -186,7 +198,7 @@ export async function diagnose(
         causeLabel: mandateMapped,
         confidence: 1,
         method: "RULE",
-        reasoning: `Deterministic mandate cause mapping from error reason "${event.errorReason}".`,
+        reasoning: `Deterministic mandate cause mapping from error reason "${event.errorReason}"${umnRef}.`,
       };
     }
     // Fall through to LLM for ambiguous SUBSCRIPTION_FAILED cases
