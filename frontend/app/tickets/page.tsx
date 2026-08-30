@@ -309,7 +309,7 @@ export default function TicketsPage() {
                     onClick={() => setShowEmailModal(true)}
                     className="px-2.5 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
                   >
-                    ✉ Send Email
+                    Send Email
                   </button>
 
                   {ticketDetail.ticket.status !== "recovered" && (

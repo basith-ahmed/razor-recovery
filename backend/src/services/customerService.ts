@@ -1,6 +1,8 @@
 import { prisma } from "../config/prisma";
-import { DomainError } from "../domain/types";
+import { DomainError, CustomerLookupItem } from "../domain/types";
 import { Customer } from "@prisma/client";
+
+export { CustomerLookupItem };
 
 /**
  * Finds a customer by ID or throws a typed DomainError if not found.
@@ -38,7 +40,7 @@ export async function countCustomerPriorFailures(
 /**
  * Helper to list all active customers ordered by name for UI lookups.
  */
-export async function listLookupCustomers() {
+export async function listLookupCustomers(): Promise<CustomerLookupItem[]> {
   return prisma.customer.findMany({
     orderBy: { name: "asc" },
     select: {

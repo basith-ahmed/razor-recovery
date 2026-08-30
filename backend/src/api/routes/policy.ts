@@ -1,7 +1,5 @@
 import { Router, Request, Response } from "express";
-import policyJson from "../../domain/policy.json";
-import { redis } from "../../config/redis";
-import { prisma } from "../../config/prisma";
+import { getPolicyConfiguration } from "../../services/policyService";
 import { handleRouteError } from "../../utils/apiResponse";
 
 export const policyRouter = Router();
@@ -9,71 +7,19 @@ export const policyRouter = Router();
 // GET /policy — live policy.json, DNC list from Redis/DB, and compliance log
 policyRouter.get("/", async (req: Request, res: Response) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
-    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 20));
-    const skip = (page - 1) * limit;
+    const page = parseInt(req.query.page as string, 10);
+    const limit = parseInt(req.query.limit as string, 10);
+    const dncPage = parseInt(req.query.dncPage as string, 10);
+    const dncLimit = parseInt(req.query.dncLimit as string, 10);
 
-    const dncPage = Math.max(1, parseInt(req.query.dncPage as string, 10) || 1);
-    const dncLimit = Math.max(1, Math.min(100, parseInt(req.query.dncLimit as string, 10) || 10));
-    const dncSkip = (dncPage - 1) * dncLimit;
-
-    // Fetch DNC list from Redis
-    const redisDncIds = await redis.smembers("razorrecovery:dnc:set");
-
-    // Fetch DNC customers from Postgres
-    const dbDncCustomers = await prisma.customer.findMany({
-      where: { dncFlag: true },
-      select: { id: true, name: true, email: true },
+    const config = await getPolicyConfiguration({
+      page: isNaN(page) ? undefined : page,
+      limit: isNaN(limit) ? undefined : limit,
+      dncPage: isNaN(dncPage) ? undefined : dncPage,
+      dncLimit: isNaN(dncLimit) ? undefined : dncLimit,
     });
 
-    const dncSet = new Map<string, { id: string; name?: string; email?: string }>();
-    for (const c of dbDncCustomers) {
-      dncSet.set(c.id, c);
-    }
-    for (const id of redisDncIds) {
-      if (!dncSet.has(id)) {
-        dncSet.set(id, { id });
-      }
-    }
-    const dncList = Array.from(dncSet.values());
-    const dncTotal = dncList.length;
-    const paginatedDncList = dncList.slice(dncSkip, dncSkip + dncLimit);
-
-    // Fetch policy-blocked compliance audit entries
-    const [total, entries] = await Promise.all([
-      prisma.auditEntry.count({
-        where: { outcome: { in: ["skipped", "escalated"] } },
-      }),
-      prisma.auditEntry.findMany({
-        where: { outcome: { in: ["skipped", "escalated"] } },
-        orderBy: { timestamp: "desc" },
-        skip,
-        take: limit,
-        include: {
-          event: {
-            include: { customer: true },
-          },
-        },
-      }),
-    ]);
-
-    return res.status(200).json({
-      policy: policyJson,
-      dncList: {
-        entries: paginatedDncList,
-        total: dncTotal,
-        page: dncPage,
-        limit: dncLimit,
-        totalPages: Math.ceil(dncTotal / dncLimit) || 1,
-      },
-      complianceLog: {
-        entries,
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
-    });
+    return res.status(200).json(config);
   } catch (error: unknown) {
     return handleRouteError(res, error, "Failed to fetch policy configuration");
   }

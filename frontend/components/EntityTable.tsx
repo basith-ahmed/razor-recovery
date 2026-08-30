@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { EntityItem, EntityFilters } from "../types";
 import { formatCurrency, formatDateTime } from "../lib/formatters";
 import { Badge } from "./Badge";
+import { PaginationControl } from "./PaginationControl";
 
 interface EntityTableProps {
   entities: EntityItem[];
@@ -286,12 +287,7 @@ export function EntityTable({
 
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-3 border-t border-slate-200">
         <div className="flex items-center gap-3 text-xs text-slate-500">
-          <span>
-            Showing <strong className="text-slate-700">{startItem}</strong>–
-            <strong className="text-slate-700">{endItem}</strong> of{" "}
-            <strong className="text-slate-700">{total}</strong> items
-          </span>
-          <div className="flex items-center gap-1.5 ml-2">
+          <div className="flex items-center gap-1.5">
             <span>Per page:</span>
             <select
               value={limit}
@@ -308,24 +304,15 @@ export function EntityTable({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 font-mono mr-1">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            disabled={page <= 1 || loading}
-            onClick={() => onFilterChange({ page: Math.max(1, page - 1) })}
-            className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
-          >
-            Previous
-          </button>
-          <button
-            disabled={page >= totalPages || loading}
-            onClick={() => onFilterChange({ page: page + 1 })}
-            className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
-          >
-            Next
-          </button>
+        <div className="w-full sm:w-auto">
+          <PaginationControl
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            limit={limit}
+            onPageChange={(newPage) => onFilterChange({ page: newPage })}
+            disabled={loading}
+          />
         </div>
       </div>
     </div>

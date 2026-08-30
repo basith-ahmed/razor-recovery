@@ -1,62 +1,27 @@
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
 import { logError } from "../config/logger";
-import { DomainError } from "../domain/types";
+import {
+  DomainError,
+  ListTicketsParams,
+  TicketSummaryDto,
+  TicketStatsDto,
+  TicketNoteItem,
+  TicketDetailResponse,
+} from "../domain/types";
 import { writeLedgerEntry } from "./ledgerService";
 import { createRecoveryPaymentLink } from "../integrations/razorpayIntegration";
 import { sendRecoveryEmail } from "../integrations/emailIntegration";
 import { buildTicketOutreachEmail } from "../domain/emailTemplates";
 import { parsePagination } from "../utils/pagination";
 
-export interface ListTicketsParams {
-  status?: string;
-  search?: string;
-  page?: number;
-  limit?: number;
-}
-
-export interface TicketSummaryDto {
-  id: string;
-  entityId: string;
-  reason: string;
-  status: string;
-  priority: string;
-  assignedTo: string | null;
-  resolutionNotes: string | null;
-  resolvedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  customer: {
-    id: string;
-    name: string;
-    email: string;
-    phone: string | null;
-    riskTier: string;
-    lifetimeValue: number;
-    dncFlag: boolean;
-  } | null;
-  event: {
-    id: string;
-    eventType: string;
-    entityType: string;
-    amount: number;
-    currency: string;
-    errorReason: string | null;
-    causeLabel: string | null;
-    riskScore: number | null;
-    occurredAt: string;
-  } | null;
-  notesCount: number;
-}
-
-export interface TicketStatsDto {
-  openCount: number;
-  resolvedCount?: number;
-  writtenOffCount?: number;
-  recoveredCount: number;
-  totalAtRisk: number;
-  totalRecovered: number;
-}
+export {
+  ListTicketsParams,
+  TicketSummaryDto,
+  TicketStatsDto,
+  TicketNoteItem,
+  TicketDetailResponse,
+};
 
 export async function listTickets(params: ListTicketsParams = {}) {
   const { page, limit, skip } = parsePagination(params as Record<string, unknown>);

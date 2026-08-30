@@ -1,14 +1,7 @@
-import { Prisma, LedgerEntryType, LedgerEntry } from "@prisma/client";
-import { DomainError } from "../domain/types";
+import { Prisma, LedgerEntry } from "@prisma/client";
+import { DomainError, WriteLedgerEntryParams } from "../domain/types";
 
-export interface WriteLedgerEntryParams {
-  entityId: string;
-  eventId: string;
-  type: LedgerEntryType;
-  amount: number;
-  currency?: string;
-  referenceId?: string;
-}
+export { WriteLedgerEntryParams };
 
 /**
  * Writes an append-only LedgerEntry within the provided transaction.

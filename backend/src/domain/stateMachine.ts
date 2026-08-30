@@ -153,3 +153,33 @@ export function getAllowedTransitions(): Record<
 > {
   return { ...ALLOWED_TRANSITIONS };
 }
+
+const RETRY_ACTION_TYPES = new Set(["retry_payment_immediate", "retry_payment_delayed"]);
+const ESCALATE_ACTION_TYPES = new Set(["escalate_to_human"]);
+const COOLDOWN_ACTION_TYPES = new Set(["pause_subscription"]);
+
+/**
+ * Derives the active WorkflowState from an audit outcome, action type, and reasoning context.
+ */
+export function deriveEventState(
+  outcome?: string | null,
+  actionType?: string | null,
+  reasoning?: string | null,
+): WorkflowState {
+  if (!outcome) return "DETECTED";
+  if (outcome === "recovered" || outcome === "payment_confirmed") return "RECOVERED";
+  if (outcome === "written_off" || outcome === "hard_decline" || outcome === "auto_cancel") return "WRITTEN_OFF";
+  if (outcome === "reversed") return "RECOVERED"; // or REVERSED represented in workflow as terminal
+  if (outcome === "escalated" || (actionType && ESCALATE_ACTION_TYPES.has(actionType))) return "ESCALATED";
+  if (actionType && RETRY_ACTION_TYPES.has(actionType)) return "RETRYING";
+  if (actionType && COOLDOWN_ACTION_TYPES.has(actionType)) return "COOLING_DOWN";
+  if (outcome === "pending") return "CONTACTED";
+  if (outcome === "skipped") {
+    if (reasoning?.includes("cooldown")) return "COOLING_DOWN";
+    if (reasoning?.includes("DNC") || actionType === "dnc") return "DO_NOT_CONTACT";
+    return "DO_NOT_CONTACT";
+  }
+  if (outcome === "failed") return "DETECTED";
+  return "DETECTED";
+}
+

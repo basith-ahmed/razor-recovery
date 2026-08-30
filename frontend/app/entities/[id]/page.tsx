@@ -69,7 +69,7 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
           href="/entities"
           className="text-xs text-slate-500 hover:text-slate-900 flex items-center gap-1"
         >
-          ← Back to Entities List
+          Back to Entities List
         </Link>
       </div>
 
