@@ -5,6 +5,7 @@ import { DomainError } from "../domain/types";
 import { writeLedgerEntry } from "./ledgerService";
 import { createRecoveryPaymentLink } from "../integrations/razorpayIntegration";
 import { sendRecoveryEmail } from "../integrations/emailIntegration";
+import { buildTicketOutreachEmail } from "../domain/emailTemplates";
 
 export interface ListTicketsParams {
   status?: string; // "open" | "resolved" | "recovered" | "all"
@@ -335,30 +336,16 @@ export async function sendTicketEmail(
     }
   }
 
-  // Format HTML body
-  const bodyParagraphs = params.message.split("\n").filter((p) => p.trim().length > 0);
-  const contentHtml = bodyParagraphs.map((p) => `<p style="margin-bottom: 16px;">${p}</p>`).join("");
-  const buttonHtml = paymentUrl
-    ? `<div style="text-align: center; margin: 32px 0;">
-         <a href="${paymentUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">Pay ₹${latestEvent.amount} Now</a>
-       </div>`
-    : "";
-
-  const fullHtml = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; background-color: #ffffff; border-radius: 8px; border: 1px solid #eaeaea;">
-      <h2 style="color: #4f46e5; margin-top: 0; margin-bottom: 24px;">RazorRecovery Support</h2>
-      ${contentHtml}
-      ${buttonHtml}
-      <hr style="border: none; border-top: 1px solid #eaeaea; margin: 32px 0;" />
-      <p style="font-size: 12px; color: #888; margin: 0;">
-        Direct support outreach from ${params.agentName || "RazorRecovery Agent"} regarding reference ${ticket.entityId}.
-      </p>
-    </div>
-  `;
+  const { subject, html: fullHtml } = buildTicketOutreachEmail({
+    customerName: customer.name,
+    message: params.message,
+    amount: latestEvent.amount,
+    paymentUrl,
+  });
 
   await sendRecoveryEmail({
     to: customer.email,
-    subject: params.subject,
+    subject: params.subject || subject,
     html: fullHtml,
   });
 

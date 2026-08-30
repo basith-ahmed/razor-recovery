@@ -23,7 +23,7 @@ import { RawRevenueEvent } from "../domain/types";
 import { publish } from "../kafka/producer";
 import { TOPICS } from "../kafka/topics";
 import * as emailIntegration from "../integrations/emailIntegration";
-import { buildEmailTemplate } from "../services/executorService";
+import { buildPromiseReminderEmail } from "../domain/emailTemplates";
 import { emitLiveUpdate } from "../api/websocket";
 
 const SCAN_INTERVAL_MS = 30_000;
@@ -432,19 +432,12 @@ export async function scanAndProcessPromises(now: Date): Promise<void> {
       },
     });
 
-    const formattedDate = promise.promisedDate.toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
+    const { subject, html } = buildPromiseReminderEmail({
+      customerName: promise.customer.name,
+      amount: promise.promisedAmount,
+      promisedDate: promise.promisedDate,
+      paymentUrl: promise.paymentLinkUrl ?? undefined,
     });
-
-    const subject = `Urgent Follow-Up: Pending Promise-to-Pay for ₹${promise.promisedAmount}`;
-    const html = buildEmailTemplate([
-      `Hi ${promise.customer.name},`,
-      `This is a follow-up regarding your agreed Promise-to-Pay commitment of ₹${promise.promisedAmount}, which was due on <strong>${formattedDate}</strong>.`,
-      `Our records show that this payment has not yet been completed. Please use the button below to settle the outstanding balance immediately:`,
-      `If you need assistance or have already made this payment, please contact us right away.`,
-    ], promise.promisedAmount, promise.paymentLinkUrl ?? undefined);
 
     try {
       await emailIntegration.sendRecoveryEmail({

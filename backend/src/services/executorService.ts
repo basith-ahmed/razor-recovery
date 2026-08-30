@@ -6,7 +6,6 @@
  * and decision), which asks the LLM for email copy in a billing-recovery tone.
  */
 
-import { requestJson } from "../config/openai";
 import { logWarn } from "../config/logger";
 import { prisma } from "../config/prisma";
 import * as razorpayIntegration from "../integrations/razorpayIntegration";
@@ -18,6 +17,12 @@ import {
   DomainError,
   EnrichedRevenueEvent,
 } from "../domain/types";
+import {
+  generateRecoveryEmail,
+  buildEmailTemplate,
+} from "../domain/emailTemplates";
+
+export { buildEmailTemplate };
 
 const RETRY_ACTIONS = new Set(["retry_payment_immediate"]);
 
@@ -29,103 +34,12 @@ const EMAIL_ACTIONS = new Set([
   "send_dunning_email_1",
   "send_dunning_email_2",
   "send_dunning_email_3",
-  
   "send_winback_offer",
 ]);
 
-const EMAIL_DRAFT_BASE_PROMPT = `You are RazorRecovery's email copywriter. Write a short, highly personalized, friendly billing-recovery email.
-Return JSON only with "subject" and "body_paragraphs" fields. 
-The "body_paragraphs" should be an array of simple text strings. Do not include HTML tags.
-
-CRITICAL INSTRUCTIONS FOR PERSONALIZATION:
-- Analyze the "eventType" (e.g., PAYMENT_FAILED, SUBSCRIPTION_FAILED, INVOICE_OVERDUE).
-- Analyze the "errorReason" and "errorCode" (e.g., insufficient_balance, card_expired). Mention this specifically but politely in the email (e.g., "It looks like your card might have expired" or "It seems the payment failed due to insufficient funds").
-- Provide context (e.g., "your recent subscription renewal", "your pending invoice").
-- Include the "entityId" if it helps identify the transaction (e.g., "Order/Invoice #${`{entityId}`.slice(-6)}\").
-Keep the tone empathetic, professional, and action-oriented. Do not include unsubscribe links or legal disclaimers.`;
-
-const MANDATE_REAUTH_CONTEXT = `
-
-MANDATE RE-AUTHORIZATION CONTEXT (apply when cause is mandate_requires_reauthorization):
-- The customer's UPI Autopay standing instruction (mandate) has been paused or cancelled — either by the bank after repeated failures, or by the customer themselves in their UPI app.
-- Do NOT suggest they simply "try again" — retrying at the payment gateway will not work.
-- Do NOT use words like "failed", "declined", or "error" in the subject line.
-- Write a calm, action-oriented email: explain that their auto-debit subscription needs their attention, and that the payment link lets them re-authorize or switch to a new payment method.
-- Tone: reassuring, not alarming. The call-to-action is re-authorization, not a retry.`;
-
-function buildEmailSystemPrompt(cause: string): string {
-  if (
-    cause === "mandate_requires_reauthorization" ||
-    cause === "mandate_execution_failed_retryable"
-  ) {
-    return EMAIL_DRAFT_BASE_PROMPT + MANDATE_REAUTH_CONTEXT;
-  }
-  return EMAIL_DRAFT_BASE_PROMPT;
-}
-
-// Keep for backward compatibility with any direct references
-const EMAIL_DRAFT_SYSTEM_PROMPT = EMAIL_DRAFT_BASE_PROMPT;
-
-const emailDraftSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["subject", "body_paragraphs"],
-  properties: {
-    subject: { type: "string" },
-    body_paragraphs: { 
-      type: "array", 
-      items: { type: "string" } 
-    },
-  },
-};
-
-export function buildEmailTemplate(paragraphs: string[], amount: number, paymentUrl?: string): string {
-  const contentHtml = paragraphs.map(p => `<p style="margin-bottom: 16px;">${p}</p>`).join("");
-  const buttonHtml = paymentUrl 
-    ? `<div style="text-align: center; margin: 32px 0;">
-         <a href="${paymentUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">Pay \u20b9${amount} Now</a>
-       </div>`
-    : "";
-
-  return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; background-color: #ffffff; border-radius: 8px; border: 1px solid #eaeaea;">
-      <h2 style="color: #4f46e5; margin-top: 0; margin-bottom: 24px;">RazorRecovery</h2>
-      ${contentHtml}
-      ${buttonHtml}
-      <hr style="border: none; border-top: 1px solid #eaeaea; margin: 32px 0;" />
-      <p style="font-size: 12px; color: #888; margin: 0;">
-        This is an automated message regarding a pending payment of \u20b9${amount}. If you've already resolved this, please ignore this email.
-      </p>
-    </div>
-  `;
-}
-
-function parseEmailDraftJson(raw: string): { subject: string; paragraphs: string[] } | null {
-  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-  
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (parsed && typeof parsed.subject === "string" && Array.isArray(parsed.body_paragraphs)) {
-      return { subject: parsed.subject, paragraphs: parsed.body_paragraphs };
-    }
-  } catch (err) {
-    // Basic repair: if LLM returned unescaped newlines inside strings, remove them
-    let repaired = cleaned.replace(/\n/g, " ").replace(/\r/g, "");
-    try {
-      const parsed = JSON.parse(repaired);
-      if (parsed && typeof parsed.subject === "string" && Array.isArray(parsed.body_paragraphs)) {
-        return { subject: parsed.subject, paragraphs: parsed.body_paragraphs };
-      }
-    } catch (err2) {
-      return null;
-    }
-  }
-  return null;
-}
-
 /**
- * AI Touchpoint #3: Drafts recovery email copy using the LLM.
- * Kept as a separate, clearly-labeled function for easy identification.
+ * Drafts recovery email copy using pre-generated, parameterized templates.
+ * Deterministic, instant, brand-compliant, with zero token latency or cost.
  */
 export async function draftRecoveryEmail(
   event: EnrichedRevenueEvent,
@@ -133,53 +47,18 @@ export async function draftRecoveryEmail(
   cause: string,
   paymentUrl?: string,
 ): Promise<{ subject: string; html: string }> {
-  try {
-    const input = JSON.stringify({
-      customerName,
-      cause,
-      amount: event.amount,
-      currency: event.currency,
-      eventType: event.eventType,
-      entityType: event.entityType,
-      entityId: event.entityId,
-      errorCode: event.errorCode,
-      errorReason: event.errorReason,
-      hasPaymentLinkIncluded: !!paymentUrl,
-    });
-    const raw = await requestJson({
-      instructions: buildEmailSystemPrompt(cause),
-      input,
-      schemaName: "recovery_email_draft",
-      schema: emailDraftSchema,
-    });
-
-    const parsed = parseEmailDraftJson(raw);
-    if (parsed) {
-      const html = buildEmailTemplate(parsed.paragraphs, event.amount, paymentUrl);
-      return { subject: parsed.subject, html };
-    }
-
-    console.warn(`[executor] LLM returned unrepairable non-standard email JSON. Using fallback.`);
-    return fallbackEmail(customerName, event.amount, paymentUrl);
-  } catch (error) {
-    console.warn(`[executor] LLM request unavailable; using fallback email copy.`);
-    return fallbackEmail(customerName, event.amount, paymentUrl);
-  }
-}
-
-function fallbackEmail(
-  customerName: string,
-  amount: number,
-  paymentUrl?: string,
-): { subject: string; html: string } {
-  return {
-    subject: `Action required: pending payment of \u20b9${amount}`,
-    html: buildEmailTemplate([
-      `Hi ${customerName},`,
-      `We noticed a pending payment of \u20b9${amount}. Please update your payment method at your earliest convenience.`,
-      `Best regards,<br/>The RazorRecovery Team`
-    ], amount, paymentUrl),
-  };
+  return generateRecoveryEmail({
+    customerName,
+    amount: event.amount,
+    currency: event.currency,
+    entityId: event.entityId,
+    entityType: event.entityType,
+    eventType: event.eventType,
+    errorReason: event.errorReason,
+    errorCode: event.errorCode,
+    cause,
+    paymentUrl,
+  });
 }
 
 /**

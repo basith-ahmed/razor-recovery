@@ -193,85 +193,44 @@ describe("executorService", () => {
   });
 
   describe("draftRecoveryEmail", () => {
-    it("sends complete event context to Gemini", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({
-          subject: "Update your payment method",
-          body_paragraphs: ["Hi Aarav, please update your card."],
-        }),
-      );
-
-      await draftRecoveryEmail(
-        makeEvent({ errorReason: "card_expired", errorCode: "BAD_REQUEST_ERROR" }),
-        "Aarav Sharma",
-        "expired_card",
-      );
-
-      expect(mockedRequestJson).toHaveBeenCalledTimes(1);
-      const requestArg = mockedRequestJson.mock.calls[0][0];
-      const parsedInput = JSON.parse(requestArg.input);
-      expect(parsedInput).toMatchObject({
-        customerName: "Aarav Sharma",
-        cause: "expired_card",
-        amount: 5000,
-        currency: "INR",
-        eventType: "PAYMENT_FAILED",
-        entityType: "INVOICE",
-        entityId: "entity-1",
-        errorReason: "card_expired",
-        errorCode: "BAD_REQUEST_ERROR",
-      });
-    });
-
-    it("wraps body_paragraphs into the templated HTML email", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({
-          subject: "Update your payment method",
-          body_paragraphs: ["Hi Aarav,", "Your card has expired."],
-        }),
-      );
-
+    it("generates deterministic parameterized email for expired_card", async () => {
       const result = await draftRecoveryEmail(
-        makeEvent(),
+        makeEvent({ amount: 5000, errorReason: "card_expired", errorCode: "BAD_REQUEST_ERROR" }),
         "Aarav Sharma",
         "expired_card",
+        "https://rzp.io/i/plink_123"
       );
 
-      expect(result.subject).toBe("Update your payment method");
-      expect(result.html).toContain("Hi Aarav,");
-      expect(result.html).toContain("Your card has expired.");
-      expect(result.html).toContain("₹5000");
-    });
-
-    it("renders body paragraphs into template when Gemini returns body_paragraphs field", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({
-          subject: "Update your payment method",
-          body_paragraphs: ["Hi Aarav, please update your card."],
-        }),
-      );
-
-      const result = await draftRecoveryEmail(
-        makeEvent(),
-        "Aarav Sharma",
-        "expired_card",
-      );
-
-      expect(result.subject).toBe("Update your payment method");
-      expect(result.html).toContain("Hi Aarav, please update your card.");
-    });
-
-    it("uses fallback copy when Gemini fails", async () => {
-      mockedRequestJson.mockRejectedValueOnce(new Error("Gemini down"));
-
-      const result = await draftRecoveryEmail(
-        makeEvent({ amount: 5000 }),
-        "Aarav Sharma",
-        "expired_card",
-      );
-
-      expect(result.subject).toContain("5000");
+      expect(result.subject).toContain("Update card details");
+      expect(result.subject).toContain("5,000");
       expect(result.html).toContain("Aarav Sharma");
+      expect(result.html).toContain("card on file has expired");
+      expect(result.html).toContain("https://rzp.io/i/plink_123");
+    });
+
+    it("generates deterministic email for insufficient_funds", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ amount: 3000 }),
+        "Priya Patel",
+        "insufficient_funds"
+      );
+
+      expect(result.subject).toContain("Payment Unsuccessful");
+      expect(result.subject).toContain("3,000");
+      expect(result.html).toContain("Priya Patel");
+      expect(result.html).toContain("insufficient balance");
+    });
+
+    it("generates deterministic email for mandate re-authorization", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ eventType: "SUBSCRIPTION_FAILED", entityType: "SUBSCRIPTION", amount: 1999 }),
+        "Rohan Gupta",
+        "mandate_requires_reauthorization"
+      );
+
+      expect(result.subject).toContain("Re-authorize your subscription");
+      expect(result.html).toContain("Rohan Gupta");
+      expect(result.html).toContain("UPI Autopay / e-NACH mandate");
     });
   });
 
@@ -314,9 +273,6 @@ describe("executorService", () => {
 
     it("routes email actions through draftRecoveryEmail + sendRecoveryEmail", async () => {
       (mockedPrisma.customer.findUnique as jest.Mock).mockResolvedValueOnce(mockCustomer);
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({ subject: "Payment reminder", body_paragraphs: ["Hi"] }),
-      );
       mockedMailer.sendMail.mockResolvedValueOnce({ messageId: "msg-123" });
 
       const result = await executeAction(
@@ -324,10 +280,9 @@ describe("executorService", () => {
         makeEvent(),
       );
 
-      expect(mockedRequestJson).toHaveBeenCalledTimes(1); // AI touchpoint for email draft
       expect(mockedMailer.sendMail).toHaveBeenCalledTimes(1);
-      expect(mockedMailer.sendMail.mock.calls[0][0].subject).toBe("Payment reminder");
-      expect(mockedMailer.sendMail.mock.calls[0][0].html).toContain("Hi");
+      expect(mockedMailer.sendMail.mock.calls[0][0].subject).toContain("Update card details");
+      expect(mockedMailer.sendMail.mock.calls[0][0].html).toContain("Hi Aarav Sharma");
       expect(result.result).toBe("success");
       expect(result.integration).toBe("EMAIL");
       expect(result.actionType).toBe("send_reminder_email");
@@ -1091,46 +1046,29 @@ describe("Definition of Done — DNC Compliance", () => {
     expect(auditCall.data.outcome).toBe("skipped");
   });
 
-  describe("draftRecoveryEmail response parsing", () => {
-    it("handles body_paragraphs responses and templates them", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({ subject: "Action Required", body_paragraphs: ["Please update payment."] }),
+  describe("draftRecoveryEmail parameterized templates", () => {
+    it("renders amount and entity reference into HTML email", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ amount: 1000, entityId: "inv_123456", entityType: "INVOICE" }),
+        "Alice",
+        "expired_card"
       );
-
-      const result = await draftRecoveryEmail(makeEvent({ amount: 1000 }), "Alice", "expired_card");
-      expect(result.subject).toBe("Action Required");
+      expect(result.subject).toContain("1,000");
       expect(result.html).toContain("<p");
-      expect(result.html).toContain("Please update payment.");
-      expect(result.html).toContain("₹1000");
+      expect(result.html).toContain("Alice");
+      expect(result.html).toContain("1,000");
     });
 
-    it("handles structured JSON responses with body paragraphs", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({ subject: "Action Required", body_paragraphs: ["Please update payment."] }),
+    it("renders payment button when payment link URL is provided", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ amount: 500 }),
+        "Bob",
+        "insufficient_funds",
+        "https://rzp.io/i/testlink"
       );
-
-      const result = await draftRecoveryEmail(makeEvent({ amount: 1000 }), "Alice", "expired_card");
-      expect(result.subject).toBe("Action Required");
-      expect(result.html).toContain("Please update payment.");
-      expect(result.html).toContain("₹1000");
-    });
-
-    it("strips markdown code blocks (```json ... ```) from Gemini responses", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        "```json\n{\n  \"subject\": \"Markdown Subject\",\n  \"body_paragraphs\": [\"Markdown Body\"]\n}\n```",
-      );
-
-      const result = await draftRecoveryEmail(makeEvent({ amount: 500 }), "Bob", "insufficient_funds");
-      expect(result.subject).toBe("Markdown Subject");
-      expect(result.html).toContain("Markdown Body");
-    });
-
-    it("uses fallback copy when Gemini returns unparseable output", async () => {
-      mockedRequestJson.mockResolvedValueOnce("not json at all");
-
-      const result = await draftRecoveryEmail(makeEvent({ amount: 500 }), "Bob", "insufficient_funds");
-      expect(result.subject).toContain("₹500");
-      expect(result.html).toContain("Bob");
+      expect(result.subject).toContain("500");
+      expect(result.html).toContain("https://rzp.io/i/testlink");
+      expect(result.html).toContain("Pay ₹500 Now");
     });
   });
 

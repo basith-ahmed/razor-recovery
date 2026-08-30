@@ -3,7 +3,10 @@ import crypto from "crypto";
 import { prisma } from "../../config/prisma";
 import * as razorpayIntegration from "../../integrations/razorpayIntegration";
 import * as emailIntegration from "../../integrations/emailIntegration";
-import { buildEmailTemplate } from "../../services/executorService";
+import {
+  buildPromiseConfirmationEmail,
+  buildPromiseReminderEmail,
+} from "../../domain/emailTemplates";
 import { emitLiveUpdate } from "../websocket";
 
 export const promisesRouter = Router();
@@ -238,19 +241,12 @@ promisesRouter.post("/", async (req: Request, res: Response) => {
 
     // Send confirmation email
     if (sendEmail !== false) {
-      const formattedDate = parsedDate.toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
+      const { subject, html } = buildPromiseConfirmationEmail({
+        customerName: customer.name,
+        amount: numericAmount,
+        promisedDate: parsedDate,
+        paymentUrl: paymentLinkUrl,
       });
-
-      const subject = `Promise-to-Pay Commitment Confirmation: ₹${numericAmount} due by ${formattedDate}`;
-      const html = buildEmailTemplate([
-        `Hi ${customer.name},`,
-        `Thank you for confirming your commitment to pay. We have recorded your promise to settle ₹${numericAmount} on or before <strong>${formattedDate}</strong>.`,
-        `You can complete your payment securely anytime before the due date using the button below:`,
-        `If you have any questions or require an adjustment to your schedule, please feel free to reply to this email.`,
-      ], numericAmount, paymentLinkUrl);
 
       try {
         await emailIntegration.sendRecoveryEmail({
@@ -299,19 +295,12 @@ promisesRouter.post("/:id/send-reminder", async (req: Request, res: Response) =>
       include: { customer: true },
     });
 
-    const formattedDate = promise.promisedDate.toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
+    const { subject, html } = buildPromiseReminderEmail({
+      customerName: promise.customer.name,
+      amount: promise.promisedAmount,
+      promisedDate: promise.promisedDate,
+      paymentUrl: promise.paymentLinkUrl ?? undefined,
     });
-
-    const subject = `Urgent Follow-Up: Pending Promise-to-Pay for ₹${promise.promisedAmount}`;
-    const html = buildEmailTemplate([
-      `Hi ${promise.customer.name},`,
-      `This is a follow-up regarding your agreed Promise-to-Pay commitment of ₹${promise.promisedAmount}, which was due on <strong>${formattedDate}</strong>.`,
-      `Our records show that this payment has not yet been completed. Please use the button below to settle the outstanding balance immediately:`,
-      `If you need assistance or have already made this payment, please contact us right away.`,
-    ], promise.promisedAmount, promise.paymentLinkUrl ?? undefined);
 
     await emailIntegration.sendRecoveryEmail({
       to: promise.customer.email,
