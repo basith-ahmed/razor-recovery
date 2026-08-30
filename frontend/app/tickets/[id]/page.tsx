@@ -244,10 +244,6 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
                       <span className="text-slate-500">Error Reason: </span>
                       <span className="font-mono text-slate-700">{detail.event.errorReason || "N/A"}</span>
                     </div>
-                    <div>
-                      <span className="text-slate-500">Ticket Reason: </span>
-                      <span className="text-slate-800">{detail.ticket.reason}</span>
-                    </div>
                     {detail.ticket.resolvedAt && (
                       <div>
                         <span className="text-slate-500">Resolved At: </span>

@@ -32,6 +32,7 @@ export default function PromisesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
@@ -45,7 +46,7 @@ export default function PromisesPage() {
           status: statusFilter !== "all" ? statusFilter : undefined,
           search: searchQuery || undefined,
           page,
-          limit: 20,
+          limit,
         }),
         getPromiseStats(),
         fetchPromiseCustomers(),
@@ -64,7 +65,7 @@ export default function PromisesPage() {
 
   useEffect(() => {
     loadData();
-  }, [statusFilter, searchQuery, page]);
+  }, [statusFilter, searchQuery, page, limit]);
 
   useEffect(() => {
     if (activityFeed && activityFeed.length > 0) {
@@ -257,8 +258,12 @@ export default function PromisesPage() {
             page={page}
             totalPages={totalPages}
             total={totalItems}
-            limit={20}
+            limit={limit}
             onPageChange={setPage}
+            onLimitChange={(newLimit) => {
+              setLimit(newLimit);
+              setPage(1);
+            }}
             disabled={loading}
           />
         </div>

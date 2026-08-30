@@ -6,6 +6,7 @@ import { PolicyResponse } from "../../types";
 import { PolicyTable } from "../../components/PolicyTable";
 import { AuditChainVerifier } from "../../components/AuditChainVerifier";
 import { PageHeader } from "../../components/PageHeader";
+import { PaginationControl } from "../../components/PaginationControl";
 
 type PolicyTab = "rules" | "dnc" | "compliance";
 
@@ -154,43 +155,20 @@ export default function PolicyPage() {
                 </table>
               </div>
 
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span>Per page:</span>
-                  <select
-                    value={dncLimit}
-                    onChange={(e) => {
-                      setDncLimit(parseInt(e.target.value, 10));
-                      setDncPage(1);
-                    }}
-                    className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500 font-mono">
-                    Page {data.dncList.page} of {data.dncList.totalPages}
-                  </span>
-                  <button
-                    disabled={dncPage <= 1}
-                    onClick={() => setDncPage((p) => Math.max(1, p - 1))}
-                    className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    disabled={dncPage >= data.dncList.totalPages}
-                    onClick={() => setDncPage((p) => p + 1)}
-                    className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
-                  >
-                    Next
-                  </button>
-                </div>
+              <div className="px-4 py-3 border-t border-slate-200">
+                <PaginationControl
+                  page={dncPage}
+                  totalPages={data.dncList.totalPages}
+                  total={data.dncList.total}
+                  limit={dncLimit}
+                  onPageChange={setDncPage}
+                  onLimitChange={(newLimit) => {
+                    setDncLimit(newLimit);
+                    setDncPage(1);
+                  }}
+                  limitOptions={[5, 10, 20, 50]}
+                  disabled={loading}
+                />
               </div>
             </div>
           )}
@@ -251,43 +229,20 @@ export default function PolicyPage() {
                 </table>
               </div>
 
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span>Per page:</span>
-                  <select
-                    value={logLimit}
-                    onChange={(e) => {
-                      setLogLimit(parseInt(e.target.value, 10));
-                      setLogPage(1);
-                    }}
-                    className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-                  >
-                    <option value={10}>10</option>
-                    <option value={15}>15</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500 font-mono">
-                    Page {data.complianceLog.page} of {data.complianceLog.totalPages}
-                  </span>
-                  <button
-                    disabled={logPage <= 1}
-                    onClick={() => setLogPage((p) => Math.max(1, p - 1))}
-                    className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    disabled={logPage >= data.complianceLog.totalPages}
-                    onClick={() => setLogPage((p) => p + 1)}
-                    className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
-                  >
-                    Next
-                  </button>
-                </div>
+              <div className="px-4 py-3 border-t border-slate-200">
+                <PaginationControl
+                  page={logPage}
+                  totalPages={data.complianceLog.totalPages}
+                  total={data.complianceLog.total}
+                  limit={logLimit}
+                  onPageChange={setLogPage}
+                  onLimitChange={(newLimit) => {
+                    setLogLimit(newLimit);
+                    setLogPage(1);
+                  }}
+                  limitOptions={[10, 15, 25, 50]}
+                  disabled={loading}
+                />
               </div>
             </div>
           )}

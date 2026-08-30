@@ -285,35 +285,16 @@ export function EntityTable({
         </table>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-3 border-t border-slate-200">
-        <div className="flex items-center gap-3 text-xs text-slate-500">
-          <div className="flex items-center gap-1.5">
-            <span>Per page:</span>
-            <select
-              value={limit}
-              onChange={(e) =>
-                onFilterChange({ limit: parseInt(e.target.value, 10), page: 1 })
-              }
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="w-full sm:w-auto">
-          <PaginationControl
-            page={page}
-            totalPages={totalPages}
-            total={total}
-            limit={limit}
-            onPageChange={(newPage) => onFilterChange({ page: newPage })}
-            disabled={loading}
-          />
-        </div>
+      <div className="mt-4 pt-3 border-t border-slate-200">
+        <PaginationControl
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          limit={limit}
+          onPageChange={(newPage) => onFilterChange({ page: newPage })}
+          onLimitChange={(newLimit) => onFilterChange({ limit: newLimit, page: 1 })}
+          disabled={loading}
+        />
       </div>
     </div>
   );

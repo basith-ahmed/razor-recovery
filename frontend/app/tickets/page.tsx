@@ -7,6 +7,7 @@ import { listTickets, getTicketStats } from "../../lib/api";
 import { TicketItem, TicketStats } from "../../types";
 import { Badge } from "../../components/Badge";
 import { PageHeader } from "../../components/PageHeader";
+import { PaginationControl } from "../../components/PaginationControl";
 
 export default function TicketsPage() {
   const router = useRouter();
@@ -16,16 +17,27 @@ export default function TicketsPage() {
   const [activeTab, setActiveTab] = useState<string>("open");
   const [search, setSearch] = useState<string>("");
   const [searchInput, setSearchInput] = useState<string>("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
   const fetchAll = async () => {
     try {
       setLoading(true);
       const [statsData, ticketsData] = await Promise.all([
         getTicketStats(),
-        listTickets({ status: activeTab, search: search || undefined }),
+        listTickets({
+          status: activeTab !== "all" ? activeTab : undefined,
+          search: search || undefined,
+          page,
+          limit,
+        }),
       ]);
       setStats(statsData);
       setTickets(ticketsData.items);
+      setTotalPages(ticketsData.totalPages);
+      setTotalItems(ticketsData.total);
     } catch (err) {
       console.error("Failed to load tickets:", err);
     } finally {
@@ -35,11 +47,12 @@ export default function TicketsPage() {
 
   useEffect(() => {
     fetchAll();
-  }, [activeTab, search]);
+  }, [activeTab, search, page, limit]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSearch(searchInput);
+    setPage(1);
   };
 
   return (
@@ -91,7 +104,10 @@ export default function TicketsPage() {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setPage(1);
+                }}
                 className={`px-3 py-1 text-xs rounded font-medium ${
                   activeTab === tab.id
                     ? "bg-slate-900 text-white"
@@ -106,14 +122,14 @@ export default function TicketsPage() {
           <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Search customer, email, entity..."
+              placeholder="Search by ID, reason, notes..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="text-xs border border-slate-300 rounded px-3 py-1.5 text-slate-900 placeholder-slate-400 focus:outline-hidden focus:border-blue-500 w-64"
+              className="bg-slate-50 border border-slate-300 rounded px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 w-64"
             />
             <button
               type="submit"
-              className="text-xs bg-slate-800 text-white px-3 py-1.5 rounded hover:bg-slate-700 font-medium"
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded font-medium"
             >
               Search
             </button>
@@ -122,60 +138,57 @@ export default function TicketsPage() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse">
-            <thead className="text-slate-500 border-b border-slate-200 bg-slate-50">
-              <tr>
-                <th className="py-2.5 px-3">Customer</th>
-                <th className="py-2.5 px-3">Entity</th>
-                <th className="py-2.5 px-3">Reason</th>
-                <th className="py-2.5 px-3">Amount</th>
-                <th className="py-2.5 px-3">Priority</th>
-                <th className="py-2.5 px-3">Status</th>
-                <th className="py-2.5 px-3">Notes</th>
-                <th className="py-2.5 px-3">Escalated</th>
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                <th className="py-2.5 px-3 font-medium">Ticket ID</th>
+                <th className="py-2.5 px-3 font-medium">Entity ID</th>
+                <th className="py-2.5 px-3 font-medium">Reason</th>
+                <th className="py-2.5 px-3 font-medium">Priority</th>
+                <th className="py-2.5 px-3 font-medium">Status</th>
+                <th className="py-2.5 px-3 font-medium">Notes</th>
+                <th className="py-2.5 px-3 font-medium">Created</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">
-                    Loading escalations...
+                  <td colSpan={7} className="py-8 text-center text-slate-400">
+                    Loading escalation tickets...
                   </td>
                 </tr>
               ) : tickets.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">
-                    No tickets found.
+                  <td colSpan={7} className="py-8 text-center text-slate-400">
+                    No escalation tickets found.
                   </td>
                 </tr>
               ) : (
                 tickets.map((t) => (
                   <tr
                     key={t.id}
-                    className="hover:bg-slate-50 cursor-pointer"
                     onClick={() => router.push(`/tickets/${t.id}`)}
+                    className="hover:bg-slate-50 cursor-pointer"
                   >
-                    <td className="py-2.5 px-3">
-                      <div className="font-semibold text-slate-900">{t.customer?.name || "—"}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">{t.customer?.email || "—"}</div>
+                    <td className="py-2.5 px-3 font-mono font-semibold text-blue-700">
+                      {t.id.slice(0, 8)}...
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-slate-600 text-[11px]">
+                    <td className="py-2.5 px-3 font-mono text-slate-600">
                       {t.entityId}
                     </td>
-                    <td className="py-2.5 px-3 text-slate-700 max-w-[180px] truncate">
+                    <td className="py-2.5 px-3 text-slate-800 font-medium max-w-xs truncate">
                       {t.reason}
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-semibold text-slate-900">
-                      {formatCurrency(t.event?.amount ?? 0, t.event?.currency)}
-                    </td>
                     <td className="py-2.5 px-3">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded border ${
-                        t.priority === "high"
-                          ? "bg-red-50 border-red-200 text-red-700"
-                          : t.priority === "medium"
-                          ? "bg-amber-50 border-amber-200 text-amber-700"
-                          : "bg-slate-50 border-slate-200 text-slate-600"
-                      }`}>
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                          t.priority === "high"
+                            ? "bg-red-50 text-red-700 border border-red-200"
+                            : t.priority === "medium"
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
                         {t.priority}
                       </span>
                     </td>
@@ -196,9 +209,18 @@ export default function TicketsPage() {
         </div>
 
         <div className="px-4 py-3 border-t border-slate-200">
-          <p className="text-xs text-slate-400">
-            {loading ? "Loading..." : `${tickets.length} ticket${tickets.length !== 1 ? "s" : ""} shown`}
-          </p>
+          <PaginationControl
+            page={page}
+            totalPages={totalPages}
+            total={totalItems}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={(newLimit) => {
+              setLimit(newLimit);
+              setPage(1);
+            }}
+            disabled={loading}
+          />
         </div>
       </div>
     </div>

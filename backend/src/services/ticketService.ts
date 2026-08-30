@@ -13,7 +13,7 @@ import { writeLedgerEntry } from "./ledgerService";
 import { createRecoveryPaymentLink } from "../integrations/razorpayIntegration";
 import { sendRecoveryEmail } from "../integrations/emailIntegration";
 import { buildTicketOutreachEmail } from "../domain/emailTemplates";
-import { parsePagination } from "../utils/pagination";
+import { parsePagination, paginatedResponse } from "../utils/pagination";
 
 export {
   ListTicketsParams,
@@ -116,15 +116,7 @@ export async function listTickets(params: ListTicketsParams = {}) {
     );
   }
 
-  return {
-    items,
-    pagination: {
-      page,
-      limit,
-      total: totalCount,
-      totalPages: Math.ceil(totalCount / limit),
-    },
-  };
+  return paginatedResponse(items, totalCount, { page, limit, skip });
 }
 
 export async function getTicketStats(): Promise<TicketStatsDto> {
