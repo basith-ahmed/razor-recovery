@@ -219,15 +219,16 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
                 where: { id: p.id },
                 data: { status: "kept" },
               });
-              await tx.ledgerEntry.create({
-                data: {
+              if (p.eventId) {
+                await writeLedgerEntry(tx, {
                   entityId: p.entityId,
+                  eventId: p.eventId,
                   type: "RECOVERED",
                   amount: p.promisedAmount,
                   currency: p.currency,
                   referenceId: paymentId || paymentLinkId || p.id,
-                },
-              });
+                });
+              }
               await tx.entityWorkflowState.upsert({
                 where: { entityId: p.entityId },
                 create: {
@@ -247,40 +248,6 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
           console.log(`[razorpayWebhook] Settled ${matchingPromises.length} standalone promise(s) to 'kept'.`);
         } else {
           console.log("[razorpayWebhook] No matching event or promise found for payment webhook payload.");
-        }
-      }
-    } else if (eventName === "refund.processed" || eventName === "payment.refunded") {
-      const refundEntity = payload.payload?.refund?.entity;
-      const paymentId = refundEntity?.payment_id as string | undefined;
-      const refundId = refundEntity?.id as string | undefined;
-      const refundedAmount = refundEntity?.amount ? refundEntity.amount / 100 : undefined; // Amount is typically in paise, convert to major unit if needed, assuming our events use major units.
-      
-      if (paymentId) {
-        const recoveredLedger = await prisma.ledgerEntry.findFirst({
-          where: {
-            type: "RECOVERED",
-            referenceId: paymentId,
-          },
-          include: { event: true },
-        });
-
-        if (recoveredLedger) {
-          const event = recoveredLedger.event;
-          await prisma.$transaction(async (tx) => {
-            await writeLedgerEntry(tx, {
-              entityId: event.entityId,
-              eventId: event.id,
-              type: "REVERSED",
-              amount: refundedAmount || event.amount, // fallback to full amount
-              currency: event.currency,
-              referenceId: refundId || paymentId,
-            });
-          });
-          
-          await emitLiveUpdate(event.id);
-          console.log(`[razorpayWebhook] Refund processed for entity ${event.entityId}. Logged REVERSED ledger entry.`);
-        } else {
-          console.log(`[razorpayWebhook] No matching RECOVERED ledger entry found for refunded payment ${paymentId}.`);
         }
       }
     }

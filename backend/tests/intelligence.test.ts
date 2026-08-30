@@ -230,7 +230,7 @@ describe("decide", () => {
 
   it("rejects an illegal model action and deterministically uses the first legal action", async () => {
     mockedRequestJson.mockResolvedValueOnce(
-      JSON.stringify({ chosen_action: "issue_refund", reasoning: "This is not permitted." }),
+      JSON.stringify({ chosen_action: "unauthorized_custom_action", reasoning: "This is not permitted." }),
     );
 
     const result = await decide(diagnosis, filterContext(), entityContext);
