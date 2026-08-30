@@ -15,6 +15,7 @@ export const CAUSE_LABELS = [
   "invoice_overdue",
   "invoice_disputed",
   "dnc",
+  "promise_broken",
 ] as const;
 
 export type CauseLabel = (typeof CAUSE_LABELS)[number];
@@ -54,7 +55,7 @@ export const MANDATE_CAUSE_MAP: Readonly<Record<string, CauseLabel>> = {
 /** Exported alias for backward compatibility with general payment cause lookups */
 export const CAUSE_MAP = PAYMENT_CAUSE_MAP;
 
-export const DIAGNOSIS_SYSTEM_PROMPT = `You are RazorRecovery's diagnosis service. Classify the revenue event into exactly one cause label. Do not recommend an action, contact a customer, or make policy decisions. Return JSON only with cause_label, confidence, and reasoning. cause_label must be one of: expired_card, insufficient_funds, gateway_timeout, price_friction, no_reason_signal, mandate_execution_failed_retryable, mandate_requires_reauthorization, invoice_overdue, invoice_disputed, dnc.`;
+export const DIAGNOSIS_SYSTEM_PROMPT = `You are RazorRecovery's diagnosis service. Classify the revenue event into exactly one cause label. Do not recommend an action, contact a customer, or make policy decisions. Return JSON only with cause_label, confidence, and reasoning. cause_label must be one of: expired_card, insufficient_funds, gateway_timeout, price_friction, no_reason_signal, mandate_execution_failed_retryable, mandate_requires_reauthorization, invoice_overdue, invoice_disputed, dnc, promise_broken.`;
 
 const diagnosisSchema = {
   type: "object",
@@ -141,6 +142,21 @@ export async function diagnose(
   event: EnrichedRevenueEvent,
   history: CustomerHistory,
 ): Promise<DiagnosisResult> {
+  // Rule-based path for PROMISE_BROKEN: deterministic from event errorReason or followUp marker
+  const followUpMarker = (event.rawPayload as Record<string, unknown>)?.followUp as { type?: string } | undefined;
+  if (
+    event.errorReason === "promise_broken" ||
+    event.errorCode === "PROMISE_BROKEN" ||
+    followUpMarker?.type === "promise_broken"
+  ) {
+    return {
+      causeLabel: "promise_broken",
+      confidence: 1,
+      method: "RULE",
+      reasoning: "Customer did not fulfill the agreed Promise-to-Pay commitment by the due date.",
+    };
+  }
+
   // Rule-based path for PAYMENT_FAILED: deterministic from gateway error_reason
   const mappedCause =
     event.eventType === "PAYMENT_FAILED" && event.errorReason

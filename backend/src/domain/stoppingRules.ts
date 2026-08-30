@@ -12,6 +12,7 @@ export interface FilterContext {
   isDnc: boolean;
   isDisputed: boolean;
   isRecovered?: boolean;
+  hasActivePromise?: boolean;
   attemptCount: number;
   isInCooldown: boolean;
   daysOverdue?: number;
@@ -31,12 +32,17 @@ export function filterLegalActions(ctx: FilterContext): string[] {
     return [];
   }
 
-  // 2. Dispute flag always overrides everything else → return ["escalate_to_human"] only
-  if (ctx.isDisputed || ctx.causeLabel === "invoice_disputed") {
+  // 2. Dispute flag or broken promise always overrides standard actions → return ["escalate_to_human"] only
+  if (ctx.isDisputed || ctx.causeLabel === "invoice_disputed" || ctx.causeLabel === "promise_broken") {
     return ["escalate_to_human"];
   }
 
-  // 3. Look up the policy rule for ctx.causeLabel
+  // 3. If customer has an active unbroken Promise-to-Pay, pause all automated outreach
+  if (ctx.hasActivePromise) {
+    return [];
+  }
+
+  // 4. Look up the policy rule for ctx.causeLabel
   const rule = getRuleForCause(ctx.causeLabel);
   if (!rule) {
     // Unknown cause — no legal actions

@@ -22,6 +22,9 @@ import { isTerminal, WorkflowState } from "../domain/stateMachine";
 import { RawRevenueEvent } from "../domain/types";
 import { publish } from "../kafka/producer";
 import { TOPICS } from "../kafka/topics";
+import * as emailIntegration from "../integrations/emailIntegration";
+import { buildEmailTemplate } from "../services/executorService";
+import { emitLiveUpdate } from "../api/websocket";
 
 const SCAN_INTERVAL_MS = 30_000;
 const FOLLOWUP_DEDUP_PREFIX = "razorrecovery:followup";
@@ -397,11 +400,153 @@ async function dispatchDueScheduledRetries(now: Date): Promise<void> {
   }
 }
 
+export async function scanAndProcessPromises(now: Date): Promise<void> {
+  // Stage 1: Check pending promises that passed promisedDate
+  const overduePromises = await prisma.promiseToPay.findMany({
+    where: {
+      status: "pending",
+      promisedDate: { lte: now },
+    },
+    include: {
+      customer: true,
+    },
+  });
+
+  for (const promise of overduePromises) {
+    const isNew = await redis.set(
+      `razorrecovery:promise:reminder:${promise.id}`,
+      "1",
+      "EX",
+      86400 * 7,
+      "NX",
+    );
+    if (!isNew) continue;
+
+    const gracePeriodUntil = new Date(now.getTime() + 24 * 3600 * 1000);
+    await prisma.promiseToPay.update({
+      where: { id: promise.id },
+      data: {
+        status: "reminder_sent",
+        reminderSentAt: now,
+        gracePeriodUntil,
+      },
+    });
+
+    const formattedDate = promise.promisedDate.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    const subject = `Urgent Follow-Up: Pending Promise-to-Pay for ₹${promise.promisedAmount}`;
+    const html = buildEmailTemplate([
+      `Hi ${promise.customer.name},`,
+      `This is a follow-up regarding your agreed Promise-to-Pay commitment of ₹${promise.promisedAmount}, which was due on <strong>${formattedDate}</strong>.`,
+      `Our records show that this payment has not yet been completed. Please use the button below to settle the outstanding balance immediately:`,
+      `If you need assistance or have already made this payment, please contact us right away.`,
+    ], promise.promisedAmount, promise.paymentLinkUrl ?? undefined);
+
+    try {
+      await emailIntegration.sendRecoveryEmail({
+        to: promise.customer.email,
+        subject,
+        html,
+      });
+      console.log(`[scheduler] Sent promise reminder email to ${promise.customer.email} for promise ${promise.id}`);
+    } catch (err) {
+      console.error(`[scheduler] Failed to send promise reminder email for ${promise.id}:`, err);
+    }
+
+    try {
+      await emitLiveUpdate(promise.eventId || promise.entityId);
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  // Stage 2: Check reminder_sent promises that passed gracePeriodUntil
+  const brokenPromises = await prisma.promiseToPay.findMany({
+    where: {
+      status: "reminder_sent",
+      gracePeriodUntil: { lte: now },
+    },
+    include: {
+      customer: true,
+    },
+  });
+
+  for (const promise of brokenPromises) {
+    const isNew = await redis.set(
+      `razorrecovery:promise:broken:${promise.id}`,
+      "1",
+      "EX",
+      86400 * 7,
+      "NX",
+    );
+    if (!isNew) continue;
+
+    await prisma.promiseToPay.update({
+      where: { id: promise.id },
+      data: {
+        status: "broken",
+      },
+    });
+
+    let event = await buildSyntheticEvent(promise.entityId, {
+      type: "promise_broken",
+      promiseId: promise.id,
+      causeLabel: "promise_broken",
+    });
+
+    if (!event) {
+      event = {
+        id: randomUUID(),
+        entityType: "INVOICE",
+        entityId: promise.entityId,
+        customerId: promise.customerId,
+        eventType: "INVOICE_OVERDUE",
+        amount: promise.promisedAmount,
+        currency: promise.currency,
+        occurredAt: now.toISOString(),
+        errorCode: "PROMISE_BROKEN",
+        errorReason: "promise_broken",
+        rawPayload: {
+          synthesized: true,
+          followUp: { type: "promise_broken", promiseId: promise.id },
+          promiseId: promise.id,
+          daysOverdue: 7,
+        },
+      };
+    } else {
+      event.errorReason = "promise_broken";
+      event.errorCode = "PROMISE_BROKEN";
+      event.rawPayload = {
+        ...(event.rawPayload as Record<string, unknown>),
+        synthesized: true,
+        followUp: { type: "promise_broken", promiseId: promise.id },
+      };
+    }
+
+    await publish(TOPICS.EVENTS_RAW, event.id, event);
+    console.log(
+      `[scheduler] Promise ${promise.id} broken for entity ${promise.entityId} → synthesized promise_broken event ${event.id}`,
+    );
+
+    try {
+      await emitLiveUpdate(event.id);
+    } catch (err) {
+      // ignore
+    }
+  }
+}
+
 export async function startFollowUpScheduler(): Promise<void> {
   if (scanTimer) return;
   scanTimer = setInterval(() => {
+    const now = new Date();
     scanAndPublish()
-      .then(() => dispatchDueScheduledRetries(new Date()))
+      .then(() => dispatchDueScheduledRetries(now))
+      .then(() => scanAndProcessPromises(now))
       .catch((err) => logError("scheduler", err));
   }, SCAN_INTERVAL_MS);
   scanTimer.unref(); // never block graceful shutdown
@@ -417,3 +562,4 @@ export async function stopFollowUpScheduler(): Promise<void> {
     console.log("Follow-up scheduler stopped.");
   }
 }
+

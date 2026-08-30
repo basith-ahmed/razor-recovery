@@ -34,7 +34,7 @@ describe("policy.ts", () => {
   it("loadPolicy returns a valid PolicyConfig", () => {
     const policy = loadPolicy();
     expect(policy.version).toBe("1.0.0");
-    expect(policy.rules).toHaveLength(8);
+    expect(policy.rules).toHaveLength(9);
   });
 
   it("getPolicyVersion returns the version string", () => {

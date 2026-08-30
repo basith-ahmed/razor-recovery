@@ -79,7 +79,7 @@ const emailDraftSchema = {
   },
 };
 
-function buildEmailTemplate(paragraphs: string[], amount: number, paymentUrl?: string): string {
+export function buildEmailTemplate(paragraphs: string[], amount: number, paymentUrl?: string): string {
   const contentHtml = paragraphs.map(p => `<p style="margin-bottom: 16px;">${p}</p>`).join("");
   const buttonHtml = paymentUrl 
     ? `<div style="text-align: center; margin: 32px 0;">
@@ -321,6 +321,81 @@ export async function executeAction(
       actionType: chosenAction,
       razorpayPaymentLinkId: paymentLinkId,
       paymentLinkShortUrl: paymentUrl
+    };
+  } else if (chosenAction === "start_promise_to_pay_tracking") {
+    const customer = await lookupCustomer(event.customerId);
+    const rawPayload = (event.rawPayload || {}) as Record<string, unknown>;
+    const promisedDateStr = rawPayload.promisedDate as string | undefined;
+    const promisedDate = promisedDateStr ? new Date(promisedDateStr) : new Date(Date.now() + 7 * 86400 * 1000);
+
+    const linkResult = await razorpayIntegration.createRecoveryPaymentLink({
+      amount: event.amount,
+      currency: event.currency,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      customerPhone: customer.phone ?? undefined,
+      description: `Promise-to-Pay for ${event.eventType} — ${event.entityId}`,
+      notify: false,
+      eventId: event.id,
+      actionType: chosenAction,
+    });
+
+    // Check if event exists before creating the PromiseToPay relation
+    const eventExists = await prisma.revenueEvent.findUnique({
+      where: { id: event.id },
+      select: { id: true },
+    });
+
+    await prisma.promiseToPay.create({
+      data: {
+        entityId: event.entityId,
+        customerId: event.customerId,
+        eventId: eventExists ? event.id : null,
+        promisedAmount: event.amount,
+        currency: event.currency,
+        promisedDate,
+        status: "pending",
+        razorpayPaymentLinkId: linkResult.razorpayPaymentLinkId,
+        paymentLinkUrl: linkResult.paymentLinkShortUrl,
+        notes: (rawPayload.notes as string) || `Promise-to-pay commitment registered for ₹${event.amount} due by ${promisedDate.toISOString().split("T")[0]}.`,
+      },
+    });
+
+    const formattedDate = promisedDate.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    const subject = `Promise-to-Pay Confirmation: ₹${event.amount} commitment due by ${formattedDate}`;
+    const html = buildEmailTemplate([
+      `Hi ${customer.name},`,
+      `Thank you for confirming your commitment to pay. We have recorded your promise to settle ₹${event.amount} on or before <strong>${formattedDate}</strong>.`,
+      `You can complete your payment securely anytime before the due date using the button below:`,
+      `If you have any questions or require an adjustment to your schedule, please feel free to reply to this email.`,
+    ], event.amount, linkResult.paymentLinkShortUrl);
+
+    let emailMsgId: string | undefined;
+    try {
+      const emailRes = await emailIntegration.sendRecoveryEmail({
+        to: customer.email,
+        subject,
+        html,
+      });
+      emailMsgId = emailRes.emailMessageId;
+    } catch (err) {
+      logWarn("executor", err);
+      console.warn("[executor] Failed to send promise confirmation email; payment link remains active.");
+    }
+
+    actionResult = {
+      actionType: chosenAction,
+      result: "success",
+      integration: "RAZORPAY",
+      razorpayPaymentLinkId: linkResult.razorpayPaymentLinkId,
+      paymentLinkShortUrl: linkResult.paymentLinkShortUrl,
+      emailMessageId: emailMsgId,
+      detail: `Promise-to-pay commitment registered for ₹${event.amount} due by ${formattedDate}. Payment link generated.`,
     };
   } else if (chosenAction === "escalate_to_human") {
     actionResult = await ticketMock.escalateToHuman(

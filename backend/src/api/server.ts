@@ -9,6 +9,7 @@ import { policyRouter } from "./routes/policy";
 import { auditRouter } from "./routes/audit";
 import { queryRouter } from "./routes/query";
 import { ticketsRouter } from "./routes/tickets";
+import { promisesRouter } from "./routes/promises";
 import { razorpayWebhookRouter } from "./webhooks/razorpayWebhook";
 
 export const app = express();
@@ -43,6 +44,8 @@ app.use("/policy", policyRouter);
 app.use("/audit", auditRouter);
 app.use("/query", queryRouter);
 app.use("/tickets", ticketsRouter);
+app.use("/promises", promisesRouter);
+app.use("/api/promises", promisesRouter);
 app.use("/webhooks/razorpay", razorpayWebhookRouter);
 
 // HTTP Server wrapping Express and Socket.io

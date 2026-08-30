@@ -82,6 +82,7 @@ export async function decide(
     if (filterCtx.isRecovered) reason = "Blocked by policy (Entity payment already RECOVERED)";
     else if (filterCtx.isDnc || filterCtx.causeLabel === "dnc") reason = "Blocked by policy (Customer is DNC)";
     else if (filterCtx.isDisputed || filterCtx.causeLabel === "invoice_disputed") reason = "Blocked by policy (Invoice is disputed)";
+    else if (filterCtx.hasActivePromise) reason = "Blocked by policy (Active Promise-to-Pay commitment pending)";
     else if (filterCtx.isInCooldown) reason = "Blocked by policy (In active cooldown window)";
     else reason = "Blocked by policy (Stopping condition reached)";
     

@@ -72,11 +72,11 @@ export async function injectFailure(
 
   const id = crypto.randomUUID();
   const occurredAt = new Date();
-  let entityType: EntityType;
-  let entityId: string;
-  let amount: number;
-  let eventType: EventType;
-  let payload: Record<string, unknown>;
+  let entityType: EntityType = "INVOICE";
+  let entityId: string = "";
+  let amount: number = 0;
+  let eventType: EventType = "PAYMENT_FAILED";
+  let payload: Record<string, unknown> = {};
   let razorpayPaymentId: string | undefined;
   let razorpayOrderId: string | undefined;
   let errorCode: string | undefined;

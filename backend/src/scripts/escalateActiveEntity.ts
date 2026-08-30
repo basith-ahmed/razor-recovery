@@ -1,4 +1,5 @@
 import { prisma } from "../config/prisma";
+import { EntityType, EventType } from "@prisma/client";
 import { escalateToHuman } from "../integrations/ticketMock";
 import { recordAuditEntry } from "../services/auditService";
 import { EnrichedRevenueEvent } from "../domain/types";
@@ -38,8 +39,8 @@ async function main() {
   let entityId: string;
   let customer: any;
   let amount: number;
-  let entityType: string;
-  let eventType: string;
+  let entityType: EntityType = "INVOICE";
+  let eventType: EventType = "INVOICE_OVERDUE";
   let priorCause: string;
 
   if (candidate && candidate.customer) {
@@ -192,9 +193,19 @@ async function main() {
   // Step 4: Record Audit Entry and transition Workflow State to ESCALATED
   console.log("4. Recording Hash-Chained Audit Entry and updating EntityWorkflowState to ESCALATED...");
   const enrichedEvent: EnrichedRevenueEvent = {
-    ...escalationEvent,
+    id: escalationEvent.id,
+    entityType: escalationEvent.entityType,
+    entityId: escalationEvent.entityId,
+    customerId: escalationEvent.customerId,
+    eventType: escalationEvent.eventType,
+    amount: escalationEvent.amount,
+    currency: escalationEvent.currency,
     occurredAt: escalationEvent.occurredAt.toISOString(),
-    rawPayload: escalationEvent.rawPayload as any,
+    razorpayPaymentId: escalationEvent.razorpayPaymentId ?? undefined,
+    razorpayOrderId: escalationEvent.razorpayOrderId ?? undefined,
+    errorCode: escalationEvent.errorCode ?? undefined,
+    errorReason: escalationEvent.errorReason ?? undefined,
+    rawPayload: escalationEvent.rawPayload as Record<string, unknown>,
     riskScore: 0.88,
     urgency: 0.9,
   };

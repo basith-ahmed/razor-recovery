@@ -272,8 +272,8 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
 
     const targetEntityId = auditEntries[0]?.entityId ?? targetId;
 
-    // Fetch entity workflow state and all events for this entity (sorted latest first)
-    const [workflowState, entityEvents] = await Promise.all([
+    // Fetch entity workflow state, events, and any promise commitments for this entity
+    const [workflowState, entityEvents, promises] = await Promise.all([
       prisma.entityWorkflowState.findUnique({
         where: { entityId: targetEntityId },
       }),
@@ -290,6 +290,10 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
             take: 1,
           },
         },
+      }),
+      prisma.promiseToPay.findMany({
+        where: { entityId: targetEntityId },
+        orderBy: { createdAt: "desc" },
       }),
     ]);
 
@@ -363,6 +367,22 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       customer: entityEvents[0]?.customer ?? auditEntries[0]?.event?.customer ?? null,
       workflowState: workflowState ?? null,
       events: formattedEvents,
+      promises: promises.map((p) => ({
+        id: p.id,
+        entityId: p.entityId,
+        customerId: p.customerId,
+        promisedAmount: p.promisedAmount,
+        currency: p.currency,
+        promisedDate: p.promisedDate.toISOString(),
+        status: p.status,
+        reminderSentAt: p.reminderSentAt?.toISOString() ?? null,
+        gracePeriodUntil: p.gracePeriodUntil?.toISOString() ?? null,
+        razorpayPaymentLinkId: p.razorpayPaymentLinkId,
+        paymentLinkUrl: p.paymentLinkUrl,
+        notes: p.notes,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+      })),
       auditEntries: result,
     };
 

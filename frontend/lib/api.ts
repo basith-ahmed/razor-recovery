@@ -151,4 +151,50 @@ export async function resolveTicket(
   return response.data;
 }
 
+export async function getPromiseStats(): Promise<import("../types").PromiseStats> {
+  const response = await apiClient.get<import("../types").PromiseStats>("/promises/stats");
+  return response.data;
+}
+
+export async function fetchPromiseCustomers(): Promise<import("../types").CustomerLookupItem[]> {
+  const response = await apiClient.get<import("../types").CustomerLookupItem[]>("/promises/customers");
+  return response.data;
+}
+
+export async function listPromises(params?: {
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<PaginatedResponse<import("../types").PromiseToPayItem>> {
+  const response = await apiClient.get<PaginatedResponse<import("../types").PromiseToPayItem>>("/promises", {
+    params,
+  });
+  return response.data;
+}
+
+export async function createPromise(
+  data: import("../types").CreatePromiseInput
+): Promise<import("../types").PromiseToPayItem> {
+  const response = await apiClient.post<import("../types").PromiseToPayItem>("/promises", data);
+  return response.data;
+}
+
+export async function sendPromiseReminder(
+  id: string
+): Promise<{ message: string; promise: import("../types").PromiseToPayItem }> {
+  const response = await apiClient.post<{ message: string; promise: import("../types").PromiseToPayItem }>(
+    `/promises/${id}/send-reminder`
+  );
+  return response.data;
+}
+
+export async function updatePromise(
+  id: string,
+  data: { status?: string; notes?: string; promisedDate?: string }
+): Promise<import("../types").PromiseToPayItem> {
+  const response = await apiClient.patch<import("../types").PromiseToPayItem>(`/promises/${id}`, data);
+  return response.data;
+}
+
 

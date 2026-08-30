@@ -88,6 +88,26 @@ export interface FunnelStage {
   count: number;
 }
 
+export type PromiseStatus = "pending" | "reminder_sent" | "kept" | "broken" | "cancelled";
+
+export interface PromiseToPayRecord {
+  id: string;
+  entityId: string;
+  customerId: string;
+  eventId?: string | null;
+  promisedAmount: number;
+  currency: string;
+  promisedDate: string | Date;
+  status: PromiseStatus;
+  reminderSentAt?: string | Date | null;
+  gracePeriodUntil?: string | Date | null;
+  razorpayPaymentLinkId?: string | null;
+  paymentLinkUrl?: string | null;
+  notes?: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
 export class DomainError extends Error {
   constructor(
     message: string,
@@ -98,3 +118,4 @@ export class DomainError extends Error {
     this.name = "DomainError";
   }
 }
+

@@ -47,6 +47,11 @@
       "cause": "invoice_overdue",
       "actions": ["send_reminder_email", "send_soft_chase_email", "escalate_to_human"],
       "stopping": {}
+    },
+    {
+      "cause": "promise_broken",
+      "actions": ["escalate_to_human"],
+      "stopping": { "maxAttempts": 1, "onMaxAction": "escalate_to_human" }
     }
   ]
 }

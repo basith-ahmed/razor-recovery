@@ -148,6 +148,64 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
             </div>
           </div>
 
+          {/* Promise-to-Pay Commitment Section (if any commitments exist) */}
+          {data?.promises && data.promises.length > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded p-4 mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-slate-900">
+                  Promise-to-Pay Commitments ({data.promises.length})
+                </h3>
+                <Link
+                  href="/promises"
+                  className="text-xs text-blue-600 hover:underline font-medium"
+                >
+                  Manage in Portal →
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {data.promises.map((p) => (
+                  <div
+                    key={p.id}
+                    className="bg-white p-3 rounded border border-slate-200 space-y-1.5 text-xs"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 font-mono">
+                        ₹{p.promisedAmount.toLocaleString("en-IN")}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-700">
+                        {p.status.replace("_", " ")}
+                      </span>
+                    </div>
+
+                    <div className="text-slate-600">
+                      Due: {new Date(p.promisedDate).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </div>
+
+                    {p.notes && <div className="text-slate-500 truncate">{p.notes}</div>}
+
+                    {p.paymentLinkUrl && (
+                      <div className="pt-1 border-t border-slate-100">
+                        <a
+                          href={p.paymentLinkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline text-xs"
+                        >
+                          Open Payment Link →
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 2-Column Layout: Left (Audit Timeline), Right (AI Assistant) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
             {/* Left 2 Columns: Audit Timeline */}

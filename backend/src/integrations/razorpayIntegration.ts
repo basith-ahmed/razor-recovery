@@ -84,9 +84,21 @@ export async function createRecoveryPaymentLink(
       paymentLinkShortUrl: paymentLink.short_url,
     };
   } catch (error: any) {
-    if (params.customerEmail.endsWith(".test") || params.customerEmail.includes("example.test") || params.eventId?.startsWith("sim_")) {
+    const isRateLimit =
+      error?.statusCode === 429 ||
+      error?.error?.code === "RATE_LIMIT_EXCEEDED" ||
+      String(error?.error?.description || "").toLowerCase().includes("limit") ||
+      String(error?.message || "").toLowerCase().includes("rate_limit_exceeded");
+
+    const isSimulated =
+      params.customerEmail.endsWith(".test") ||
+      params.customerEmail.includes("example.test") ||
+      params.eventId?.startsWith("sim_") ||
+      Boolean(params.eventId && params.eventId.includes("sim"));
+
+    if (isRateLimit || isSimulated) {
       const simHash = createHash("md5")
-        .update(`${params.customerEmail}:${params.amount}:${params.eventId ?? ""}`)
+        .update(`${params.customerEmail}:${params.amount}:${params.eventId ?? Date.now()}`)
         .digest("hex")
         .slice(0, 16);
       const simId = `plink_sim_${simHash}`;

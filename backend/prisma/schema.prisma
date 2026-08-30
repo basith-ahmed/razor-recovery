@@ -59,6 +59,7 @@ model Customer {
   subscriptions Subscription[]
   events        RevenueEvent[]
   workflowStates EntityWorkflowState[]
+  promises      PromiseToPay[]
 }
 
 model Invoice {
@@ -116,6 +117,7 @@ model RevenueEvent {
   action        Action?
   auditEntries  AuditEntry[]
   ledgerEntries LedgerEntry[]
+  promises      PromiseToPay[]
 }
 
 model Diagnosis {
@@ -268,5 +270,31 @@ model TicketNote {
 
   @@index([ticketId])
   @@index([createdAt])
+}
+
+model PromiseToPay {
+  id                    String        @id @default(uuid())
+  entityId              String
+  customerId            String
+  customer              Customer      @relation(fields: [customerId], references: [id])
+  eventId               String?
+  event                 RevenueEvent? @relation(fields: [eventId], references: [id])
+  promisedAmount        Float
+  currency              String        @default("INR")
+  promisedDate          DateTime
+  status                String        @default("pending") // "pending" | "reminder_sent" | "kept" | "broken" | "cancelled"
+  reminderSentAt        DateTime?
+  gracePeriodUntil      DateTime?
+  razorpayPaymentLinkId String?
+  paymentLinkUrl        String?
+  notes                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([entityId])
+  @@index([customerId])
+  @@index([status])
+  @@index([promisedDate])
+  @@index([razorpayPaymentLinkId])
 }
 

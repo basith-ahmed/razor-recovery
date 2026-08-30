@@ -135,6 +135,8 @@ function outcomeToState(outcome: string): WorkflowState {
       return "RECOVERED";
     case "winback_sent":
       return "CONTACTED";
+    case "promise_tracked":
+      return "CONTACTED";
     case "subscription_paused":
       return "COOLING_DOWN";
     default:

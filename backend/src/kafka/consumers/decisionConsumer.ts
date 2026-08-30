@@ -69,7 +69,7 @@ export async function startDecisionConsumer(): Promise<void> {
         // Build FilterContext from Postgres.
         // Unified entity-level attempt tracking is stored in EntityWorkflowState
         // with per-cause fallback in EntityCauseState.
-        const [customer, workflowState, causeState] = await Promise.all([
+        const [customer, workflowState, causeState, activePromise] = await Promise.all([
           prisma.customer.findUnique({
             where: { id: event.customerId },
             select: { dncFlag: true, lifetimeValue: true },
@@ -85,6 +85,13 @@ export async function startDecisionConsumer(): Promise<void> {
               },
             },
           }),
+          prisma.promiseToPay.findFirst({
+            where: {
+              entityId: event.entityId,
+              status: { in: ["pending", "reminder_sent"] },
+            },
+            orderBy: { createdAt: "desc" },
+          }),
         ]);
 
         // Check dispute flag on the entity (Invoice-specific)
@@ -99,6 +106,13 @@ export async function startDecisionConsumer(): Promise<void> {
 
         const now = new Date();
         const isDnc = customer?.dncFlag ?? false;
+
+        // Check if customer has an active, unbroken promise whose window has not expired
+        const hasActivePromise =
+          activePromise !== null &&
+          activePromise.status === "pending" &&
+          activePromise.promisedDate > now &&
+          diagnosis.causeLabel !== "promise_broken";
 
         // Check if entity payment has already been recovered
         const redisRecoveredKey = `${REDIS_PREFIX}:recovered:${event.entityId}`;
@@ -157,6 +171,7 @@ export async function startDecisionConsumer(): Promise<void> {
           isDnc,
           isDisputed,
           isRecovered,
+          hasActivePromise,
           attemptCount,
           isInCooldown,
           daysOverdue,

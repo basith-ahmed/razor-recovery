@@ -49,7 +49,8 @@ export interface TicketSummaryDto {
 
 export interface TicketStatsDto {
   openCount: number;
-  resolvedCount: number;
+  resolvedCount?: number;
+  writtenOffCount?: number;
   recoveredCount: number;
   totalAtRisk: number;
   totalRecovered: number;
@@ -330,7 +331,7 @@ export async function sendTicketEmail(
       });
       paymentUrl = linkResult.paymentLinkShortUrl;
     } catch (err) {
-      console.warn("[ticketService] Payment link generation failed, proceeding without link:", err);
+      logError("ticketService", err);
     }
   }
 

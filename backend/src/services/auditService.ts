@@ -91,6 +91,8 @@ function toStateMachineOutcome(
       return "subscription_paused";
     case "send_winback_offer":
       return "winback_sent";
+    case "start_promise_to_pay_tracking":
+      return "promise_tracked";
     default:
       return null;
   }

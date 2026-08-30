@@ -128,6 +128,19 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
 
           await redis.set(`razorrecovery:recovered:${event.entityId}`, "true", "EX", 86400 * 30);
 
+          // Update any active Promise-to-Pay commitments for this entity to 'kept'
+          await tx.promiseToPay.updateMany({
+            where: {
+              OR: [
+                { entityId: event.entityId, status: { in: ["pending", "reminder_sent"] } },
+                ...(paymentLinkId ? [{ razorpayPaymentLinkId: paymentLinkId, status: { in: ["pending", "reminder_sent"] } }] : []),
+              ],
+            },
+            data: {
+              status: "kept",
+            },
+          });
+
           const recoveryAction = {
             actionType: "webhook_capture",
             result: "success",

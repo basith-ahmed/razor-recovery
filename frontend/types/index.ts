@@ -108,6 +108,7 @@ export interface EntityAuditResponse {
   } | null;
   workflowState?: EntityWorkflowStateData | null;
   events: EntityEventItem[];
+  promises?: PromiseToPayItem[];
   auditEntries: AuditEntry[];
 }
 
@@ -329,6 +330,58 @@ export interface TicketStats {
   recoveredCount: number;
   totalAtRisk: number;
   totalRecovered: number;
+}
+
+export type PromiseStatus = "pending" | "reminder_sent" | "kept" | "broken" | "cancelled";
+
+export interface PromiseToPayItem {
+  id: string;
+  entityId: string;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string | null;
+  promisedAmount: number;
+  currency: string;
+  promisedDate: string;
+  status: PromiseStatus;
+  reminderSentAt?: string | null;
+  gracePeriodUntil?: string | null;
+  razorpayPaymentLinkId?: string | null;
+  paymentLinkUrl?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  msRemaining?: number;
+  isOverdue?: boolean;
+}
+
+export interface PromiseStats {
+  totalCount: number;
+  pendingCount: number;
+  reminderSentCount: number;
+  keptCount: number;
+  brokenCount: number;
+  totalPromisedAmount: number;
+  totalRecoveredAmount: number;
+}
+
+export interface CreatePromiseInput {
+  customerId: string;
+  entityId?: string;
+  amount: number;
+  promisedDate: string;
+  notes?: string;
+  sendEmail?: boolean;
+}
+
+export interface CustomerLookupItem {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  riskTier?: string;
+  dncFlag?: boolean;
 }
 
 
