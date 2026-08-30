@@ -10,7 +10,11 @@ const mockTx = {
   diagnosis: { findUnique: jest.fn().mockResolvedValue(null) },
   decision: { findUnique: jest.fn().mockResolvedValue(null) },
   entityCauseState: { deleteMany: jest.fn() },
-  ledgerEntry: { create: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
+  ledgerEntry: {
+    create: jest.fn(),
+    findFirst: jest.fn().mockResolvedValue(null),
+    findMany: jest.fn().mockResolvedValue([]),
+  },
   promiseToPay: {
     updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     findFirst: jest.fn().mockResolvedValue(null),

@@ -136,6 +136,63 @@ describe("Financial Ledger", () => {
     expect(recovered.length).toBe(1);
   });
 
+  it("should not double-count amount at risk when multiple events arrive for the same entity", async () => {
+    // 1. Initial failure event for entity inv_2000 of amount 2000
+    await prisma.revenueEvent.create({
+      data: {
+        id: "evt_2000_1",
+        entityType: "INVOICE",
+        entityId: "inv_2000",
+        customerId: "cust_1",
+        eventType: "PAYMENT_FAILED",
+        amount: 2000,
+        currency: "INR",
+        occurredAt: new Date(),
+        rawPayload: {},
+      },
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await writeLedgerEntry(tx, {
+        entityId: "inv_2000",
+        eventId: "evt_2000_1",
+        type: "AT_RISK",
+        amount: 2000,
+      });
+    });
+
+    // 2. Second event (e.g. retry / follow-up failure) for the SAME entity inv_2000 of amount 2000
+    await prisma.revenueEvent.create({
+      data: {
+        id: "evt_2000_2",
+        entityType: "INVOICE",
+        entityId: "inv_2000",
+        customerId: "cust_1",
+        eventType: "PAYMENT_FAILED",
+        amount: 2000,
+        currency: "INR",
+        occurredAt: new Date(),
+        rawPayload: {},
+      },
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await writeLedgerEntry(tx, {
+        entityId: "inv_2000",
+        eventId: "evt_2000_2",
+        type: "AT_RISK",
+        amount: 2000,
+      });
+    });
+
+    // Verify exactly 1 AT_RISK ledger entry exists for inv_2000
+    const atRiskEntries = await prisma.ledgerEntry.findMany({
+      where: { entityId: "inv_2000", type: "AT_RISK" },
+    });
+    expect(atRiskEntries.length).toBe(1);
+    expect(atRiskEntries[0].amount).toBe(2000);
+  });
+
   it("should format deterministic Razorpay reference_id for payment links", () => {
     const { createHash } = require("crypto");
     const eventId = "evt_test_123";

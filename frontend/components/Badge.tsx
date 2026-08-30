@@ -25,7 +25,7 @@ interface BadgeProps {
 }
 
 export function Badge({ type = "custom", value, className = "", children }: BadgeProps) {
-  let style = "bg-slate-100 text-slate-600 border-slate-300";
+  let style = "bg-canvas-soft text-ink-muted border-hairline";
 
   if (type === "state") {
     style = getStateBadgeStyle(value);
@@ -43,7 +43,7 @@ export function Badge({ type = "custom", value, className = "", children }: Badg
 
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${style} ${className}`}
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border uppercase tracking-eyebrow ${style} ${className}`}
     >
       {children || value || "—"}
     </span>

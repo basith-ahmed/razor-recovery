@@ -91,13 +91,13 @@ export function CreatePromiseModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded">
+          <div className="p-3 bg-accent-orange/10 border border-accent-orange/25 text-accent-orange-deep text-xs rounded-[8px]">
             {error}
           </div>
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">
+          <label className="block text-xs font-semibold text-ink mb-1">
             Customer *
           </label>
           <CustomerSearchCombobox
@@ -109,7 +109,7 @@ export function CreatePromiseModal({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">
+          <label className="block text-xs font-semibold text-ink mb-1">
             Associated Entity / Reference ID (Optional)
           </label>
           <input
@@ -117,14 +117,14 @@ export function CreatePromiseModal({
             placeholder="e.g. inv_001, sub_002, cart_003"
             value={formData.entityId}
             onChange={(e) => setFormData({ ...formData, entityId: e.target.value })}
-            className="w-full text-sm border border-slate-300 rounded px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-hidden focus:border-blue-500 font-mono"
+            className="w-full text-xs border border-hairline-input rounded-[4px] px-3 py-2 text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
             disabled={submitting}
           />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-ink mb-1">
               Promised Amount (₹) *
             </label>
             <input
@@ -134,21 +134,21 @@ export function CreatePromiseModal({
               placeholder="e.g. 5000"
               value={formData.amount}
               onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              className="w-full text-sm border border-slate-300 rounded px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-hidden focus:border-blue-500 font-mono"
+              className="w-full text-xs border border-hairline-input rounded-[4px] px-3 py-2 text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
               required
               disabled={submitting}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-ink mb-1">
               Promised Due Date *
             </label>
             <input
               type="date"
               value={formData.promisedDate}
               onChange={(e) => setFormData({ ...formData, promisedDate: e.target.value })}
-              className="w-full text-sm border border-slate-300 rounded px-3 py-2 text-slate-900 focus:outline-hidden focus:border-blue-500 font-mono"
+              className="w-full text-xs border border-hairline-input rounded-[4px] px-3 py-2 text-ink focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
               required
               disabled={submitting}
             />
@@ -156,14 +156,14 @@ export function CreatePromiseModal({
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Quick presets:</span>
+          <span className="text-xs text-ink-muted">Quick presets:</span>
           {[3, 7, 14, 30].map((days) => (
             <button
               key={days}
               type="button"
               onClick={() => handlePresetDays(days)}
               disabled={submitting}
-              className="px-2 py-0.5 text-xs rounded border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700"
+              className="px-2.5 py-0.5 text-xs rounded-full border border-hairline bg-canvas-soft hover:bg-hairline/40 text-ink transition-colors font-medium"
             >
               +{days} Days
             </button>
@@ -172,10 +172,10 @@ export function CreatePromiseModal({
 
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-semibold text-slate-700">
+            <label className="text-xs font-semibold text-ink">
               Notes / Agreement Context
             </label>
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-ink-faint">
               {formData.notes.length}/500
             </span>
           </div>
@@ -185,7 +185,7 @@ export function CreatePromiseModal({
             maxLength={500}
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            className="w-full text-sm border border-slate-300 rounded px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-hidden focus:border-blue-500"
+            className="w-full text-xs border border-hairline-input rounded-[4px] px-3 py-2 text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
             disabled={submitting}
           />
         </div>
@@ -196,27 +196,27 @@ export function CreatePromiseModal({
             id="sendEmailCheckbox"
             checked={formData.sendEmail}
             onChange={(e) => setFormData({ ...formData, sendEmail: e.target.checked })}
-            className="w-4 h-4 text-blue-600 rounded border-slate-300"
+            className="w-4 h-4 accent-primary rounded-[4px] border-hairline-input cursor-pointer"
             disabled={submitting}
           />
-          <label htmlFor="sendEmailCheckbox" className="text-xs text-slate-700">
+          <label htmlFor="sendEmailCheckbox" className="text-xs text-ink-secondary cursor-pointer">
             Send instant confirmation email with secure Razorpay payment link
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-hairline">
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded border border-slate-300 bg-white"
+            className="px-3.5 py-1.5 text-xs font-medium text-ink hover:bg-canvas-soft rounded-[8px] border border-hairline bg-white transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50"
+            className="px-4 py-1.5 text-xs font-medium bg-primary hover:bg-primary-active active:scale-[0.98] text-white rounded-full transition-all shadow-sm disabled:opacity-50"
           >
             {submitting ? "Saving Commitment..." : "Save Commitment"}
           </button>

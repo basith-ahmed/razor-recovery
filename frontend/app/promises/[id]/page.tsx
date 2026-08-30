@@ -75,55 +75,55 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
   return (
     <div className="pb-24">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-slate-400 mb-4">
-        <Link href="/promises" className="hover:text-slate-700">
+      <nav className="flex items-center gap-1.5 text-xs text-ink-faint mb-4">
+        <Link href="/promises" className="hover:text-ink transition-colors">
           Promises to Pay
         </Link>
         <span>/</span>
-        <span className="text-slate-700 font-medium truncate max-w-xs">
+        <span className="text-ink font-semibold truncate max-w-xs">
           {loading ? "Loading..." : promise?.customerName ?? id}
         </span>
       </nav>
 
       {loading ? (
-        <div className="bg-white border border-slate-200 rounded p-8 text-center text-slate-500 text-sm">
+        <div className="bg-white border border-hairline rounded-[12px] p-8 text-center text-ink-muted text-xs shadow-notion-soft">
           Loading promise details...
         </div>
       ) : error ? (
-        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded text-sm">
+        <div className="bg-accent-orange/10 border border-accent-orange/25 text-accent-orange-deep p-4 rounded-[8px] text-xs">
           {error}
         </div>
       ) : promise ? (
         <div>
           {/* Header card */}
-          <div className="bg-white border border-slate-200 rounded p-5 mb-5">
+          <div className="bg-white border border-hairline rounded-[12px] p-5 mb-5 shadow-notion-soft">
             <div className="flex flex-wrap items-start justify-between gap-6">
               {/* Left: identity */}
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5 mb-2 flex-wrap">
-                  <h1 className="text-xl font-bold text-slate-900">{promise.customerName}</h1>
+                  <h1 className="text-xl font-bold text-ink tracking-[-0.625px]">{promise.customerName}</h1>
                   <Badge type="promiseStatus" value={promise.status}>
                     {promise.status.replace("_", " ")}
                   </Badge>
                 </div>
-                <div className="text-xs text-slate-500 font-mono space-y-0.5">
-                  <div>{promise.customerEmail}</div>
+                <div className="text-xs text-ink-muted space-y-0.5">
+                  <div className="text-ink font-medium">{promise.customerEmail}</div>
                   {promise.customerPhone && <div>{promise.customerPhone}</div>}
-                  <div className="text-slate-400">
+                  <div className="text-ink-faint">
                     Entity:{" "}
-                    <Link href={`/entities/${promise.entityId}`} className="text-blue-600 hover:underline">
+                    <Link href={`/entities/${promise.entityId}`} className="text-primary hover:underline font-medium">
                       {promise.entityId}
                     </Link>
                   </div>
-                  <div className="text-slate-400">Promise ID: {promise.id}</div>
+                  <div className="text-ink-faint">Promise ID: {promise.id}</div>
                 </div>
               </div>
 
               {/* Right: amount + actions */}
               <div className="flex flex-col items-end gap-3 shrink-0">
                 <div className="text-right">
-                  <div className="text-xs text-slate-500 mb-0.5">Promised Amount</div>
-                  <div className="text-2xl font-bold font-mono text-slate-900">
+                  <div className="text-xs text-ink-muted mb-0.5">Promised Amount</div>
+                  <div className="text-2xl font-bold text-ink tracking-heading-3">
                     {formatCurrency(promise.promisedAmount, promise.currency)}
                   </div>
                 </div>
@@ -133,7 +133,7 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
                       type="button"
                       onClick={handleSendReminder}
                       disabled={actionLoading}
-                      className="px-3 py-1.5 text-xs font-medium border border-amber-300 bg-amber-50 text-amber-800 rounded hover:bg-amber-100 disabled:opacity-50"
+                      className="px-4 py-1.5 text-xs font-semibold border border-accent-orange/30 bg-accent-orange/10 text-accent-orange-deep rounded-full hover:bg-accent-orange/20 disabled:opacity-50 transition-colors"
                     >
                       {actionLoading ? "Sending..." : "Send Reminder"}
                     </button>
@@ -143,7 +143,7 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
                       type="button"
                       onClick={handleMarkPaid}
                       disabled={actionLoading}
-                      className="px-3 py-1.5 text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-800 rounded hover:bg-emerald-100 disabled:opacity-50"
+                      className="px-4 py-1.5 text-xs font-semibold border border-accent-green/30 bg-accent-green/10 text-accent-green rounded-full hover:bg-accent-green/20 disabled:opacity-50 transition-colors"
                     >
                       {actionLoading ? "Updating..." : "Mark as Paid"}
                     </button>
@@ -159,38 +159,38 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
             <div className="lg:col-span-2 space-y-4">
 
               {/* Countdown + dates */}
-              <div className="bg-white border border-slate-200 rounded p-4">
-                <h2 className="text-sm font-semibold text-slate-900 mb-3">Commitment Timeline</h2>
+              <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+                <h2 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-3.5">Commitment Timeline</h2>
                 <div className="space-y-3 text-xs">
-                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                    <span className="text-slate-500">Created</span>
-                    <span className="font-mono text-slate-800">{formatDateTime(promise.createdAt)}</span>
+                  <div className="flex justify-between items-center py-2 border-b border-hairline">
+                    <span className="text-ink-muted">Created</span>
+                    <span className="text-ink-secondary">{formatDateTime(promise.createdAt)}</span>
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                    <span className="text-slate-500">Promised Due Date</span>
-                    <span className="font-mono font-semibold text-slate-900">{formatDate(promise.promisedDate)}</span>
+                  <div className="flex justify-between items-center py-2 border-b border-hairline">
+                    <span className="text-ink-muted">Promised Due Date</span>
+                    <span className="font-bold text-ink">{formatDate(promise.promisedDate)}</span>
                   </div>
                   {promise.reminderSentAt && (
-                    <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                      <span className="text-slate-500">Reminder Sent</span>
-                      <span className="font-mono text-slate-700">{formatDateTime(promise.reminderSentAt)}</span>
+                    <div className="flex justify-between items-center py-2 border-b border-hairline">
+                      <span className="text-ink-muted">Reminder Sent</span>
+                      <span className="text-ink-secondary">{formatDateTime(promise.reminderSentAt)}</span>
                     </div>
                   )}
                   {promise.gracePeriodUntil && (
-                    <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                      <span className="text-slate-500">Grace Period Until</span>
-                      <span className="font-mono text-amber-700">{formatDateTime(promise.gracePeriodUntil)}</span>
+                    <div className="flex justify-between items-center py-2 border-b border-hairline">
+                      <span className="text-ink-muted">Grace Period Until</span>
+                      <span className="text-accent-orange font-semibold">{formatDateTime(promise.gracePeriodUntil)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                    <span className="text-slate-500">Last Updated</span>
-                    <span className="font-mono text-slate-700">{formatDateTime(promise.updatedAt)}</span>
+                  <div className="flex justify-between items-center py-2 border-b border-hairline">
+                    <span className="text-ink-muted">Last Updated</span>
+                    <span className="text-ink-secondary">{formatDateTime(promise.updatedAt)}</span>
                   </div>
 
                   {/* Live countdown */}
                   {(promise.status === "pending" || promise.status === "reminder_sent") && (
-                    <div className="pt-1">
-                      <span className="text-slate-500 block mb-1">Live Countdown</span>
+                    <div className="pt-2">
+                      <span className="text-ink-muted font-medium block mb-1.5">Live Countdown</span>
                       <CountdownTimer
                         promisedDate={promise.promisedDate}
                         gracePeriodUntil={promise.gracePeriodUntil}
@@ -203,24 +203,24 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
 
               {/* Payment link */}
               {promise.paymentLinkUrl && (
-                <div className="bg-white border border-slate-200 rounded p-4">
-                  <h2 className="text-sm font-semibold text-slate-900 mb-3">Payment Link</h2>
-                  <div className="font-mono text-xs text-slate-700 break-all bg-slate-50 p-3 border border-slate-200 rounded mb-3">
+                <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+                  <h2 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-3.5">Payment Link</h2>
+                  <div className="text-xs text-ink-secondary break-all bg-canvas-soft p-3 border border-hairline rounded-[6px] mb-3.5 font-medium">
                     {promise.paymentLinkUrl}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
                     <a
                       href={promise.paymentLinkUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded font-medium"
+                      className="px-4 py-2 text-xs bg-primary hover:bg-primary-active active:scale-[0.98] text-white rounded-full font-medium transition-all shadow-sm"
                     >
                       Open Payment Link
                     </a>
                     <button
                       type="button"
                       onClick={handleCopyLink}
-                      className="px-3 py-1.5 text-xs border border-slate-300 rounded bg-white text-slate-700 hover:bg-slate-50"
+                      className="px-3.5 py-2 text-xs border border-hairline rounded-[8px] bg-white text-ink hover:bg-canvas-soft font-medium transition-colors"
                     >
                       {copiedLink ? "Copied!" : "Copy Link"}
                     </button>
@@ -229,39 +229,39 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
               )}
 
               {/* Notes */}
-              <div className="bg-white border border-slate-200 rounded p-4">
-                <h2 className="text-sm font-semibold text-slate-900 mb-3">Notes & Agreement Context</h2>
-                <div className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed bg-slate-50 border border-slate-200 rounded p-3 min-h-16">
-                  {promise.notes || <span className="text-slate-400 italic">No notes recorded for this commitment.</span>}
+              <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+                <h2 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-3.5">Notes & Agreement Context</h2>
+                <div className="text-xs text-ink-secondary whitespace-pre-wrap leading-relaxed bg-canvas-soft border border-hairline rounded-[6px] p-3.5 min-h-16">
+                  {promise.notes || <span className="text-ink-faint italic">No notes recorded for this commitment.</span>}
                 </div>
               </div>
             </div>
 
             {/* Right: Summary panel */}
             <div className="space-y-4">
-              <div className="bg-white border border-slate-200 rounded p-4">
-                <h2 className="text-sm font-semibold text-slate-900 mb-3">Summary</h2>
-                <div className="space-y-3 text-xs">
+              <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+                <h2 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-3.5">Summary</h2>
+                <div className="space-y-3.5 text-xs">
                   <div>
-                    <span className="text-slate-500 block mb-0.5">Status</span>
+                    <span className="text-ink-muted block mb-1">Status</span>
                     <Badge type="promiseStatus" value={promise.status}>
                       {promise.status.replace("_", " ")}
                     </Badge>
                   </div>
                   <div>
-                    <span className="text-slate-500 block mb-0.5">Promised Amount</span>
-                    <span className="font-mono font-bold text-slate-900 text-base">
+                    <span className="text-ink-muted block mb-1">Promised Amount</span>
+                    <span className="font-bold text-ink text-base">
                       {formatCurrency(promise.promisedAmount, promise.currency)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block mb-0.5">Currency</span>
-                    <span className="font-mono text-slate-800">{promise.currency}</span>
+                    <span className="text-ink-muted block mb-1">Currency</span>
+                    <span className="text-ink font-semibold">{promise.currency}</span>
                   </div>
                   {promise.razorpayPaymentLinkId && (
                     <div>
-                      <span className="text-slate-500 block mb-0.5">Razorpay Link ID</span>
-                      <span className="font-mono text-slate-700 text-[11px] break-all">
+                      <span className="text-ink-muted block mb-1">Razorpay Link ID</span>
+                      <span className="text-ink-muted text-[11px] break-all font-medium">
                         {promise.razorpayPaymentLinkId}
                       </span>
                     </div>
@@ -269,18 +269,18 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200 rounded p-4">
-                <h2 className="text-sm font-semibold text-slate-900 mb-3">Customer</h2>
-                <div className="space-y-2 text-xs">
-                  <div className="font-semibold text-slate-900">{promise.customerName}</div>
-                  <div className="font-mono text-slate-600">{promise.customerEmail}</div>
+              <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+                <h2 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-3.5">Customer</h2>
+                <div className="space-y-2.5 text-xs">
+                  <div className="font-semibold text-ink">{promise.customerName}</div>
+                  <div className="text-ink-muted">{promise.customerEmail}</div>
                   {promise.customerPhone && (
-                    <div className="font-mono text-slate-600">{promise.customerPhone}</div>
+                    <div className="text-ink-muted">{promise.customerPhone}</div>
                   )}
-                  <div className="pt-2 border-t border-slate-100">
+                  <div className="pt-2.5 border-t border-hairline">
                     <Link
                       href={`/entities/${promise.entityId}`}
-                      className="text-blue-600 hover:underline font-medium"
+                      className="text-primary hover:underline font-semibold"
                     >
                       View Entity Audit Trail →
                     </Link>

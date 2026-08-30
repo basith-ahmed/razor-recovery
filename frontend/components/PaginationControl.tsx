@@ -29,31 +29,31 @@ export function PaginationControl({
 
   return (
     <div
-      className={`flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 ${className}`}
+      className={`flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-ink-muted ${className}`}
     >
       {/* Left side: Item range & Per-page selector */}
       <div className="flex items-center gap-4">
         {total !== undefined && startItem !== undefined && endItem !== undefined ? (
           <span>
-            Showing <strong className="text-slate-900">{total === 0 ? 0 : startItem}</strong> to{" "}
-            <strong className="text-slate-900">{endItem}</strong> of{" "}
-            <strong className="text-slate-900">{total}</strong> item{total !== 1 ? "s" : ""}
+            Showing <strong className="text-ink font-semibold">{total === 0 ? 0 : startItem}</strong> to{" "}
+            <strong className="text-ink font-semibold">{endItem}</strong> of{" "}
+            <strong className="text-ink font-semibold">{total}</strong> item{total !== 1 ? "s" : ""}
           </span>
         ) : (
           <span>
-            Page <strong className="text-slate-900">{page}</strong> of{" "}
-            <strong className="text-slate-900">{safeTotalPages}</strong>
+            Page <strong className="text-ink font-semibold">{page}</strong> of{" "}
+            <strong className="text-ink font-semibold">{safeTotalPages}</strong>
           </span>
         )}
 
         {onLimitChange && limit && (
-          <div className="flex items-center gap-1.5 pl-3 border-l border-slate-200">
+          <div className="flex items-center gap-1.5 pl-3 border-l border-hairline">
             <span>Per page:</span>
             <select
               value={limit}
               disabled={disabled}
               onChange={(e) => onLimitChange(parseInt(e.target.value, 10))}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+              className="bg-white border border-hairline-input rounded-[4px] px-2 py-1 text-xs text-ink focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
             >
               {limitOptions.map((opt) => (
                 <option key={opt} value={opt}>
@@ -67,7 +67,7 @@ export function PaginationControl({
 
       {/* Right side: Navigation buttons */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-mono text-slate-600 mr-1">
+        <span className="text-xs text-ink-muted mr-1 font-medium">
           {page} / {safeTotalPages}
         </span>
 
@@ -75,7 +75,7 @@ export function PaginationControl({
           type="button"
           disabled={disabled || page <= 1}
           onClick={() => onPageChange(Math.max(1, page - 1))}
-          className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium disabled:cursor-not-allowed"
+          className="bg-white border border-hairline hover:bg-canvas-soft disabled:opacity-40 text-ink text-xs px-3 py-1.5 rounded-[8px] font-medium disabled:cursor-not-allowed transition-colors shadow-sm"
         >
           Previous
         </button>
@@ -84,7 +84,7 @@ export function PaginationControl({
           type="button"
           disabled={disabled || page >= safeTotalPages}
           onClick={() => onPageChange(Math.min(safeTotalPages, page + 1))}
-          className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium disabled:cursor-not-allowed"
+          className="bg-white border border-hairline hover:bg-canvas-soft disabled:opacity-40 text-ink text-xs px-3 py-1.5 rounded-[8px] font-medium disabled:cursor-not-allowed transition-colors shadow-sm"
         >
           Next
         </button>

@@ -71,24 +71,24 @@ export default function PolicyPage() {
       </div>
 
       {/* Tab navigation */}
-      <div className="flex items-center gap-0 border-b border-slate-200 mb-5">
+      <div className="flex items-center gap-0 border-b border-hairline mb-5">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               activeTab === tab.id
-                ? "border-blue-600 text-blue-700"
-                : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+                ? "border-primary text-primary font-semibold"
+                : "border-transparent text-ink-muted hover:text-ink hover:border-hairline"
             }`}
           >
             {tab.label}
             {tab.count !== undefined && (
               <span
-                className={`ml-2 text-xs font-mono px-1.5 py-0.5 rounded ${
+                className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${
                   activeTab === tab.id
-                    ? "bg-blue-50 text-blue-700 border border-blue-200"
-                    : "bg-slate-100 text-slate-500"
+                    ? "bg-primary/10 text-primary border border-primary/20"
+                    : "bg-canvas-soft text-ink-muted border border-hairline"
                 }`}
               >
                 {tab.count}
@@ -99,7 +99,7 @@ export default function PolicyPage() {
       </div>
 
       {loading && !data ? (
-        <div className="bg-white border border-slate-200 rounded p-8 text-center text-slate-500 text-sm">
+        <div className="bg-white border border-hairline rounded-[12px] p-8 text-center text-ink-muted text-sm shadow-notion-soft">
           Loading policy settings...
         </div>
       ) : data ? (
@@ -111,17 +111,17 @@ export default function PolicyPage() {
 
           {/* Tab: DNC Register */}
           {activeTab === "dnc" && (
-            <div className="bg-white border border-slate-200 rounded">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+            <div className="bg-white border border-hairline rounded-[12px] shadow-notion-soft overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900">
+                  <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px]">
                     Active Do-Not-Contact Customer List
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-ink-muted mt-0.5">
                     Entities registered in Redis / Database to halt dunning communications
                   </p>
                 </div>
-                <span className="text-xs font-mono bg-red-50 border border-red-200 text-red-800 px-2.5 py-1 rounded">
+                <span className="text-xs bg-accent-orange/10 border border-accent-orange/25 text-accent-orange-deep px-3 py-1 rounded-full font-semibold">
                   {data.dncList.total} DNC Customers
                 </span>
               </div>
@@ -129,25 +129,25 @@ export default function PolicyPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                      <th className="p-3 font-medium">Customer ID</th>
-                      <th className="p-3 font-medium">Name</th>
-                      <th className="p-3 font-medium">Email</th>
+                    <tr className="bg-canvas-soft text-ink-muted border-b border-hairline text-[11px] font-semibold uppercase tracking-eyebrow">
+                      <th className="p-3">Customer ID</th>
+                      <th className="p-3">Name</th>
+                      <th className="p-3">Email</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200">
+                  <tbody className="divide-y divide-hairline bg-white">
                     {data.dncList.entries.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="text-center py-6 text-slate-500">
+                        <td colSpan={3} className="text-center py-6 text-ink-muted">
                           No active DNC records.
                         </td>
                       </tr>
                     ) : (
                       data.dncList.entries.map((c) => (
-                        <tr key={c.id} className="hover:bg-slate-50">
-                          <td className="p-3 font-mono text-slate-500">{c.id}</td>
-                          <td className="p-3 font-semibold text-slate-900">{c.name || "N/A"}</td>
-                          <td className="p-3 font-mono text-slate-700">{c.email || "N/A"}</td>
+                        <tr key={c.id} className="hover:bg-canvas-soft transition-colors">
+                          <td className="p-3 text-ink-faint">{c.id}</td>
+                          <td className="p-3 font-semibold text-ink">{c.name || "N/A"}</td>
+                          <td className="p-3 text-ink-secondary">{c.email || "N/A"}</td>
                         </tr>
                       ))
                     )}
@@ -155,7 +155,7 @@ export default function PolicyPage() {
                 </table>
               </div>
 
-              <div className="px-4 py-3 border-t border-slate-200">
+              <div className="px-4 py-3 border-t border-hairline">
                 <PaginationControl
                   page={dncPage}
                   totalPages={data.dncList.totalPages}
@@ -175,17 +175,17 @@ export default function PolicyPage() {
 
           {/* Tab: Compliance Log */}
           {activeTab === "compliance" && (
-            <div className="bg-white border border-slate-200 rounded">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+            <div className="bg-white border border-hairline rounded-[12px] shadow-notion-soft overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900">
+                  <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px]">
                     Compliance Audit Log (Blocked / Escalated Actions)
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-ink-muted mt-0.5">
                     Audit entries stopped or escalated due to policy guardrails
                   </p>
                 </div>
-                <span className="text-xs font-mono bg-amber-50 border border-amber-200 text-amber-800 px-2.5 py-1 rounded">
+                <span className="text-xs bg-accent-orange/10 border border-accent-orange/25 text-accent-orange-deep px-3 py-1 rounded-full font-semibold">
                   {data.complianceLog.total} Total Blocked Entries
                 </span>
               </div>
@@ -193,32 +193,32 @@ export default function PolicyPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                      <th className="p-3 font-medium">Timestamp</th>
-                      <th className="p-3 font-medium">Customer / Entity</th>
-                      <th className="p-3 font-medium">Action Attempted</th>
-                      <th className="p-3 font-medium">Outcome</th>
+                    <tr className="bg-canvas-soft text-ink-muted border-b border-hairline text-[11px] font-semibold uppercase tracking-eyebrow">
+                      <th className="p-3">Timestamp</th>
+                      <th className="p-3">Customer / Entity</th>
+                      <th className="p-3">Action Attempted</th>
+                      <th className="p-3">Outcome</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200">
+                  <tbody className="divide-y divide-hairline bg-white">
                     {data.complianceLog.entries.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="text-center py-6 text-slate-500">
+                        <td colSpan={4} className="text-center py-6 text-ink-muted">
                           No policy-blocked audit entries found.
                         </td>
                       </tr>
                     ) : (
                       data.complianceLog.entries.map((entry) => (
-                        <tr key={entry.id} className="hover:bg-slate-50">
-                          <td className="p-3 font-mono text-slate-500">
+                        <tr key={entry.id} className="hover:bg-canvas-soft transition-colors">
+                          <td className="p-3 text-ink-muted">
                             {new Date(entry.timestamp).toLocaleString("en-IN")}
                           </td>
-                          <td className="p-3 font-semibold text-slate-900">
+                          <td className="p-3 font-semibold text-ink">
                             {entry.event?.customer?.name || entry.entityId}
                           </td>
-                          <td className="p-3 font-mono text-amber-800">{entry.actor}</td>
+                          <td className="p-3 text-accent-orange font-semibold">{entry.actor}</td>
                           <td className="p-3">
-                            <span className="bg-red-50 border border-red-200 text-red-800 px-2 py-0.5 rounded font-mono text-[10px] uppercase">
+                            <span className="bg-accent-orange/10 border border-accent-orange/25 text-accent-orange-deep px-2.5 py-0.5 rounded-full text-[10px] uppercase font-semibold">
                               {entry.outcome}
                             </span>
                           </td>
@@ -229,7 +229,7 @@ export default function PolicyPage() {
                 </table>
               </div>
 
-              <div className="px-4 py-3 border-t border-slate-200">
+              <div className="px-4 py-3 border-t border-hairline">
                 <PaginationControl
                   page={logPage}
                   totalPages={data.complianceLog.totalPages}

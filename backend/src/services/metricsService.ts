@@ -131,8 +131,11 @@ export async function computeLiveMetricsUncached(
     { count: number; amountAtRisk: number; amountRecovered: number }
   > = {};
   const recoveryTimesMs: number[] = [];
+  const accountedAtRiskEntities = new Set<string>();
+  const accountedRecoveredEntities = new Set<string>();
 
   for (const event of events) {
+    const entityKey = event.entityId || event.id;
     const causeLabel = event.diagnosis?.causeLabel ?? "unknown";
     if (!causeMap[causeLabel]) {
       causeMap[causeLabel] = {
@@ -142,18 +145,26 @@ export async function computeLiveMetricsUncached(
       };
     }
     causeMap[causeLabel].count += 1;
-    causeMap[causeLabel].amountAtRisk += event.amount;
+
+    // Attribute at-risk amount once per entity
+    if (!accountedAtRiskEntities.has(entityKey)) {
+      accountedAtRiskEntities.add(entityKey);
+      causeMap[causeLabel].amountAtRisk += event.amount;
+    }
 
     const isRecovered =
       recoveredEventIds.has(event.id) ||
-      recoveredEntityIds.has(event.entityId) ||
+      recoveredEntityIds.has(entityKey) ||
       event.auditEntries.some((a) => a.outcome === "recovered");
 
     if (isRecovered) {
-      causeMap[causeLabel].amountRecovered += event.amount;
+      if (!accountedRecoveredEntities.has(entityKey)) {
+        accountedRecoveredEntities.add(entityKey);
+        causeMap[causeLabel].amountRecovered += event.amount;
+      }
 
       const recoveryTime =
-        recoveryTimestampMap.get(event.entityId) ??
+        recoveryTimestampMap.get(entityKey) ??
         event.auditEntries.find((a) => a.outcome === "recovered")?.timestamp ??
         event.action?.executedAt;
 
@@ -173,7 +184,10 @@ export async function computeLiveMetricsUncached(
     human: { count: 0, recoveredCount: 0, recoveredAmount: 0 },
   };
 
+  const accountedChannelRecovered = new Set<string>();
+
   for (const event of events) {
+    const entityKey = event.entityId || event.id;
     const action = event.action;
     if (!action || action.result === "skipped") continue;
 
@@ -192,10 +206,11 @@ export async function computeLiveMetricsUncached(
 
     const isRecovered =
       recoveredEventIds.has(event.id) ||
-      recoveredEntityIds.has(event.entityId) ||
+      recoveredEntityIds.has(entityKey) ||
       event.auditEntries.some((a) => a.outcome === "recovered");
 
-    if (isRecovered) {
+    if (isRecovered && !accountedChannelRecovered.has(entityKey)) {
+      accountedChannelRecovered.add(entityKey);
       channelMap[normKey].recoveredCount += 1;
       channelMap[normKey].recoveredAmount += event.amount;
     }
@@ -309,6 +324,7 @@ export async function metricsTrend(
   const events = await prisma.revenueEvent.findMany({
     where: eventFilter,
     select: {
+      entityId: true,
       occurredAt: true,
       amount: true,
       auditEntries: { select: { outcome: true } },
@@ -317,6 +333,8 @@ export async function metricsTrend(
   });
 
   const buckets = new Map<number, TrendPoint>();
+  const recoveredInBucket = new Map<number, Set<string>>();
+
   for (const event of events) {
     const date = new Date(event.occurredAt);
     if (bucket === "hour") {
@@ -331,11 +349,16 @@ export async function metricsTrend(
         eventsProcessed: 0,
         amountRecovered: 0,
       });
+      recoveredInBucket.set(key, new Set<string>());
     }
     const point = buckets.get(key)!;
     point.eventsProcessed += 1;
     if (event.auditEntries.some((a) => a.outcome === "recovered")) {
-      point.amountRecovered += event.amount;
+      const recSet = recoveredInBucket.get(key)!;
+      if (!recSet.has(event.entityId)) {
+        recSet.add(event.entityId);
+        point.amountRecovered += event.amount;
+      }
     }
   }
 

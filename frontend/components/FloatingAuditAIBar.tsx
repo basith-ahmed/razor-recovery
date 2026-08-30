@@ -139,14 +139,14 @@ export function FloatingAuditAIBar({
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-2xl">
       {/* Response / Conversation Drawer */}
       {isOpen && (
-        <div className="mb-2 bg-white border border-slate-300 rounded overflow-hidden flex flex-col max-h-[60vh]">
+        <div className="mb-2.5 bg-white border border-hairline rounded-[12px] shadow-notion-elevated overflow-hidden flex flex-col max-h-[60vh]">
           {/* Header */}
-          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2 shrink-0">
+          <div className="px-4 py-2.5 bg-canvas-soft border-b border-hairline flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-900">
+              <span className="text-xs font-bold text-ink tracking-[-0.125px]">
                 {title || (entityId ? "AI Audit Assistant" : "AI Recovery Copilot")}
               </span>
-              <span className="text-xs text-slate-500 font-mono">
+              <span className="text-xs text-ink-muted">
                 ({messages.length} message{messages.length !== 1 ? "s" : ""})
               </span>
             </div>
@@ -155,7 +155,7 @@ export function FloatingAuditAIBar({
                 <button
                   type="button"
                   onClick={handleClear}
-                  className="text-slate-500 hover:text-slate-800 text-xs px-2 py-0.5 border border-slate-200 rounded bg-white"
+                  className="text-ink-muted hover:text-ink text-xs px-2.5 py-1 border border-hairline rounded-[8px] bg-white hover:bg-canvas-soft transition-colors"
                 >
                   Clear
                 </button>
@@ -163,7 +163,7 @@ export function FloatingAuditAIBar({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="text-slate-500 hover:text-slate-800 text-xs px-2 py-0.5 border border-slate-200 rounded bg-white"
+                className="text-ink-muted hover:text-ink text-xs px-2.5 py-1 border border-hairline rounded-[8px] bg-white hover:bg-canvas-soft transition-colors"
               >
                 Close
               </button>
@@ -171,9 +171,9 @@ export function FloatingAuditAIBar({
           </div>
 
           {/* Messages History List */}
-          <div className="p-3 overflow-y-auto space-y-3 text-xs flex-1">
+          <div className="p-4 overflow-y-auto space-y-3 text-xs flex-1">
             {messages.length === 0 && !loading && (
-              <div className="py-6 text-center text-slate-500 text-xs">
+              <div className="py-6 text-center text-ink-muted text-xs">
                 No questions asked yet. Type a question below or click Ask AI.
               </div>
             )}
@@ -183,15 +183,15 @@ export function FloatingAuditAIBar({
                 key={m.id}
                 className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}
               >
-                <div className="text-[10px] text-slate-400 font-mono mb-0.5 px-1">
+                <div className="text-[10px] text-ink-faint mb-1 px-1">
                   {m.role === "user" ? "You" : "Audit Assistant"} · {m.timestamp}
                 </div>
 
                 <div
-                  className={`max-w-[90%] rounded p-2.5 text-xs leading-relaxed ${
+                  className={`p-3.5 text-xs leading-relaxed ${
                     m.role === "user"
-                      ? "bg-blue-600 text-white font-medium"
-                      : "bg-slate-50 border border-slate-200 text-slate-900"
+                      ? "max-w-[85%] rounded-[12px] rounded-br-[2px] bg-primary text-white font-medium shadow-xs"
+                      : "max-w-[90%] rounded-[12px] rounded-bl-[2px] bg-canvas-soft border border-hairline text-ink shadow-xs"
                   }`}
                 >
                   {m.role === "assistant" ? (
@@ -201,15 +201,15 @@ export function FloatingAuditAIBar({
                   )}
 
                   {m.citedEntityIds && m.citedEntityIds.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-slate-200 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-slate-500">
+                    <div className="mt-2.5 pt-2 border-t border-hairline flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-ink-muted">
                         Cited Records:
                       </span>
                       {m.citedEntityIds.map((cid) => (
                         <Link
                           key={cid}
                           href={`/entities/${cid}`}
-                          className="text-[11px] font-mono text-blue-700 bg-white border border-blue-200 px-1.5 py-0.5 rounded hover:underline"
+                          className="text-[11px] text-primary bg-white border border-primary/20 px-2 py-0.5 rounded-full hover:bg-primary/10 hover:underline transition-colors font-medium"
                         >
                           {cid}
                         </Link>
@@ -222,17 +222,17 @@ export function FloatingAuditAIBar({
 
             {loading && (
               <div className="flex flex-col items-start">
-                <div className="text-[10px] text-slate-400 font-mono mb-0.5 px-1">
+                <div className="text-[10px] text-ink-faint mb-1 px-1">
                   {title || "AI Assistant"} · Thinking...
                 </div>
-                <div className="bg-slate-50 border border-slate-200 rounded p-2.5 text-xs text-slate-600">
+                <div className="bg-canvas-soft border border-hairline rounded-[12px] rounded-bl-[2px] p-3 text-xs text-ink-muted">
                   Generating response...
                 </div>
               </div>
             )}
 
             {error && (
-              <div className="p-2 bg-red-50 border border-red-200 text-red-700 rounded text-xs">
+              <div className="p-3 bg-accent-orange/10 border border-accent-orange/25 text-accent-orange-deep rounded-[8px] text-xs">
                 {error}
               </div>
             )}
@@ -242,14 +242,11 @@ export function FloatingAuditAIBar({
         </div>
       )}
 
-      {/* Floating Bottom Bar */}
+      {/* Floating Bottom Bar (Seamless Pill Style) */}
       <form
         onSubmit={handleSubmit}
-        className="bg-white border border-slate-300 rounded p-2 flex items-center gap-2"
+        className="bg-white/95 backdrop-blur-[8px] border border-hairline rounded-full p-1.5 pl-3 shadow-notion-elevated flex items-center gap-2.5 transition-all focus-within:border-primary/40 focus-within:shadow-md"
       >
-        <span className="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded shrink-0">
-          AI
-        </span>
 
         <input
           ref={inputRef}
@@ -259,14 +256,14 @@ export function FloatingAuditAIBar({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           placeholder={currentPlaceholder}
-          className="flex-1 text-xs border border-slate-300 rounded px-3 py-1.5 text-slate-900 placeholder-slate-400 focus:outline-hidden"
+          className="flex-1 text-xs bg-transparent border-0 outline-none text-ink placeholder:text-ink-faint focus:outline-none focus:ring-0 px-1 py-1"
           disabled={loading}
         />
 
         <button
           type="submit"
           disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium px-3 py-1.5 rounded shrink-0"
+          className="bg-primary hover:bg-primary-active active:scale-[0.98] disabled:opacity-50 text-white text-xs font-medium px-4 py-1.5 rounded-full shrink-0 shadow-sm transition-all"
         >
           {loading ? "Thinking..." : "Ask AI"}
         </button>

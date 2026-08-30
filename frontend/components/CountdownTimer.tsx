@@ -32,22 +32,22 @@ export function CountdownTimer({
   }, [promisedDate, gracePeriodUntil, status]);
 
   if (status === "kept") {
-    return <span className="text-xs text-green-700 font-semibold">Paid & Kept</span>;
+    return <span className="text-xs text-accent-green font-semibold">Paid & Kept</span>;
   }
 
   if (status === "broken") {
-    return <span className="text-xs text-red-700 font-semibold">Broken (Escalated)</span>;
+    return <span className="text-xs text-accent-orange-deep font-semibold">Broken (Escalated)</span>;
   }
 
   if (status === "cancelled") {
-    return <span className="text-xs text-slate-500">Cancelled</span>;
+    return <span className="text-xs text-ink-faint">Cancelled</span>;
   }
 
   if (status === "reminder_sent") {
     return (
       <div className="text-xs">
-        <span className="text-amber-800 font-semibold block">Reminder Sent (Grace Period)</span>
-        <span className="text-slate-500 font-mono">
+        <span className="text-accent-orange-deep font-semibold block">Reminder Sent (Grace Period)</span>
+        <span className="text-ink-muted">
           {timeLeft.isPast
             ? "Grace period expired"
             : `${timeLeft.hours}h ${timeLeft.minutes}m ${timeLeft.seconds}s remaining`}
@@ -58,11 +58,11 @@ export function CountdownTimer({
 
   // Pending
   return (
-    <div className="text-xs font-mono">
+    <div className="text-xs">
       {timeLeft.isPast ? (
-        <span className="text-red-700 font-semibold">Due Date Passed</span>
+        <span className="text-accent-orange-deep font-semibold">Due Date Passed</span>
       ) : (
-        <span className="text-slate-800 font-semibold">
+        <span className="text-ink font-semibold">
           {timeLeft.days}d {timeLeft.hours}h {timeLeft.minutes}m {timeLeft.seconds}s left
         </span>
       )}

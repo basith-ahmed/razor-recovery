@@ -46,10 +46,10 @@ export function TicketEmailModal({
       <div className="space-y-3 text-xs">
         {statusMsg && (
           <div
-            className={`p-2 rounded border text-xs ${
+            className={`p-3 rounded-[8px] border text-xs ${
               statusMsg.type === "success"
-                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                : "bg-red-50 text-red-800 border-red-200"
+                ? "bg-accent-green/10 text-accent-green border-accent-green/25"
+                : "bg-accent-orange/10 text-accent-orange-deep border-accent-orange/25"
             }`}
           >
             {statusMsg.text}
@@ -58,63 +58,63 @@ export function TicketEmailModal({
 
         <form onSubmit={onSubmit} className="space-y-3">
           <div>
-            <label className="block text-slate-600 mb-1 font-medium">To:</label>
+            <label className="block text-ink mb-1 font-semibold">To:</label>
             <input
               type="text"
               disabled
               value={`${customerName || "Customer"} <${customerEmail || ""}>`}
-              className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded text-slate-600 font-mono"
+              className="w-full px-3 py-2 bg-canvas-soft border border-hairline-input rounded-[4px] text-ink-muted text-xs font-medium"
             />
           </div>
 
           <div>
-            <label className="block text-slate-600 mb-1 font-medium">Subject:</label>
+            <label className="block text-ink mb-1 font-semibold">Subject:</label>
             <input
               type="text"
               value={subject}
               onChange={(e) => onSubjectChange(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded text-slate-900 focus:outline-hidden focus:border-blue-500"
+              className="w-full px-3 py-2 border border-hairline-input rounded-[4px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all text-xs"
               required
             />
           </div>
 
           <div>
-            <label className="block text-slate-600 mb-1 font-medium">Message:</label>
+            <label className="block text-ink mb-1 font-semibold">Message:</label>
             <textarea
               rows={5}
               value={message}
               onChange={(e) => onMessageChange(e.target.value)}
-              className="w-full p-3 border border-slate-300 rounded text-slate-900 focus:outline-hidden focus:border-blue-500"
+              className="w-full p-3 border border-hairline-input rounded-[4px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all text-xs"
               required
             />
           </div>
 
-          <div className="flex items-center gap-2 border border-slate-200 p-2 rounded bg-slate-50">
+          <div className="flex items-center gap-2 border border-hairline p-2.5 rounded-[6px] bg-canvas-soft">
             <input
               type="checkbox"
               id="includePaymentLinkTicket"
               checked={includePaymentLink}
               onChange={(e) => onIncludePaymentLinkChange(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded border-slate-300"
+              className="w-4 h-4 accent-primary rounded-[4px] border-hairline-input cursor-pointer"
             />
-            <label htmlFor="includePaymentLinkTicket" className="text-slate-700 cursor-pointer">
+            <label htmlFor="includePaymentLinkTicket" className="text-ink-secondary cursor-pointer">
               Attach Razorpay recovery payment link ({formatCurrency(amount ?? 0)})
             </label>
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+          <div className="flex justify-end gap-2 pt-3 border-t border-hairline">
             <button
               type="button"
               onClick={onClose}
               disabled={sending}
-              className="px-3 py-1.5 border border-slate-300 rounded text-slate-700 hover:bg-slate-50 bg-white"
+              className="px-3.5 py-1.5 border border-hairline rounded-[8px] text-ink hover:bg-canvas-soft bg-white transition-colors text-xs font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={sending}
-              className="px-4 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-medium"
+              className="px-4 py-1.5 bg-primary text-white rounded-full hover:bg-primary-active active:scale-[0.98] disabled:opacity-50 font-medium transition-all shadow-sm text-xs"
             >
               {sending ? "Sending..." : "Send Email"}
             </button>

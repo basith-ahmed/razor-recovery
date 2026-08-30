@@ -38,24 +38,24 @@ export function Modal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/35 backdrop-blur-[2px]">
       <div
-        className={`bg-white rounded border border-slate-300 w-full ${MAX_WIDTH_CLASSES[maxWidth]} overflow-hidden`}
+        className={`bg-white rounded-[12px] border border-hairline shadow-notion-elevated w-full ${MAX_WIDTH_CLASSES[maxWidth]} overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-hairline bg-canvas-soft">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">{title}</h3>
-            {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+            <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px]">{title}</h3>
+            {subtitle && <p className="text-xs text-ink-muted mt-0.5">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
-            className="text-slate-500 hover:text-slate-800 text-sm px-2 py-1"
+            className="text-ink-muted hover:text-ink hover:bg-hairline/40 rounded-[6px] p-1.5 text-xs transition-colors"
           >
             ✕
           </button>
         </div>
-        <div className="p-4">{children}</div>
+        <div className="p-5">{children}</div>
       </div>
     </div>
   );

@@ -122,54 +122,54 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
   return (
     <div className="pb-24">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-slate-400 mb-4">
-        <Link href="/tickets" className="hover:text-slate-700">
+      <nav className="flex items-center gap-1.5 text-xs text-ink-faint mb-4">
+        <Link href="/tickets" className="hover:text-ink transition-colors">
           Escalations
         </Link>
         <span>/</span>
-        <span className="text-slate-700 font-medium truncate max-w-xs">
+        <span className="text-ink font-semibold truncate max-w-xs">
           {loading ? "Loading..." : customerName}
         </span>
       </nav>
 
       {loading ? (
-        <div className="bg-white border border-slate-200 rounded p-8 text-center text-slate-500 text-sm">
+        <div className="bg-white border border-hairline rounded-[12px] p-8 text-center text-ink-muted text-xs shadow-notion-soft">
           Loading escalation details...
         </div>
       ) : error ? (
-        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded text-sm">
+        <div className="bg-accent-orange/10 border border-accent-orange/25 text-accent-orange-deep p-4 rounded-[8px] text-xs">
           {error}
         </div>
       ) : detail ? (
         <div>
           {/* Header */}
-          <div className="bg-white border border-slate-200 rounded p-5 mb-5">
+          <div className="bg-white border border-hairline rounded-[12px] p-5 mb-5 shadow-notion-soft">
             <div className="flex flex-wrap items-start justify-between gap-6">
               {/* Left: identity */}
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5 mb-2 flex-wrap">
-                  <h1 className="text-xl font-bold text-slate-900">{customerName}</h1>
+                  <h1 className="text-xl font-bold text-ink tracking-[-0.625px]">{customerName}</h1>
                   <Badge type="ticketStatus" value={detail.ticket.status} />
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded border ${
+                  <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border uppercase ${
                     detail.ticket.priority === "high"
-                      ? "bg-red-50 border-red-200 text-red-700"
+                      ? "bg-accent-orange/10 border-accent-orange/25 text-accent-orange-deep"
                       : detail.ticket.priority === "medium"
-                      ? "bg-amber-50 border-amber-200 text-amber-700"
-                      : "bg-slate-50 border-slate-200 text-slate-600"
+                      ? "bg-accent-orange/10 border-accent-orange/20 text-accent-orange"
+                      : "bg-canvas-soft border-hairline text-ink-muted"
                   }`}>
                     {detail.ticket.priority} priority
                   </span>
                 </div>
-                <div className="text-xs text-slate-500 font-mono space-y-0.5">
-                  {detail.customer?.email && <div>{detail.customer.email}</div>}
-                  <div className="text-slate-400">
+                <div className="text-xs text-ink-muted space-y-0.5">
+                  {detail.customer?.email && <div className="text-ink font-medium">{detail.customer.email}</div>}
+                  <div className="text-ink-faint">
                     Entity:{" "}
-                    <Link href={`/entities/${detail.ticket.entityId}`} className="text-blue-600 hover:underline">
+                    <Link href={`/entities/${detail.ticket.entityId}`} className="text-primary hover:underline font-medium">
                       {detail.ticket.entityId}
                     </Link>
                   </div>
-                  <div className="text-slate-400">Ticket ID: {detail.ticket.id}</div>
-                  <div className="text-slate-400">Escalated: {formatDateTime(detail.ticket.createdAt)}</div>
+                  <div className="text-ink-faint">Ticket ID: {detail.ticket.id}</div>
+                  <div className="text-ink-faint">Escalated: {formatDateTime(detail.ticket.createdAt)}</div>
                 </div>
               </div>
 
@@ -177,8 +177,8 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
               <div className="flex flex-col items-end gap-3 shrink-0">
                 {detail.event && (
                   <div className="text-right">
-                    <div className="text-xs text-slate-500 mb-0.5">Amount at Risk</div>
-                    <div className="text-2xl font-bold font-mono text-amber-700">
+                    <div className="text-xs text-ink-muted mb-0.5">Amount at Risk</div>
+                    <div className="text-2xl font-bold text-accent-orange tracking-heading-3">
                       {formatCurrency(detail.event.amount, detail.event.currency)}
                     </div>
                   </div>
@@ -187,7 +187,7 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
                   <button
                     type="button"
                     onClick={() => setShowEmailModal(true)}
-                    className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
+                    className="px-4 py-1.5 text-xs bg-primary text-white rounded-full hover:bg-primary-active active:scale-[0.98] font-medium transition-all shadow-sm"
                   >
                     Send Email
                   </button>
@@ -196,7 +196,7 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
                       type="button"
                       disabled={resolving}
                       onClick={() => handleResolve("recovered")}
-                      className="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 font-medium"
+                      className="px-4 py-1.5 text-xs bg-accent-green/10 text-accent-green border border-accent-green/30 rounded-full hover:bg-accent-green/20 disabled:opacity-50 font-semibold transition-colors"
                     >
                       Mark Recovered
                     </button>
@@ -206,7 +206,7 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
                       type="button"
                       disabled={resolving}
                       onClick={() => handleResolve("written_off")}
-                      className="px-3 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 font-medium"
+                      className="px-4 py-1.5 text-xs bg-accent-orange/10 text-accent-orange-deep border border-accent-orange/30 rounded-full hover:bg-accent-orange/20 disabled:opacity-50 font-semibold transition-colors"
                     >
                       Write Off
                     </button>
@@ -223,38 +223,38 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
 
               {/* Triggering event */}
               {detail.event && (
-                <div className="bg-white border border-slate-200 rounded p-4">
-                  <h2 className="text-sm font-semibold text-slate-900 mb-3">Triggering Event</h2>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+                  <h2 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-3.5">Triggering Event</h2>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-xs">
                     <div>
-                      <span className="text-slate-500">Event Type: </span>
-                      <span className="font-mono text-slate-800">{detail.event.eventType}</span>
+                      <span className="text-ink-muted">Event Type: </span>
+                      <span className="text-ink font-semibold">{detail.event.eventType}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500">Amount: </span>
-                      <span className="font-mono font-bold text-slate-900">
+                      <span className="text-ink-muted">Amount: </span>
+                      <span className="font-bold text-ink">
                         {formatCurrency(detail.event.amount, detail.event.currency)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-500">Failure Cause: </span>
-                      <span className="text-slate-800 font-medium">{detail.event.causeLabel || "N/A"}</span>
+                      <span className="text-ink-muted">Failure Cause: </span>
+                      <span className="text-ink-secondary font-medium">{detail.event.causeLabel || "N/A"}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500">Error Reason: </span>
-                      <span className="font-mono text-slate-700">{detail.event.errorReason || "N/A"}</span>
+                      <span className="text-ink-muted">Error Reason: </span>
+                      <span className="text-ink-muted">{detail.event.errorReason || "N/A"}</span>
                     </div>
                     {detail.ticket.resolvedAt && (
                       <div>
-                        <span className="text-slate-500">Resolved At: </span>
-                        <span className="font-mono text-emerald-700">{formatDateTime(detail.ticket.resolvedAt)}</span>
+                        <span className="text-ink-muted">Resolved At: </span>
+                        <span className="text-accent-green font-semibold">{formatDateTime(detail.ticket.resolvedAt)}</span>
                       </div>
                     )}
                   </div>
                   {detail.ticket.resolutionNotes && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 text-xs">
-                      <span className="text-slate-500 block mb-1">Resolution Notes</span>
-                      <div className="text-slate-700 whitespace-pre-wrap bg-slate-50 border border-slate-200 rounded p-2">
+                    <div className="mt-3.5 pt-3.5 border-t border-hairline text-xs">
+                      <span className="text-ink-muted font-medium block mb-1">Resolution Notes</span>
+                      <div className="text-ink-secondary whitespace-pre-wrap bg-canvas-soft border border-hairline rounded-[6px] p-3 leading-relaxed">
                         {detail.ticket.resolutionNotes}
                       </div>
                     </div>
@@ -263,61 +263,61 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
               )}
 
               {/* Activity & notes */}
-              <div className="bg-white border border-slate-200 rounded p-4">
-                <h2 className="text-sm font-semibold text-slate-900 mb-3">
-                  Activity & Internal Notes
-                  <span className="ml-2 text-xs font-mono bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
+              <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+                <h2 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-3.5 flex items-center justify-between">
+                  <span>Activity & Internal Notes</span>
+                  <span className="text-xs bg-canvas-soft text-ink-muted border border-hairline px-2.5 py-0.5 rounded-full font-semibold">
                     {notes.length}
                   </span>
                 </h2>
 
                 {notes.length === 0 ? (
-                  <div className="text-xs text-slate-400 italic py-4 text-center">No notes recorded yet.</div>
+                  <div className="text-xs text-ink-faint italic py-6 text-center">No notes recorded yet.</div>
                 ) : (
-                  <div className="space-y-2 mb-4">
+                  <div className="space-y-2.5 mb-4">
                     {notes.map((note) => (
                       <div
                         key={note.id}
-                        className={`p-3 rounded border text-xs ${
+                        className={`p-3.5 rounded-[8px] border text-xs leading-relaxed ${
                           note.type === "email_sent"
-                            ? "bg-blue-50 border-blue-200"
+                            ? "bg-primary/5 border-primary/20"
                             : note.type === "status_change"
-                            ? "bg-slate-50 border-slate-200"
-                            : "bg-amber-50 border-amber-200"
+                            ? "bg-canvas-soft border-hairline"
+                            : "bg-accent-purple/10 border-accent-purple/30"
                         }`}
                       >
-                        <div className="flex justify-between items-center text-[11px] text-slate-500 mb-1">
-                          <span className="font-semibold text-slate-700">{note.author}</span>
-                          <span className="font-mono">{formatDateTime(note.createdAt)}</span>
+                        <div className="flex justify-between items-center text-[11px] text-ink-muted mb-1">
+                          <span className="font-semibold text-ink">{note.author}</span>
+                          <span className="text-ink-faint">{formatDateTime(note.createdAt)}</span>
                         </div>
-                        <div className="text-slate-800 whitespace-pre-wrap">{note.content}</div>
+                        <div className="text-ink-secondary whitespace-pre-wrap">{note.content}</div>
                       </div>
                     ))}
                   </div>
                 )}
 
                 {/* Add note form */}
-                <form onSubmit={handleAddNote} className="pt-3 border-t border-slate-200 space-y-2">
-                  <div className="text-xs font-semibold text-slate-700">Add Internal Note</div>
+                <form onSubmit={handleAddNote} className="pt-3.5 border-t border-hairline space-y-2.5">
+                  <div className="text-xs font-semibold text-ink">Add Internal Note</div>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       placeholder="Agent name..."
                       value={noteAuthor}
                       onChange={(e) => setNoteAuthor(e.target.value)}
-                      className="px-2.5 py-1.5 border border-slate-300 rounded text-xs w-1/3 focus:outline-hidden focus:border-blue-500"
+                      className="px-3 py-1.5 bg-white border border-hairline-input rounded-[4px] text-xs text-ink placeholder:text-ink-faint w-1/3 focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
                     />
                     <input
                       type="text"
                       placeholder="Type note or call summary..."
                       value={newNote}
                       onChange={(e) => setNewNote(e.target.value)}
-                      className="flex-1 px-2.5 py-1.5 border border-slate-300 rounded text-xs focus:outline-hidden focus:border-blue-500"
+                      className="flex-1 px-3 py-1.5 bg-white border border-hairline-input rounded-[4px] text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
                     />
                     <button
                       type="submit"
                       disabled={submittingNote || !newNote.trim()}
-                      className="px-3 py-1.5 bg-slate-800 text-white rounded hover:bg-slate-700 disabled:opacity-50 text-xs font-medium whitespace-nowrap"
+                      className="px-4 py-1.5 bg-ink text-white rounded-[8px] hover:bg-ink-secondary disabled:opacity-50 text-xs font-medium whitespace-nowrap transition-colors"
                     >
                       {submittingNote ? "Adding..." : "Add Note"}
                     </button>
@@ -330,36 +330,36 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
             <div className="space-y-4">
               {/* Customer profile */}
               {detail.customer && (
-                <div className="bg-white border border-slate-200 rounded p-4">
-                  <h2 className="text-sm font-semibold text-slate-900 mb-3">Customer Profile</h2>
-                  <div className="space-y-2 text-xs">
-                    <div className="font-semibold text-slate-900 text-sm">{detail.customer.name}</div>
-                    <div className="font-mono text-slate-600">{detail.customer.email}</div>
+                <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+                  <h2 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-3.5">Customer Profile</h2>
+                  <div className="space-y-2.5 text-xs">
+                    <div className="font-semibold text-ink text-sm">{detail.customer.name}</div>
+                    <div className="text-ink-muted">{detail.customer.email}</div>
                     {detail.customer.phone && (
-                      <div className="font-mono text-slate-600">{detail.customer.phone}</div>
+                      <div className="text-ink-muted">{detail.customer.phone}</div>
                     )}
-                    <div className="pt-2 space-y-1.5 border-t border-slate-100">
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Risk Tier</span>
+                    <div className="pt-2.5 space-y-2 border-t border-hairline">
+                      <div className="flex justify-between items-center">
+                        <span className="text-ink-muted">Risk Tier</span>
                         <Badge type="riskTier" value={detail.customer.riskTier} />
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Lifetime Value</span>
-                        <span className="font-mono font-medium text-slate-800">
+                      <div className="flex justify-between items-center">
+                        <span className="text-ink-muted">Lifetime Value</span>
+                        <span className="font-bold text-ink">
                           {formatCurrency(detail.customer.lifetimeValue)}
                         </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">DNC Flag</span>
-                        <span className={detail.customer.dncFlag ? "text-red-700 font-bold" : "text-slate-600"}>
+                      <div className="flex justify-between items-center">
+                        <span className="text-ink-muted">DNC Flag</span>
+                        <span className={detail.customer.dncFlag ? "text-accent-orange font-bold" : "text-accent-green font-medium"}>
                           {detail.customer.dncFlag ? "Yes" : "No"}
                         </span>
                       </div>
                     </div>
-                    <div className="pt-2 border-t border-slate-100">
+                    <div className="pt-2.5 border-t border-hairline">
                       <Link
                         href={`/entities/${detail.ticket.entityId}`}
-                        className="text-blue-600 hover:underline text-xs font-medium"
+                        className="text-primary hover:underline text-xs font-semibold"
                       >
                         View Entity Audit Trail →
                       </Link>
@@ -369,39 +369,39 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
               )}
 
               {/* Ticket metadata */}
-              <div className="bg-white border border-slate-200 rounded p-4">
-                <h2 className="text-sm font-semibold text-slate-900 mb-3">Ticket Details</h2>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Status</span>
+              <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+                <h2 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-3.5">Ticket Details</h2>
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-ink-muted">Status</span>
                     <Badge type="ticketStatus" value={detail.ticket.status} />
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Priority</span>
-                    <span className={`font-medium ${
-                      detail.ticket.priority === "high" ? "text-red-700" :
-                      detail.ticket.priority === "medium" ? "text-amber-700" : "text-slate-700"
+                  <div className="flex justify-between items-center">
+                    <span className="text-ink-muted">Priority</span>
+                    <span className={`font-semibold uppercase text-[11px] ${
+                      detail.ticket.priority === "high" ? "text-accent-orange" :
+                      detail.ticket.priority === "medium" ? "text-accent-orange" : "text-ink-muted"
                     }`}>
                       {detail.ticket.priority}
                     </span>
                   </div>
                   {detail.ticket.assignedTo && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Assigned To</span>
-                      <span className="text-slate-800">{detail.ticket.assignedTo}</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-ink-muted">Assigned To</span>
+                      <span className="text-ink font-medium">{detail.ticket.assignedTo}</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Notes Count</span>
-                    <span className="font-mono text-slate-800">{notes.length}</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-ink-muted">Notes Count</span>
+                    <span className="text-ink font-semibold">{notes.length}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Created</span>
-                    <span className="font-mono text-slate-700">{formatDateTime(detail.ticket.createdAt)}</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-ink-muted">Created</span>
+                    <span className="text-ink-muted">{formatDateTime(detail.ticket.createdAt)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Updated</span>
-                    <span className="font-mono text-slate-700">{formatDateTime(detail.ticket.updatedAt)}</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-ink-muted">Updated</span>
+                    <span className="text-ink-muted">{formatDateTime(detail.ticket.updatedAt)}</span>
                   </div>
                 </div>
               </div>

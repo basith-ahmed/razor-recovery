@@ -24,18 +24,18 @@ interface CauseChannelChartsProps {
   }[];
 }
 
-const COLORS = ["#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#06b6d4", "#ec4899"];
+const COLORS = ["#0075de", "#1aae39", "#dd5b00", "#2a9d99", "#62aef0", "#391c57", "#ec4899"];
 
 export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChannelChartsProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-      <div className="bg-white border border-slate-200 rounded p-4">
-        <h3 className="text-sm font-semibold text-slate-900 mb-1">Failure Cause Distribution</h3>
-        <p className="text-xs text-slate-500 mb-4">Breakdown of failure reasons for current window</p>
+      <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+        <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-0.5">Failure Cause Distribution</h3>
+        <p className="text-xs text-ink-muted mb-4">Breakdown of failure reasons for current window</p>
 
         <div className="h-64 w-full">
           {byCause.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-slate-500 text-xs">
+            <div className="h-full flex items-center justify-center text-ink-muted text-xs">
               No cause data available
             </div>
           ) : (
@@ -59,7 +59,14 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", color: "#f8fafc" }}
+                  contentStyle={{
+                    backgroundColor: "#ffffff",
+                    borderColor: "#e6e6e6",
+                    color: "#000000",
+                    borderRadius: "8px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.02), 0 6px 16px rgba(0,0,0,0.03)",
+                    fontSize: "12px",
+                  }}
                   formatter={(value: unknown) => [
                     formatCurrency(Number(value ?? 0)),
                     "Amount at Risk",
@@ -71,13 +78,13 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded p-4">
-        <h3 className="text-sm font-semibold text-slate-900 mb-1">Recovery Channel Efficiency</h3>
-        <p className="text-xs text-slate-500 mb-4">Total events attempted vs successfully recovered events per channel</p>
+      <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+        <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-0.5">Recovery Channel Efficiency</h3>
+        <p className="text-xs text-ink-muted mb-4">Total events attempted vs successfully recovered events per channel</p>
 
         <div className="h-64 w-full">
           {byChannel.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-slate-500 text-xs">
+            <div className="h-full flex items-center justify-center text-ink-muted text-xs">
               No channel data available
             </div>
           ) : (
@@ -97,24 +104,31 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
               >
                 <XAxis
                   dataKey="channelLabel"
-                  stroke="#94a3b8"
-                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  stroke="#e6e6e6"
+                  tick={{ fill: "#615d59", fontSize: 10, fontWeight: 500 }}
                 />
                 <YAxis
-                  stroke="#94a3b8"
-                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  stroke="#e6e6e6"
+                  tick={{ fill: "#615d59", fontSize: 10 }}
                   allowDecimals={false}
                 />
                 <Tooltip
-                  contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", color: "#f8fafc" }}
+                  contentStyle={{
+                    backgroundColor: "#ffffff",
+                    borderColor: "#e6e6e6",
+                    color: "#000000",
+                    borderRadius: "8px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.02), 0 6px 16px rgba(0,0,0,0.03)",
+                    fontSize: "12px",
+                  }}
                   formatter={(value: unknown, name: string | number | undefined) => [
                     `${Number(value ?? 0).toLocaleString("en-IN")} events`,
                     name,
                   ]}
                 />
-                <Legend wrapperStyle={{ paddingTop: "10px", fontSize: "12px" }} />
-                <Bar dataKey="count" name="Total Events" fill="#64748b" radius={[2, 2, 0, 0]} />
-                <Bar dataKey="recoveredEvents" name="Recovered Events" fill="#22c55e" radius={[2, 2, 0, 0]} />
+                <Legend wrapperStyle={{ paddingTop: "10px", fontSize: "11px" }} />
+                <Bar dataKey="count" name="Total Events" fill="#615d59" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="recoveredEvents" name="Recovered Events" fill="#1aae39" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

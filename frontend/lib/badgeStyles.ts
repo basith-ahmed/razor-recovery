@@ -4,79 +4,79 @@
  */
 
 export const STATE_BADGE_STYLES: Record<string, string> = {
-  DETECTED: "bg-slate-100 text-slate-700 border-slate-300",
-  CONTACTED: "bg-blue-50 text-blue-700 border-blue-200",
-  RETRYING: "bg-blue-50 text-blue-700 border-blue-200",
-  COOLING_DOWN: "bg-amber-50 text-amber-700 border-amber-200",
-  ESCALATED: "bg-purple-50 text-purple-700 border-purple-200",
-  RECOVERED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  WRITTEN_OFF: "bg-red-50 text-red-700 border-red-200",
-  DO_NOT_CONTACT: "bg-white text-slate-500 border-slate-300",
+  DETECTED: "bg-canvas-soft text-ink-muted border-hairline",
+  CONTACTED: "bg-primary/10 text-primary border-primary/20",
+  RETRYING: "bg-accent-sky/15 text-primary border-accent-sky/30",
+  COOLING_DOWN: "bg-accent-orange/10 text-accent-orange-deep border-accent-orange/25",
+  ESCALATED: "bg-accent-purple/30 text-accent-purple-deep border-accent-purple/60",
+  RECOVERED: "bg-accent-green/10 text-accent-green border-accent-green/25",
+  WRITTEN_OFF: "bg-accent-orange/15 text-accent-orange-deep border-accent-orange/30",
+  DO_NOT_CONTACT: "bg-canvas-soft text-ink-muted border-hairline",
 };
 
 export const STAGE_BADGE_STYLES: Record<string, string> = {
-  DETECTED: "bg-slate-100 text-slate-600 border-slate-300",
-  DIAGNOSED: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  DECIDED: "bg-cyan-50 text-cyan-700 border-cyan-200",
-  EXECUTED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  DETECTED: "bg-canvas-soft text-ink-muted border-hairline",
+  DIAGNOSED: "bg-accent-purple/30 text-accent-purple-deep border-accent-purple/60",
+  DECIDED: "bg-accent-teal/15 text-accent-teal border-accent-teal/30",
+  EXECUTED: "bg-accent-green/10 text-accent-green border-accent-green/25",
 };
 
 export const ACTION_RESULT_BADGE_STYLES: Record<string, string> = {
-  success: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  scheduled: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  dispatched: "bg-cyan-50 text-cyan-700 border-cyan-200",
-  cancelled: "bg-slate-100 text-slate-500 border-slate-300",
-  skipped: "bg-slate-100 text-slate-500 border-slate-300",
-  failed: "bg-red-50 text-red-700 border-red-200",
+  success: "bg-accent-green/10 text-accent-green border-accent-green/25",
+  scheduled: "bg-accent-purple/20 text-accent-purple-deep border-accent-purple/40",
+  dispatched: "bg-primary/10 text-primary border-primary/20",
+  cancelled: "bg-canvas-soft text-ink-muted border-hairline",
+  skipped: "bg-canvas-soft text-ink-muted border-hairline",
+  failed: "bg-accent-orange/15 text-accent-orange-deep border-accent-orange/30",
 };
 
 export const RISK_TIER_BADGE_STYLES: Record<string, string> = {
-  HIGH: "bg-red-50 text-red-700 border-red-200",
-  MEDIUM: "bg-amber-50 text-amber-700 border-amber-200",
-  LOW: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  HIGH: "bg-accent-orange/15 text-accent-orange-deep border-accent-orange/30",
+  MEDIUM: "bg-accent-orange/10 text-accent-orange border-accent-orange/20",
+  LOW: "bg-accent-green/10 text-accent-green border-accent-green/25",
 };
 
 export const PROMISE_STATUS_BADGE_STYLES: Record<string, string> = {
-  pending: "bg-amber-50 text-amber-700 border-amber-200",
-  reminder_sent: "bg-orange-50 text-orange-700 border-orange-200",
-  kept: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  broken: "bg-red-50 text-red-700 border-red-200",
-  cancelled: "bg-slate-100 text-slate-500 border-slate-300",
+  pending: "bg-accent-orange/10 text-accent-orange border-accent-orange/20",
+  reminder_sent: "bg-accent-sky/15 text-primary border-accent-sky/30",
+  kept: "bg-accent-green/10 text-accent-green border-accent-green/25",
+  broken: "bg-accent-orange/15 text-accent-orange-deep border-accent-orange/30",
+  cancelled: "bg-canvas-soft text-ink-muted border-hairline",
 };
 
 export const TICKET_STATUS_BADGE_STYLES: Record<string, string> = {
-  open: "bg-purple-50 text-purple-700 border-purple-200",
-  resolved: "bg-blue-50 text-blue-700 border-blue-200",
-  recovered: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  written_off: "bg-red-50 text-red-700 border-red-200",
+  open: "bg-accent-purple/30 text-accent-purple-deep border-accent-purple/60",
+  resolved: "bg-primary/10 text-primary border-primary/20",
+  recovered: "bg-accent-green/10 text-accent-green border-accent-green/25",
+  written_off: "bg-accent-orange/15 text-accent-orange-deep border-accent-orange/30",
 };
 
 export function getStateBadgeStyle(state?: string | null): string {
-  if (!state) return "bg-slate-100 text-slate-600 border-slate-300";
-  return STATE_BADGE_STYLES[state.toUpperCase()] || "bg-slate-100 text-slate-600 border-slate-300";
+  if (!state) return "bg-canvas-soft text-ink-muted border-hairline";
+  return STATE_BADGE_STYLES[state.toUpperCase()] || "bg-canvas-soft text-ink-muted border-hairline";
 }
 
 export function getStageBadgeStyle(stage?: string | null): string {
-  if (!stage) return "bg-slate-100 text-slate-600 border-slate-300";
-  return STAGE_BADGE_STYLES[stage.toUpperCase()] || "bg-slate-100 text-slate-600 border-slate-300";
+  if (!stage) return "bg-canvas-soft text-ink-muted border-hairline";
+  return STAGE_BADGE_STYLES[stage.toUpperCase()] || "bg-canvas-soft text-ink-muted border-hairline";
 }
 
 export function getActionResultBadgeStyle(result?: string | null): string {
-  if (!result) return "bg-slate-100 text-slate-500 border-slate-300";
-  return ACTION_RESULT_BADGE_STYLES[result.toLowerCase()] || "bg-slate-100 text-slate-500 border-slate-300";
+  if (!result) return "bg-canvas-soft text-ink-muted border-hairline";
+  return ACTION_RESULT_BADGE_STYLES[result.toLowerCase()] || "bg-canvas-soft text-ink-muted border-hairline";
 }
 
 export function getRiskTierBadgeStyle(tier?: string | null): string {
-  if (!tier) return "bg-slate-100 text-slate-600 border-slate-300";
-  return RISK_TIER_BADGE_STYLES[tier.toUpperCase()] || "bg-slate-100 text-slate-600 border-slate-300";
+  if (!tier) return "bg-canvas-soft text-ink-muted border-hairline";
+  return RISK_TIER_BADGE_STYLES[tier.toUpperCase()] || "bg-canvas-soft text-ink-muted border-hairline";
 }
 
 export function getPromiseStatusBadgeStyle(status?: string | null): string {
-  if (!status) return "bg-slate-100 text-slate-500 border-slate-300";
-  return PROMISE_STATUS_BADGE_STYLES[status.toLowerCase()] || "bg-slate-100 text-slate-500 border-slate-300";
+  if (!status) return "bg-canvas-soft text-ink-muted border-hairline";
+  return PROMISE_STATUS_BADGE_STYLES[status.toLowerCase()] || "bg-canvas-soft text-ink-muted border-hairline";
 }
 
 export function getTicketStatusBadgeStyle(status?: string | null): string {
-  if (!status) return "bg-slate-100 text-slate-500 border-slate-300";
-  return TICKET_STATUS_BADGE_STYLES[status.toLowerCase()] || "bg-slate-100 text-slate-500 border-slate-300";
+  if (!status) return "bg-canvas-soft text-ink-muted border-hairline";
+  return TICKET_STATUS_BADGE_STYLES[status.toLowerCase()] || "bg-canvas-soft text-ink-muted border-hairline";
 }

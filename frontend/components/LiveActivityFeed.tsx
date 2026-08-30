@@ -14,22 +14,22 @@ export function LiveActivityFeed({ items }: LiveActivityFeedProps) {
     switch (outcome.toLowerCase()) {
       case "recovered":
       case "success":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+        return "bg-accent-green/10 text-accent-green border-accent-green/25";
       case "written_off":
       case "failed":
-        return "bg-red-50 text-red-700 border-red-200";
+        return "bg-accent-orange/15 text-accent-orange-deep border-accent-orange/30";
       case "contacted":
       case "retrying":
-        return "bg-blue-50 text-blue-700 border-blue-200";
+        return "bg-primary/10 text-primary border-primary/20";
       case "cooling_down":
-        return "bg-amber-50 text-amber-700 border-amber-200";
+        return "bg-accent-orange/10 text-accent-orange-deep border-accent-orange/25";
       case "escalated":
-        return "bg-purple-50 text-purple-700 border-purple-200";
+        return "bg-accent-purple/30 text-accent-purple-deep border-accent-purple/60";
       case "skipped":
       case "do_not_contact":
-        return "bg-slate-100 text-slate-400 border-slate-300";
+        return "bg-canvas-soft text-ink-muted border-hairline";
       default:
-        return "bg-slate-100 text-slate-700 border-slate-300";
+        return "bg-canvas-soft text-ink-muted border-hairline";
     }
   };
 
@@ -41,18 +41,18 @@ export function LiveActivityFeed({ items }: LiveActivityFeedProps) {
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded p-4 h-full flex flex-col">
+    <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft h-full flex flex-col">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+        <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px] flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-accent-green animate-pulse" />
           Live Activity Feed
         </h3>
-        <span className="text-xs text-slate-400 font-mono">{items.length} events logged</span>
+        <span className="text-xs text-ink-faint">{items.length} events logged</span>
       </div>
 
       <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
         {items.length === 0 ? (
-          <div className="text-center py-6 text-slate-500 text-xs">
+          <div className="text-center py-6 text-ink-muted text-xs">
             No live events yet. Start a stream injection to watch events flow through live.
           </div>
         ) : (
@@ -60,34 +60,34 @@ export function LiveActivityFeed({ items }: LiveActivityFeedProps) {
             <div
               key={idx}
               onClick={() => handleRowClick(item)}
-              className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded p-2.5 text-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 cursor-pointer"
+              className="bg-canvas-soft hover:bg-hairline/40 border border-hairline rounded-[6px] p-2.5 text-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 cursor-pointer transition-colors"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <span className="font-mono text-slate-500 text-[11px] whitespace-nowrap">
+                <span className="text-ink-muted text-[11px] whitespace-nowrap">
                   {new Date(item.timestamp).toLocaleTimeString()}
                 </span>
-                <span className="font-semibold text-slate-800 truncate">
+                <span className="font-semibold text-ink truncate">
                   {item.customerName}
                 </span>
-                <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono text-[10px] uppercase border border-slate-200">
+                <span className="bg-white text-ink-muted px-1.5 py-0.5 rounded-[4px] text-[10px] uppercase border border-hairline font-medium">
                   {item.eventType}
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-slate-400">
-                  Cause: <strong className="text-slate-700 font-normal">{item.cause}</strong>
+                <span className="text-ink-faint">
+                  Cause: <strong className="text-ink-secondary font-normal">{item.cause}</strong>
                 </span>
-                <span className="text-slate-400 hidden md:inline">|</span>
-                <span className="text-slate-400 hidden md:inline">
-                  Action: <strong className="text-slate-700 font-normal">{item.action}</strong>
+                <span className="text-ink-faint hidden md:inline">|</span>
+                <span className="text-ink-faint hidden md:inline">
+                  Action: <strong className="text-ink-secondary font-normal">{item.action}</strong>
                 </span>
                 {item.actionResult && item.actionResult !== "success" && (
-                  <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono text-[10px] uppercase border border-slate-200">
+                  <span className="bg-white text-ink-muted px-1.5 py-0.5 rounded-[4px] text-[10px] uppercase border border-hairline font-medium">
                     {item.actionResult}
                   </span>
                 )}
-                <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${getOutcomeBadgeClass(item.outcome)}`}>
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-eyebrow border ${getOutcomeBadgeClass(item.outcome)}`}>
                   {item.outcome}
                 </span>
               </div>

@@ -16,15 +16,15 @@ const OPTIONS: Array<{ value: MetricsWindow; label: string }> = [
 
 export function WindowSelector({ value, onChange }: WindowSelectorProps) {
   return (
-    <div className="flex items-center gap-1 bg-white border border-slate-300 rounded p-1">
+    <div className="flex items-center gap-1 bg-white border border-hairline rounded-[8px] p-1 shadow-notion-soft">
       {OPTIONS.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
-          className={`text-xs px-3 py-1.5 rounded font-medium ${
+          className={`text-xs px-3 py-1.5 rounded-[6px] font-medium transition-all ${
             value === opt.value
-              ? "bg-slate-900 text-white"
-              : "text-slate-600 hover:bg-slate-100"
+              ? "bg-ink text-white font-semibold shadow-sm"
+              : "text-ink-muted hover:text-ink hover:bg-canvas-soft"
           }`}
         >
           {opt.label}

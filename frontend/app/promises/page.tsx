@@ -92,7 +92,7 @@ export default function PromisesPage() {
         actions={
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded"
+            className="px-4 py-1.5 text-xs font-medium bg-primary hover:bg-primary-active active:scale-[0.98] text-white rounded-full transition-all shadow-sm"
           >
             + Record Promise to Pay
           </button>
@@ -101,47 +101,47 @@ export default function PromisesPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
-        <div className="bg-white border border-slate-200 rounded p-4">
-          <div className="text-xs text-slate-500">Active Commitments</div>
-          <div className="text-2xl font-bold text-slate-900 mt-1">
+        <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+          <div className="text-xs text-ink-muted font-medium">Active Commitments</div>
+          <div className="text-2xl font-bold text-ink mt-1 tracking-heading-3">
             {(stats?.pendingCount ?? 0) + (stats?.reminderSentCount ?? 0)}
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
+          <div className="text-[11px] text-ink-faint mt-0.5">
             {stats?.reminderSentCount ?? 0} in grace period
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded p-4">
-          <div className="text-xs text-slate-500">Total Promised Volume</div>
-          <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
+        <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+          <div className="text-xs text-ink-muted font-medium">Total Promised Volume</div>
+          <div className="text-2xl font-bold text-ink mt-1 tracking-heading-3">
             {formatCurrency(stats?.totalPromisedAmount ?? 0)}
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
+          <div className="text-[11px] text-ink-faint mt-0.5">
             {stats?.totalCount ?? 0} total records
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded p-4">
-          <div className="text-xs text-slate-500">Recovered & Kept</div>
-          <div className="text-2xl font-bold font-mono text-emerald-600 mt-1">
+        <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+          <div className="text-xs text-ink-muted font-medium">Recovered & Kept</div>
+          <div className="text-2xl font-bold text-accent-green mt-1 tracking-heading-3">
             {formatCurrency(stats?.totalRecoveredAmount ?? 0)}
           </div>
-          <div className="text-[11px] text-emerald-700 mt-0.5">
+          <div className="text-[11px] text-accent-green mt-0.5">
             {stats?.keptCount ?? 0} paid commitments
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded p-4">
-          <div className="text-xs text-slate-500">Broken / Escalated</div>
-          <div className="text-2xl font-bold text-red-600 mt-1">{stats?.brokenCount ?? 0}</div>
-          <div className="text-[11px] text-red-700 mt-0.5">Auto-escalated to support</div>
+        <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+          <div className="text-xs text-ink-muted font-medium">Broken / Escalated</div>
+          <div className="text-2xl font-bold text-accent-orange-deep mt-1 tracking-heading-3">{stats?.brokenCount ?? 0}</div>
+          <div className="text-[11px] text-accent-orange-deep mt-0.5">Auto-escalated to support</div>
         </div>
       </div>
 
       {/* Table card */}
-      <div className="bg-white border border-slate-200 rounded">
+      <div className="bg-white border border-hairline rounded-[12px] shadow-notion-soft overflow-hidden">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-hairline">
           <div className="flex items-center gap-1.5">
             {["all", "pending", "reminder_sent", "kept", "broken"].map((s) => (
               <button
@@ -150,10 +150,10 @@ export default function PromisesPage() {
                   setStatusFilter(s);
                   setPage(1);
                 }}
-                className={`px-3 py-1 text-xs rounded font-medium ${
+                className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
                   statusFilter === s
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
+                    ? "bg-ink text-white font-semibold shadow-xs"
+                    : "bg-canvas-soft hover:bg-hairline/40 text-ink-secondary border border-hairline"
                 }`}
               >
                 {s === "all" ? "All" : s.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
@@ -169,14 +169,14 @@ export default function PromisesPage() {
               setSearchQuery(e.target.value);
               setPage(1);
             }}
-            className="text-xs border border-slate-300 rounded px-3 py-1.5 text-slate-900 placeholder-slate-400 focus:outline-hidden focus:border-blue-500 w-64"
+            className="text-xs border border-hairline-input rounded-[4px] px-3 py-1.5 text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all w-64"
           />
         </div>
 
         {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left border-collapse">
-            <thead className="text-slate-500 border-b border-slate-200 bg-slate-50">
+            <thead className="text-ink-muted border-b border-hairline bg-canvas-soft text-[11px] font-semibold uppercase tracking-eyebrow">
               <tr>
                 <th className="py-2.5 px-3">Customer</th>
                 <th className="py-2.5 px-3">Amount</th>
@@ -185,16 +185,16 @@ export default function PromisesPage() {
                 <th className="py-2.5 px-3">Payment Link</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-hairline bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400">
+                  <td colSpan={5} className="py-8 text-center text-ink-muted">
                     Loading promises...
                   </td>
                 </tr>
               ) : promises.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400">
+                  <td colSpan={5} className="py-8 text-center text-ink-muted">
                     No promise-to-pay records found.
                   </td>
                 </tr>
@@ -202,19 +202,19 @@ export default function PromisesPage() {
                 promises.map((p) => (
                   <tr
                     key={p.id}
-                    className="hover:bg-slate-50 cursor-pointer"
+                    className="hover:bg-canvas-soft cursor-pointer transition-colors"
                     onClick={() => router.push(`/promises/${p.id}`)}
                   >
                     <td className="py-2.5 px-3">
-                      <div className="font-semibold text-slate-900">{p.customerName}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">{p.customerEmail}</div>
+                      <div className="font-semibold text-ink">{p.customerName}</div>
+                      <div className="text-[11px] text-ink-muted">{p.customerEmail}</div>
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-semibold text-slate-900">
+                    <td className="py-2.5 px-3 font-semibold text-ink">
                       {formatCurrency(p.promisedAmount, p.currency)}
                     </td>
                     <td className="py-2.5 px-3">
-                      <div className="font-semibold text-slate-800">{formatDate(p.promisedDate)}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">
+                      <div className="font-semibold text-ink">{formatDate(p.promisedDate)}</div>
+                      <div className="text-[10px] text-ink-faint">
                         {formatDateTime(p.promisedDate).split(", ")[1]}
                       </div>
                     </td>
@@ -230,19 +230,19 @@ export default function PromisesPage() {
                         status={p.status}
                       />
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px]">
+                    <td className="py-2.5 px-3 text-[11px]">
                       {p.paymentLinkUrl ? (
                         <a
                           href={p.paymentLinkUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="text-blue-600 hover:underline truncate max-w-[160px] block"
+                          className="text-primary hover:underline truncate max-w-[160px] block"
                         >
                           {p.paymentLinkUrl.replace("https://", "")}
                         </a>
                       ) : (
-                        <span className="text-slate-400">—</span>
+                        <span className="text-ink-faint">—</span>
                       )}
                     </td>
                   </tr>
@@ -253,7 +253,7 @@ export default function PromisesPage() {
         </div>
 
         {/* Pagination */}
-        <div className="px-4 py-3 border-t border-slate-200">
+        <div className="px-4 py-3 border-t border-hairline">
           <PaginationControl
             page={page}
             totalPages={totalPages}

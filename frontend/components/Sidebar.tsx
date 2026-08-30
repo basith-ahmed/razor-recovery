@@ -88,7 +88,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Mobile overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-20 bg-slate-900/40 lg:hidden"
+          className="fixed inset-0 z-20 bg-black/30 backdrop-blur-[2px] lg:hidden"
           onClick={onClose}
         />
       )}
@@ -96,7 +96,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Sidebar panel */}
       <aside
         className={`
-          fixed top-14 bottom-0 left-0 z-30 w-56 bg-white border-r border-slate-200 flex flex-col
+          fixed top-14 bottom-0 left-0 z-30 w-56 bg-white border-r border-hairline flex flex-col
           transition-transform duration-200
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 lg:sticky lg:top-14 lg:h-[calc(100vh-3.5rem)] lg:shrink-0
@@ -105,7 +105,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto py-4 px-3">
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mb-5">
-              <div className="px-2 mb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+              <div className="px-2 mb-1.5 text-[11px] font-semibold text-ink-muted uppercase tracking-eyebrow">
                 {group.label}
               </div>
               <ul className="space-y-0.5">
@@ -117,14 +117,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                         href={item.href}
                         onClick={onClose}
                         className={`
-                          flex items-center gap-2.5 px-2.5 py-2 rounded text-sm font-medium
+                          flex items-center gap-2.5 px-2.5 py-2 rounded-[8px] text-xs font-medium transition-colors
                           ${active
-                            ? "bg-blue-50 text-blue-700 border border-blue-100"
-                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 border border-transparent"
+                            ? "bg-primary/10 text-primary border border-primary/20 font-semibold"
+                            : "text-ink-secondary hover:bg-canvas-soft hover:text-ink border border-transparent"
                           }
                         `}
                       >
-                        <span className={active ? "text-blue-600" : "text-slate-400"}>
+                        <span className={active ? "text-primary" : "text-ink-muted"}>
                           {item.icon}
                         </span>
                         {item.label}
@@ -137,8 +137,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           ))}
         </nav>
 
-        <div className="px-3 py-3 border-t border-slate-100">
-          <div className="text-[10px] text-slate-400 font-mono px-2">
+        <div className="px-3 py-3 border-t border-hairline">
+          <div className="text-[11px] text-ink-faint px-2 font-medium">
             RazorRecovery · v1.0
           </div>
         </div>
