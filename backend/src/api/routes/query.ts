@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { queryAuditTrail } from "../../services/queryService";
+import { handleRouteError } from "../../utils/apiResponse";
 
 export const queryRouter = Router();
 
@@ -23,8 +24,6 @@ queryRouter.post("/", async (req: Request, res: Response) => {
 
     return res.status(200).json(result);
   } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : "Failed to process audit query";
-    console.error("[queryRouter] Error executing audit query:", error);
-    return res.status(500).json({ error: errMessage });
+    return handleRouteError(res, error, "Failed to process audit query");
   }
 });

@@ -78,12 +78,30 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
           : null;
 
       let event = action?.event;
-      if (!event && (paymentId || orderId || notesEventId || notesEntityId)) {
+      if (!event && (paymentId || orderId || notesEventId || notesEntityId || paymentLinkId || (notes as any)?.promise_id)) {
         const eventConds: Prisma.RevenueEventWhereInput[] = [];
         if (paymentId) eventConds.push({ razorpayPaymentId: paymentId });
         if (orderId) eventConds.push({ razorpayOrderId: orderId });
         if (notesEventId) eventConds.push({ id: notesEventId });
         if (notesEntityId) eventConds.push({ entityId: notesEntityId });
+
+        if (paymentLinkId || (notes as any)?.promise_id) {
+          const promiseWithLink = await prisma.promiseToPay.findFirst({
+            where: {
+              OR: [
+                ...(paymentLinkId ? [{ razorpayPaymentLinkId: paymentLinkId }] : []),
+                ...((notes as any)?.promise_id ? [{ id: (notes as any).promise_id }] : []),
+              ],
+            },
+          });
+          if (promiseWithLink?.eventId) {
+            eventConds.push({ id: promiseWithLink.eventId });
+          }
+          if (promiseWithLink?.entityId) {
+            eventConds.push({ entityId: promiseWithLink.entityId });
+          }
+        }
+
         if (eventConds.length > 0) {
           event =
             (await prisma.revenueEvent.findFirst({
@@ -94,11 +112,6 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
       }
 
       if (event) {
-        // Recovery closes this recovery ARC: wipe per-cause attempt/cooldown
-        // memory so the next event on this entity — a genuinely new billing
-        // cycle, or an unrelated cause arriving while this one just resolved —
-        // starts with a clean budget, not stale state from whatever cause just
-        // recovered.
         const recoveryAuditEntry = await prisma.$transaction(async (tx) => {
           const [diagnosis, decision] = await Promise.all([
             tx.diagnosis.findUnique({ where: { eventId: event.id } }),
@@ -128,12 +141,12 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
 
           await redis.set(`razorrecovery:recovered:${event.entityId}`, "true", "EX", 86400 * 30);
 
-          // Update any active Promise-to-Pay commitments for this entity to 'kept'
           await tx.promiseToPay.updateMany({
             where: {
               OR: [
                 { entityId: event.entityId, status: { in: ["pending", "reminder_sent"] } },
                 ...(paymentLinkId ? [{ razorpayPaymentLinkId: paymentLinkId, status: { in: ["pending", "reminder_sent"] } }] : []),
+                ...((notes as any)?.promise_id ? [{ id: (notes as any).promise_id, status: { in: ["pending", "reminder_sent"] } }] : []),
               ],
             },
             data: {
@@ -149,7 +162,6 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
             paymentId: paymentId || orderId || paymentLinkId,
           };
 
-          // Record AuditEntry for recovery settlement from the incoming webhook
           const auditEntry = await writeChainedAuditEntry(tx, {
             eventId: event.id,
             entityId: event.entityId,
@@ -161,51 +173,46 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
             outcome: "recovered",
             timestamp: new Date(),
           });
+
+          const matchingPromise = await tx.promiseToPay.findFirst({
+            where: {
+              OR: [
+                { entityId: event.entityId },
+                ...(paymentLinkId ? [{ razorpayPaymentLinkId: paymentLinkId }] : []),
+              ],
+            },
+          });
+          const recoveredAmount = matchingPromise?.promisedAmount ?? event.amount;
+
           await writeLedgerEntry(tx, {
             entityId: event.entityId,
             eventId: event.id,
             type: "RECOVERED",
-            amount: event.amount,
+            amount: recoveredAmount,
             currency: event.currency,
             referenceId: paymentId || orderId || paymentLinkId,
           });
           return auditEntry;
         });
 
-        // Keep RAG indexing decoupled from the webhook write: the embedding
-        // consumer independently reacts to the finalized audit record.
         try {
           await publish(TOPICS.AUDIT, event.id, {
             auditEntryId: recoveryAuditEntry.id,
             event: { id: event.id, entityId: event.entityId },
           });
         } catch (publishError) {
-          // A webhook acknowledgement must not be rolled back after its
-          // recovery transaction commits. Startup connects the producer in
-          // production; this makes a disconnected producer visible in logs
-          // while preserving Razorpay's successful recovery acknowledgement.
           console.error("[razorpayWebhook] Failed to publish recovery for embedding:", publishError);
-          try {
-            await recordFailureAuditEntry(
-              { id: event.id, entityId: event.entityId },
-              { inputSnapshot: { stage: "embedding_publish", payload } },
-            );
-          } catch (auditError) {
-            console.error("[razorpayWebhook] Failed to record publish failure audit entry:", auditError);
-          }
         }
 
-        // Trigger real-time WebSocket update on the global live channel
         await emitLiveUpdate(event.id);
-
         console.log(`[razorpayWebhook] Entity ${event.entityId} marked RECOVERED via payment webhook.`);
       } else {
-        // Check if matching PromiseToPay commitments exist without attached RevenueEvent
         const matchingPromises = await prisma.promiseToPay.findMany({
           where: {
             OR: [
               ...(paymentLinkId ? [{ razorpayPaymentLinkId: paymentLinkId }] : []),
               ...(notesEntityId ? [{ entityId: notesEntityId }] : []),
+              ...((notes as any)?.promise_id ? [{ id: (notes as any).promise_id }] : []),
               ...(paymentEntity?.email ? [{ customer: { email: paymentEntity.email } }] : []),
             ],
             status: { in: ["pending", "reminder_sent"] },
@@ -219,16 +226,46 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
                 where: { id: p.id },
                 data: { status: "kept" },
               });
-              if (p.eventId) {
+              let eventId = p.eventId;
+              if (!eventId) {
+                const fallbackEv = await tx.revenueEvent.create({
+                  data: {
+                    entityId: p.entityId,
+                    entityType: "INVOICE",
+                    eventType: "INVOICE_OVERDUE",
+                    customerId: p.customerId,
+                    amount: p.promisedAmount,
+                    currency: p.currency,
+                    occurredAt: p.createdAt,
+                    errorCode: "PROMISE_PAYMENT",
+                    errorReason: "promise_settlement",
+                    rawPayload: { promise: true },
+                  },
+                });
+                eventId = fallbackEv.id;
+                await tx.promiseToPay.update({
+                  where: { id: p.id },
+                  data: { eventId: fallbackEv.id },
+                });
                 await writeLedgerEntry(tx, {
                   entityId: p.entityId,
-                  eventId: p.eventId,
-                  type: "RECOVERED",
+                  eventId: fallbackEv.id,
+                  type: "AT_RISK",
                   amount: p.promisedAmount,
                   currency: p.currency,
-                  referenceId: paymentId || paymentLinkId || p.id,
+                  referenceId: p.entityId,
                 });
               }
+
+              await writeLedgerEntry(tx, {
+                entityId: p.entityId,
+                eventId: eventId,
+                type: "RECOVERED",
+                amount: p.promisedAmount,
+                currency: p.currency,
+                referenceId: paymentId || paymentLinkId || p.id,
+              });
+
               await tx.entityWorkflowState.upsert({
                 where: { entityId: p.entityId },
                 create: {
@@ -261,4 +298,3 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
 }
 
 razorpayWebhookRouter.post("/", handleRazorpayWebhook);
-

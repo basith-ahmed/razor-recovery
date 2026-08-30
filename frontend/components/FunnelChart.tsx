@@ -33,13 +33,13 @@ export function FunnelChart({ data = [] }: FunnelChartProps) {
   }));
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-5 mb-6">
-      <h3 className="text-md font-semibold text-slate-900 mb-1">Recovery Conversion Funnel</h3>
-      <p className="text-xs text-slate-400 mb-4">Volume of revenue entities passing through workflow stages</p>
+    <div className="bg-white border border-slate-200 rounded p-4 mb-6">
+      <h3 className="text-sm font-semibold text-slate-900 mb-1">Recovery Conversion Funnel</h3>
+      <p className="text-xs text-slate-500 mb-4">Volume of revenue entities passing through workflow stages</p>
 
       <div className="h-64 w-full">
         {chartData.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+          <div className="h-full flex items-center justify-center text-slate-500 text-xs">
             No funnel data available
           </div>
         ) : (
@@ -56,7 +56,7 @@ export function FunnelChart({ data = [] }: FunnelChartProps) {
                 contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", color: "#f8fafc" }}
                 itemStyle={{ color: "#38bdf8" }}
               />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="count" radius={[2, 2, 0, 0]}>
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}

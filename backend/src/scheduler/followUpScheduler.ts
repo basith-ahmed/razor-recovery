@@ -1,18 +1,3 @@
-/**
- * Follow-up Scheduler — the only component in the system that acts on a clock.
- *
- * The pipeline itself is purely reactive: it thinks only when a failure event
- * arrives. Policy windows (cooldowns, no-response timeouts) are stored as
- * timestamps in EntityCauseState, and THIS module periodically scans for
- * timestamps that have elapsed while an entity's recovery arc is still open,
- * then synthesizes a fresh RawRevenueEvent back onto revenue.events.raw.
- *
- * The synthesized event walks the exact same pipeline as a real failure
- * (detection → diagnosis → decision → execution → audit), so all per-cause
- * budgets, stopping rules, DNC checks, and audit trails apply unchanged. The
- * scheduler never executes actions directly and never bypasses policy.
- */
-
 import { randomUUID } from "crypto";
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
@@ -28,11 +13,8 @@ import { emitLiveUpdate } from "../api/websocket";
 
 const SCAN_INTERVAL_MS = 30_000;
 const FOLLOWUP_DEDUP_PREFIX = "razorrecovery:followup";
-// If the pipeline acts on a follow-up, lastContactedAt/cooldownUntil refresh
-// and selection stops matching on its own; these TTLs just bound re-fires
-// when the pipeline legitimately cannot act (e.g. everything blocked).
-const COOLDOWN_DEDUP_TTL = 86_400; // 24h
-const NO_RESPONSE_DEDUP_TTL = 604_800; // 7d
+const COOLDOWN_DEDUP_TTL = 86_400;
+const NO_RESPONSE_DEDUP_TTL = 604_800;
 
 export type FollowUpType = "cooldown_expired" | "no_response_timeout";
 
@@ -42,19 +24,6 @@ export interface DueFollowUp {
   type: FollowUpType;
 }
 
-/**
- * Pure selection logic: given open (non-terminal) entity arcs and their
- * per-cause states, decide which (entityId, cause) pairs are due for a
- * follow-up right now.
- *
- * Rules:
- * - ESCALATED arcs are skipped: a human owns them; we must not auto-contact.
- * - Cooldown-expiry follow-ups fire only while the cause still has budget
- *   (attemptCount < maxAttempts). Once the budget is exhausted the normal
- *   decision path escalates/writes off — chasing further would be harassment.
- * - Causes without a maxAttempts budget get no cooldown chase (nothing to
- *   spend), but DO get no-response timeout handling per their policy.
- */
 export function selectDueFollowUps(
   openArcs: Array<{
     entityId: string;
@@ -103,7 +72,6 @@ export function selectDueFollowUps(
       const effectiveCooldown = arc.cooldownUntil ?? cs.cooldownUntil;
       const effectiveLastContact = arc.lastContactedAt ?? cs.lastContactedAt;
 
-      // Cooldown expired while budget remains → worth another contact cycle
       if (
         typeof stopping.maxAttempts === "number" &&
         effectiveAttempts < stopping.maxAttempts &&
@@ -115,8 +83,6 @@ export function selectDueFollowUps(
         continue;
       }
 
-      // No-response timeout: policy says act (or stop) once the silence
-      // threshold elapses
       if (
         stopping.noResponseWithinHours !== undefined &&
         effectiveLastContact !== null &&
@@ -136,12 +102,6 @@ function dedupKey(followUp: DueFollowUp): string {
   return `${FOLLOWUP_DEDUP_PREFIX}:${followUp.entityId}:${followUp.causeLabel}:${followUp.type}`;
 }
 
-/**
- * Pure filter: a generic cooldown-expiry follow-up must NOT fire for an
- * (entityId, cause) pair that already has a deferred retry pending — the
- * scheduled retry is that cause's chosen next contact, and letting both fire
- * would race two independent contact paths against the same customer.
- */
 export function suppressPendingScheduledRetries(
   due: DueFollowUp[],
   pendingScheduled: Array<{ entityId: string; causeLabel: string | null }>,
@@ -157,13 +117,6 @@ export function suppressPendingScheduledRetries(
   );
 }
 
-/**
- * Clone the entity's most recent real event as a new synthetic event.
- * Reusing the latest event preserves entityType/errorReason (so RULE
- * diagnosis lands on the same cause) and razorpayOrderId (so a retry
- * targets the original order). The marker is written into rawPayload so
- * downstream stages can recognize why this event exists.
- */
 async function buildSyntheticEvent(
   entityId: string,
   followUpMarker: Record<string, unknown>,
@@ -221,8 +174,6 @@ async function scanAndPublish(): Promise<void> {
     now,
   );
 
-  // Don't double-contact: where a deferred retry is already pending, it — not
-  // a generic synthetic event — is that cause's next contact.
   const pendingScheduled = await prisma.action.findMany({
     where: { result: "scheduled", actionType: "retry_payment_delayed" },
     select: {
@@ -268,21 +219,10 @@ async function scanAndPublish(): Promise<void> {
 
 let scanTimer: NodeJS.Timeout | null = null;
 
-// ── Scheduled retries (retry_payment_delayed) ─────────────────────────────────
-
 export type ScheduledRetryDecision =
   | { actionId: string; verdict: "dispatch" }
   | { actionId: string; verdict: "cancel"; reason: "arc_closed" | "escalated" };
 
-/**
- * Pure decision logic for deferred retries. When a scheduled retry's cooldown
- * has lapsed and the entity's arc is still open (and not escalated), the
- * scheduler DISPATCHES it back into the pipeline — it never executes anything
- * itself. The pipeline's decision stage recognizes the dispatched event as the
- * due retry and the executor runs it through the normal path. Arcs that closed
- * or escalated meanwhile get their scheduled retry cancelled rather than
- * executed behind policy's (or a human's) back.
- */
 export function decideScheduledRetries(
   actions: Array<{ id: string; entityId: string; cooldownUntil: Date | null }>,
   arcStateByEntity: Record<string, string>,
@@ -302,7 +242,6 @@ export function decideScheduledRetries(
     if (action.cooldownUntil !== null && action.cooldownUntil <= now) {
       decisions.push({ actionId: action.id, verdict: "dispatch" });
     }
-    // Not due yet → hold silently; a later scan re-evaluates.
   }
   return decisions;
 }
@@ -364,7 +303,6 @@ async function dispatchDueScheduledRetries(now: Date): Promise<void> {
       continue;
     }
 
-    // Dedup guard: dispatch each scheduled retry at most once
     const isNew = await redis.set(
       `razorrecovery:scheduledretry:${decision.actionId}`,
       "1",
@@ -374,8 +312,6 @@ async function dispatchDueScheduledRetries(now: Date): Promise<void> {
     );
     if (!isNew) continue;
 
-    // Release the scheduled row so later scans don't re-dispatch it. The
-    // superseding retry creates its own Action row when the executor runs it.
     await prisma.action.update({
       where: { id: decision.actionId },
       data: { result: "dispatched" },
@@ -395,13 +331,12 @@ async function dispatchDueScheduledRetries(now: Date): Promise<void> {
 
     await publish(TOPICS.EVENTS_RAW, event.id, event);
     console.log(
-      `[scheduler] Dispatched due scheduled retry ${decision.actionId} for entity ${entityId} → event ${event.id} (pipeline will decide & execute)`,
+      `[scheduler] Dispatched due scheduled retry ${decision.actionId} for entity ${entityId} → event ${event.id}`,
     );
   }
 }
 
 export async function scanAndProcessPromises(now: Date): Promise<void> {
-  // Stage 1: Check pending promises that passed promisedDate
   const overduePromises = await prisma.promiseToPay.findMany({
     where: {
       status: "pending",
@@ -457,7 +392,6 @@ export async function scanAndProcessPromises(now: Date): Promise<void> {
     }
   }
 
-  // Stage 2: Check reminder_sent promises that passed gracePeriodUntil
   const brokenPromises = await prisma.promiseToPay.findMany({
     where: {
       status: "reminder_sent",
@@ -542,7 +476,7 @@ export async function startFollowUpScheduler(): Promise<void> {
       .then(() => scanAndProcessPromises(now))
       .catch((err) => logError("scheduler", err));
   }, SCAN_INTERVAL_MS);
-  scanTimer.unref(); // never block graceful shutdown
+  scanTimer.unref();
   console.log(
     `Follow-up scheduler started (scanning every ${SCAN_INTERVAL_MS / 1000}s).`,
   );
@@ -555,4 +489,3 @@ export async function stopFollowUpScheduler(): Promise<void> {
     console.log("Follow-up scheduler stopped.");
   }
 }
-

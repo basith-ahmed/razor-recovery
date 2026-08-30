@@ -57,6 +57,13 @@ export interface ActionResult {
 }
 
 export type Window = "1h" | "24h" | "7d" | "all";
+export const VALID_WINDOWS: readonly Window[] = ["1h", "24h", "7d", "all"] as const;
+
+export function parseWindow(raw: unknown, defaultWindow: Window = "24h"): Window {
+  return typeof raw === "string" && (VALID_WINDOWS as readonly string[]).includes(raw)
+    ? (raw as Window)
+    : defaultWindow;
+}
 
 export interface MetricsSummary {
   window: Window;

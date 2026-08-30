@@ -12,6 +12,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { formatCauseLabel, formatCurrency } from "../lib/formatters";
 
 interface CauseChannelChartsProps {
   byCause?: { cause: string; recovered: number; atRisk: number }[];
@@ -25,34 +26,16 @@ interface CauseChannelChartsProps {
 
 const COLORS = ["#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#06b6d4", "#ec4899"];
 
-const CAUSE_DISPLAY_NAMES: Record<string, string> = {
-  expired_card: "Expired Card",
-  insufficient_funds: "Insufficient Funds",
-  gateway_timeout: "Gateway Timeout",
-  price_friction: "Price Friction",
-  no_reason_signal: "No Reason Signal",
-  mandate_execution_failed_retryable: "Mandate: Retryable Failure",
-  mandate_requires_reauthorization: "Mandate: Re-auth Required",
-  invoice_overdue: "Invoice Overdue",
-  invoice_disputed: "Invoice Disputed",
-  dnc: "DNC / Consent Block",
-};
-
-function displayCause(cause: string): string {
-  return CAUSE_DISPLAY_NAMES[cause] ?? cause.replace(/_/g, " ");
-}
-
 export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChannelChartsProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-      {/* 1. Failure Cause Breakdown */}
-      <div className="bg-white border border-slate-200 rounded-lg p-5">
-        <h3 className="text-md font-semibold text-slate-900 mb-1">Failure Cause Distribution</h3>
-        <p className="text-xs text-slate-400 mb-4">Breakdown of failure reasons for current window</p>
+      <div className="bg-white border border-slate-200 rounded p-4">
+        <h3 className="text-sm font-semibold text-slate-900 mb-1">Failure Cause Distribution</h3>
+        <p className="text-xs text-slate-500 mb-4">Breakdown of failure reasons for current window</p>
 
         <div className="h-64 w-full">
           {byCause.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+            <div className="h-full flex items-center justify-center text-slate-500 text-xs">
               No cause data available
             </div>
           ) : (
@@ -68,7 +51,7 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
                   innerRadius={45}
                   paddingAngle={2}
                   label={(entry: { cause?: string; name?: string; percent?: number }) =>
-                    `${displayCause(entry.cause || entry.name || "")} (${((entry.percent || 0) * 100).toFixed(0)}%)`
+                    `${formatCauseLabel(entry.cause || entry.name || "")} (${((entry.percent || 0) * 100).toFixed(0)}%)`
                   }
                 >
                   {byCause.map((entry, index) => (
@@ -78,7 +61,7 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
                 <Tooltip
                   contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", color: "#f8fafc" }}
                   formatter={(value: unknown) => [
-                    `₹${Number(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`,
+                    formatCurrency(Number(value ?? 0)),
                     "Amount at Risk",
                   ]}
                 />
@@ -88,14 +71,13 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
         </div>
       </div>
 
-      {/* 2. Channel Performance */}
-      <div className="bg-white border border-slate-200 rounded-lg p-5">
-        <h3 className="text-md font-semibold text-slate-900 mb-1">Recovery Channel Efficiency</h3>
-        <p className="text-xs text-slate-400 mb-4">Total events attempted vs successfully recovered events per channel</p>
+      <div className="bg-white border border-slate-200 rounded p-4">
+        <h3 className="text-sm font-semibold text-slate-900 mb-1">Recovery Channel Efficiency</h3>
+        <p className="text-xs text-slate-500 mb-4">Total events attempted vs successfully recovered events per channel</p>
 
         <div className="h-64 w-full">
           {byChannel.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+            <div className="h-full flex items-center justify-center text-slate-500 text-xs">
               No channel data available
             </div>
           ) : (
@@ -131,8 +113,8 @@ export function CauseChannelCharts({ byCause = [], byChannel = [] }: CauseChanne
                   ]}
                 />
                 <Legend wrapperStyle={{ paddingTop: "10px", fontSize: "12px" }} />
-                <Bar dataKey="count" name="Total Events" fill="#64748b" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="recoveredEvents" name="Recovered Events" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" name="Total Events" fill="#64748b" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="recoveredEvents" name="Recovered Events" fill="#22c55e" radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

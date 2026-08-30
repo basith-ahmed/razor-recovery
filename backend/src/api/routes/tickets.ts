@@ -7,7 +7,8 @@ import {
   sendTicketEmail,
   resolveTicket,
 } from "../../services/ticketService";
-import { DomainError } from "../../domain/types";
+import { handleRouteError } from "../../utils/apiResponse";
+import { parsePagination } from "../../utils/pagination";
 
 export const ticketsRouter = Router();
 
@@ -17,25 +18,24 @@ ticketsRouter.get("/stats", async (_req, res) => {
     const stats = await getTicketStats();
     return res.status(200).json(stats);
   } catch (error) {
-    console.error("[ticketsRouter] Failed to fetch ticket stats:", error);
-    return res.status(500).json({ error: "Failed to fetch ticket stats" });
+    return handleRouteError(res, error, "Failed to fetch ticket stats");
   }
 });
 
 // GET /tickets — list tickets with filters & pagination
 ticketsRouter.get("/", async (req, res) => {
   try {
-    const { status, search, page, limit } = req.query;
+    const { status, search } = req.query;
+    const pagination = parsePagination(req.query as Record<string, unknown>, 20);
     const result = await listTickets({
       status: typeof status === "string" ? status : undefined,
       search: typeof search === "string" ? search : undefined,
-      page: page ? parseInt(page as string, 10) : 1,
-      limit: limit ? parseInt(limit as string, 10) : 20,
+      page: pagination.page,
+      limit: pagination.limit,
     });
     return res.status(200).json(result);
   } catch (error) {
-    console.error("[ticketsRouter] Failed to list tickets:", error);
-    return res.status(500).json({ error: "Failed to list tickets" });
+    return handleRouteError(res, error, "Failed to list tickets");
   }
 });
 
@@ -46,11 +46,7 @@ ticketsRouter.get("/:id", async (req, res) => {
     const ticketData = await getTicketById(id);
     return res.status(200).json(ticketData);
   } catch (error) {
-    if (error instanceof DomainError && error.code === "TICKET_NOT_FOUND") {
-      return res.status(404).json({ error: error.message });
-    }
-    console.error("[ticketsRouter] Failed to get ticket:", error);
-    return res.status(500).json({ error: "Failed to get ticket" });
+    return handleRouteError(res, error, "Failed to get ticket");
   }
 });
 
@@ -67,11 +63,7 @@ ticketsRouter.post("/:id/notes", async (req, res) => {
     const note = await addTicketNote(id, { content, author, type });
     return res.status(201).json(note);
   } catch (error) {
-    if (error instanceof DomainError && error.code === "TICKET_NOT_FOUND") {
-      return res.status(404).json({ error: error.message });
-    }
-    console.error("[ticketsRouter] Failed to add ticket note:", error);
-    return res.status(500).json({ error: "Failed to add ticket note" });
+    return handleRouteError(res, error, "Failed to add ticket note");
   }
 });
 
@@ -94,11 +86,7 @@ ticketsRouter.post("/:id/send-email", async (req, res) => {
 
     return res.status(200).json(result);
   } catch (error) {
-    if (error instanceof DomainError && error.code === "TICKET_NOT_FOUND") {
-      return res.status(404).json({ error: error.message });
-    }
-    console.error("[ticketsRouter] Failed to send ticket email:", error);
-    return res.status(500).json({ error: "Failed to send outreach email" });
+    return handleRouteError(res, error, "Failed to send outreach email");
   }
 });
 
@@ -123,10 +111,6 @@ ticketsRouter.post("/:id/resolve", async (req, res) => {
 
     return res.status(200).json(result);
   } catch (error) {
-    if (error instanceof DomainError && error.code === "TICKET_NOT_FOUND") {
-      return res.status(404).json({ error: error.message });
-    }
-    console.error("[ticketsRouter] Failed to resolve ticket:", error);
-    return res.status(500).json({ error: "Failed to resolve ticket" });
+    return handleRouteError(res, error, "Failed to resolve ticket");
   }
 });

@@ -1,5 +1,5 @@
 import { requestJson } from "../config/openai";
-import { logError, renderError } from "../config/logger";
+import { logError } from "../config/logger";
 import { getPolicyVersion } from "../domain/policy";
 import { FilterContext, filterLegalActions } from "../domain/stoppingRules";
 import { DecisionResult, DiagnosisResult, DomainError } from "../domain/types";
@@ -69,7 +69,6 @@ export async function decide(
     customerLtv: number;
     priorFailures: number;
     daysSinceLastContact: number;
-    /** Set when this event is a scheduler-dispatched due deferred retry. */
     dueScheduledRetry?: boolean;
   },
   retrievalContext?: DecisionRetrievalContext,
@@ -89,9 +88,6 @@ export async function decide(
     return { legalActions, chosenAction: "none", reasoning: reason, policyVersion };
   }
 
-  // Honor scheduled-retry commitments deterministically: when the scheduler
-  // dispatches a due deferred retry, execute the retry now (via the normal
-  // executor path) rather than re-asking the LLM what to do.
   if (entityContext.dueScheduledRetry) {
     const immediateRetry = legalActions.find(
       (a) => a === "retry_payment_immediate",
@@ -105,8 +101,6 @@ export async function decide(
         policyVersion,
       };
     }
-    // No immediate retry is legal for this cause → fall through to the normal
-    // flow; the commitment degrades to whatever policy currently allows.
   }
 
   if (legalActions.length === 1) {

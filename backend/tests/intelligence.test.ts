@@ -209,10 +209,10 @@ describe("decide", () => {
 
   it("accepts a valid model choice when multiple legal actions are available", async () => {
     mockedFindSimilarCases.mockResolvedValueOnce([
-      { causeLabel: "expired_card", chosenAction: "send_payment_link", outcome: "recovered", daysToRecover: 1 },
+      { causeLabel: "expired_card", chosenAction: "send_reminder_email", outcome: "recovered", daysToRecover: 1 },
     ]);
     mockedRequestJson.mockResolvedValueOnce(
-      JSON.stringify({ chosen_action: "send_payment_link", reasoning: "Customer has high LTV and expired card." }),
+      JSON.stringify({ chosen_action: "send_reminder_email", reasoning: "Customer has high LTV and expired card." }),
     );
 
     const result = await decide(diagnosis, filterContext(), entityContext, {
@@ -223,8 +223,8 @@ describe("decide", () => {
     expect(mockedRequestJson).toHaveBeenCalledTimes(1);
     expect(mockedRequestJson.mock.calls[0][0].input).toContain("provided legal_actions list");
     expect(mockedFindSimilarCases).toHaveBeenCalledWith("expired_card", "CART", 1200);
-    expect(result.legalActions).toContain("send_payment_link");
-    expect(result.chosenAction).toBe("send_payment_link");
+    expect(result.legalActions).toContain("send_reminder_email");
+    expect(result.chosenAction).toBe("send_reminder_email");
     expect(result.reasoning).toBe("Customer has high LTV and expired card.");
   });
 

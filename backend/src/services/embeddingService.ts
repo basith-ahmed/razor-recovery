@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "../config/prisma";
 import { embed } from "../config/voyage";
+import { env } from "../config/env";
 
 export const TERMINAL_AUDIT_OUTCOMES = new Set(["recovered", "written_off", "escalated"]);
 
@@ -43,16 +44,16 @@ function stringValue(value: unknown, fallback: string): string {
 
 /** Index one completed recovery case. The unique auditEntryId makes retries idempotent. */
 export async function indexAuditEntry(entryId: string): Promise<void> {
+  if (!env.VOYAGE_API_KEY) {
+    return;
+  }
+
   const entry = await prisma.auditEntry.findUniqueOrThrow({
     where: { id: entryId },
     include: { event: { include: { diagnosis: true, decision: true } } },
   });
   if (!TERMINAL_AUDIT_OUTCOMES.has(entry.outcome)) return;
 
-  // Webhook recovery entries deliberately preserve their webhook input, while
-  // the authoritative diagnosis/decision live on RevenueEvent. Merge both so
-  // every terminal case remains useful, including records written before the
-  // webhook began carrying complete snapshots.
   const diagnosis = {
     ...objectValue(entry.event.diagnosis),
     ...objectValue(entry.diagnosisSnapshot),

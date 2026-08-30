@@ -1,10 +1,3 @@
-/**
- * Metrics Service — read-only aggregation queries over rolling time windows.
- * Metrics are computed over a window ('1h' | '24h' | '7d' | 'all') across all
- * events in the system, and cached briefly in Redis so dashboard polling stays
- * snappy. There is no run/batch scoping anywhere.
- */
-
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
 import {
@@ -16,9 +9,6 @@ import {
 
 const CACHE_TTL_SECONDS = 5;
 
-/**
- * Median of an array of numbers. Returns null for empty arrays.
- */
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -49,22 +39,15 @@ export function eventWindowFilter(window: Window) {
   };
 }
 
-/**
- * Returns funnel stage counts within the given time window:
- * detected → diagnosed → contacted → recovered
- */
 export async function recoveryFunnel(window: Window): Promise<FunnelStage[]> {
   const eventFilter = eventWindowFilter(window);
 
-  // detected = total events in the window
   const detected = await prisma.revenueEvent.count({ where: eventFilter });
 
-  // diagnosed = events that have a Diagnosis row
   const diagnosed = await prisma.diagnosis.count({
     where: { event: eventFilter },
   });
 
-  // contacted = events that have an Action row with result != 'skipped'
   const contacted = await prisma.action.count({
     where: {
       event: eventFilter,
@@ -72,7 +55,6 @@ export async function recoveryFunnel(window: Window): Promise<FunnelStage[]> {
     },
   });
 
-  // recovered = events where an audit entry has outcome 'recovered'
   const recoveredAudits = await prisma.auditEntry.findMany({
     where: {
       event: eventFilter,
@@ -219,7 +201,6 @@ export async function computeLiveMetricsUncached(
     }
   }
 
-  // Compliance counters over the audit trail in this window
   const audits = await prisma.auditEntry.findMany({
     where: { event: eventFilter },
     select: { outcome: true, decisionSnapshot: true },
@@ -292,10 +273,6 @@ export async function computeLiveMetricsUncached(
   };
 }
 
-/**
- * Full live metrics summary for the given rolling window, cached briefly in
- * Redis so dashboard polling stays responsive.
- */
 export async function computeLiveMetrics(
   window: Window,
 ): Promise<MetricsSummary> {
@@ -323,9 +300,6 @@ export async function computeLiveMetrics(
   return summary;
 }
 
-/**
- * Buckets the same aggregation over time for the Metrics page trend chart.
- */
 export async function metricsTrend(
   window: Window,
   bucket: "hour" | "day",

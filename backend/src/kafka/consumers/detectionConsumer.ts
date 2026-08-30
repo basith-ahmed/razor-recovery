@@ -1,14 +1,3 @@
-/**
- * Detection Consumer — group `detection-service`
- *
- * Subscribes to EVENTS_RAW. For each message:
- * 1. Dedup via Redis SETNX
- * 2. Loads customer history from Postgres
- * 3. Calls computeRiskScore
- * 4. Publishes EnrichedRevenueEvent to EVENTS_ENRICHED
- * 5. Upserts the RevenueEvent row with riskScore/urgency
- */
-
 import { Prisma } from "@prisma/client";
 import { kafka } from "../../config/kafka";
 import { prisma } from "../../config/prisma";
@@ -21,15 +10,13 @@ import { TOPICS } from "../topics";
 import { emitIncomingEvent } from "../../api/websocket";
 import { recordFailureAuditEntry } from "../../services/auditService";
 import { writeLedgerEntry } from "../../services/ledgerService";
+import { checkAndSetDedup } from "../../utils/redisUtils";
+import { countCustomerPriorFailures, calculateCustomerTenureDays } from "../../services/customerService";
 
 const CONSUMER_GROUP = "detection-service";
 const STAGE = "detection";
-const DEDUP_TTL = 3600; // 1 hour
-// Rolling normalization reference for risk scoring. There is no "batch" to
-// take a max over in a continuous stream, so this value stands in for it.
-// A 24h TTL gives it a natural daily reset so it doesn't grow unbounded.
 const RISK_NORM_KEY = "razorrecovery:riskNorm:recentMaxAmount";
-const RISK_NORM_TTL = 86400; // 24 hours
+const RISK_NORM_TTL = 86400;
 
 const consumer = kafka.consumer({ groupId: CONSUMER_GROUP });
 
@@ -44,15 +31,12 @@ export async function startDetectionConsumer(): Promise<void> {
         if (!message.value) return;
         event = JSON.parse(message.value.toString()) as RawRevenueEvent;
 
-        // Idempotency: Redis SETNX dedup
-        const dedupKey = `razorrecovery:dedup:${event.id}:${STAGE}`;
-        const isNew = await redis.set(dedupKey, "1", "EX", DEDUP_TTL, "NX");
+        const isNew = await checkAndSetDedup(event.id, STAGE);
         if (!isNew) {
           console.log(`[detection] Skipping duplicate event ${event.id}`);
           return;
         }
 
-        // Load customer history from Postgres
         const customer = await prisma.customer.findUnique({
           where: { id: event.customerId },
         });
@@ -61,21 +45,13 @@ export async function startDetectionConsumer(): Promise<void> {
           return;
         }
 
-        // Count prior failures for this customer
-        const priorFailures = await prisma.revenueEvent.count({
-          where: {
-            customerId: event.customerId,
-            id: { not: event.id },
-          },
-        });
+        const priorFailures = await countCustomerPriorFailures(event.customerId, event.id);
 
-        // Rolling amount reference for normalisation (Redis-backed)
         const recentMaxRaw = await redis.get(RISK_NORM_KEY);
         const recentMaxAmount = recentMaxRaw
           ? Number(recentMaxRaw)
           : event.amount;
 
-        // Extract urgency-related data from rawPayload
         const payload = event.rawPayload as Record<string, unknown>;
         const daysOverdue =
           typeof payload.daysOverdue === "number"
@@ -86,13 +62,7 @@ export async function startDetectionConsumer(): Promise<void> {
             ? payload.hoursSinceAbandon
             : undefined;
 
-        const tenureDays = Math.max(
-          0,
-          Math.floor(
-            (Date.now() - new Date(customer.createdAt).getTime()) /
-              (1000 * 60 * 60 * 24),
-          ),
-        );
+        const tenureDays = calculateCustomerTenureDays(customer.createdAt);
 
         const { riskScore, urgency } = computeRiskScore(
           event,
@@ -106,7 +76,6 @@ export async function startDetectionConsumer(): Promise<void> {
           hoursSinceAbandon,
         );
 
-        // Update the rolling max: MAX(current, event.amount), with a daily reset
         await redis.set(
           RISK_NORM_KEY,
           String(Math.max(Number(recentMaxRaw ?? 0), event.amount)),
@@ -114,9 +83,6 @@ export async function startDetectionConsumer(): Promise<void> {
           RISK_NORM_TTL,
         );
 
-        // Persist the event (upsert makes the consumer self-sufficient: any
-        // publisher can emit a complete RawRevenueEvent without pre-saving it)
-        // Upsert the RevenueEvent row inside a transaction to also write the LedgerEntry
         await prisma.$transaction(async (tx) => {
           await tx.revenueEvent.upsert({
             where: { id: event!.id },
@@ -152,7 +118,6 @@ export async function startDetectionConsumer(): Promise<void> {
           });
         });
 
-        // Build enriched event and publish
         const enrichedEvent: EnrichedRevenueEvent = {
           ...event,
           riskScore,
@@ -161,8 +126,6 @@ export async function startDetectionConsumer(): Promise<void> {
 
         await publish(TOPICS.EVENTS_ENRICHED, event.id, enrichedEvent);
 
-        // Live ingestion feed: broadcast the event as soon as it has entered
-        // the pipeline (observability only — no downstream stage depends on it)
         const followUpMarker = payload.followUp as { type?: string } | undefined;
         emitIncomingEvent({
           eventId: event.id,
@@ -184,7 +147,6 @@ export async function startDetectionConsumer(): Promise<void> {
         );
       } catch (error) {
         logError("detection", error);
-        // Write a failed audit entry so the failure is visible
         if (event) {
           try {
             await recordFailureAuditEntry(event, { inputSnapshot: event });

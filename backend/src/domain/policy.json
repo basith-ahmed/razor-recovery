@@ -3,12 +3,12 @@
   "rules": [
     {
       "cause": "expired_card",
-      "actions": ["retry_payment_immediate", "send_payment_link", "escalate_to_human"],
+      "actions": ["retry_payment_immediate", "send_reminder_email", "escalate_to_human"],
       "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxAction": "escalate_to_human" }
     },
     {
       "cause": "insufficient_funds",
-      "actions": ["retry_payment_immediate", "send_payment_link", "escalate_to_human"],
+      "actions": ["retry_payment_immediate", "send_reminder_email", "escalate_to_human"],
       "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxAction": "escalate_to_human" }
     },
     {
@@ -28,16 +28,16 @@
     },
     {
       "cause": "mandate_execution_failed_retryable",
-      "actions": ["retry_payment_delayed", "send_payment_link"],
+      "actions": ["retry_payment_delayed", "send_reminder_email"],
       "stopping": {
         "maxAttempts": 3,
         "windowDays": 7,
-        "onMaxAction": "send_payment_link"
+        "onMaxAction": "send_reminder_email"
       }
     },
     {
       "cause": "mandate_requires_reauthorization",
-      "actions": ["send_payment_link", "escalate_to_human"],
+      "actions": ["send_reminder_email", "escalate_to_human"],
       "stopping": {
         "hardStopDays": 30,
         "onHardStopAction": "escalate_to_human"

@@ -214,16 +214,14 @@ export function generateRecoveryEmail(ctx: EmailTemplateContext): { subject: str
   return { subject, html };
 }
 
-/**
- * Builds confirmation email for a newly recorded Promise-to-Pay commitment.
- */
 export function buildPromiseConfirmationEmail(params: {
   customerName: string;
   amount: number;
-  promisedDate: Date;
+  promisedDate: Date | string;
   paymentUrl?: string;
 }): { subject: string; html: string } {
-  const formattedDate = params.promisedDate.toLocaleDateString("en-IN", {
+  const dateObj = params.promisedDate instanceof Date ? params.promisedDate : new Date(params.promisedDate);
+  const formattedDate = isNaN(dateObj.getTime()) ? String(params.promisedDate) : dateObj.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -243,16 +241,14 @@ export function buildPromiseConfirmationEmail(params: {
   return { subject, html };
 }
 
-/**
- * Builds reminder email when a Promise-to-Pay commitment passes its due date.
- */
 export function buildPromiseReminderEmail(params: {
   customerName: string;
   amount: number;
-  promisedDate: Date;
+  promisedDate: Date | string;
   paymentUrl?: string;
 }): { subject: string; html: string } {
-  const formattedDate = params.promisedDate.toLocaleDateString("en-IN", {
+  const dateObj = params.promisedDate instanceof Date ? params.promisedDate : new Date(params.promisedDate);
+  const formattedDate = isNaN(dateObj.getTime()) ? String(params.promisedDate) : dateObj.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",

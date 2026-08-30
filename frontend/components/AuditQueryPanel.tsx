@@ -65,7 +65,7 @@ export function AuditQueryPanel({
   };
 
   return (
-    <div className="bg-white border border-slate-300 rounded p-4">
+    <div className="bg-white border border-slate-200 rounded p-4">
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-slate-900">
           {title || (entityId ? "Ask AI About This Entity's History" : "Natural-Language Audit Trail Assistant")}
@@ -78,7 +78,6 @@ export function AuditQueryPanel({
         </p>
       </div>
 
-      {/* Suggested Quick Questions */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <span className="text-xs text-slate-500">Suggestions:</span>
         {sampleQuestions.map((sq, i) => (
@@ -94,7 +93,6 @@ export function AuditQueryPanel({
         ))}
       </div>
 
-      {/* Form Input */}
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           type="text"
@@ -118,14 +116,12 @@ export function AuditQueryPanel({
         </button>
       </form>
 
-      {/* Error display */}
       {error && (
         <div className="mt-3 p-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded">
           {error}
         </div>
       )}
 
-      {/* Response Display */}
       {response && (
         <div className="mt-4 pt-3 border-t border-slate-200 space-y-2">
           <div className="bg-slate-50 border border-slate-200 rounded p-3">
@@ -137,7 +133,6 @@ export function AuditQueryPanel({
             </p>
           </div>
 
-          {/* Citations section */}
           {response.citedEntityIds.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <span className="text-xs font-semibold text-slate-500">

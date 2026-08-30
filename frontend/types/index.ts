@@ -60,6 +60,7 @@ export interface EntityEventItem {
   eventType: string;
   amount: number;
   currency: string;
+  errorReason?: string | null;
   occurredAt: string;
   riskScore: number | null;
   urgency?: number | null;
@@ -321,6 +322,7 @@ export interface TicketDetailResponse {
   event?: EntityEventItem | null;
   workflowState?: string | null;
   auditEntries: AuditEntry[];
+  notes?: TicketNoteItem[];
 }
 
 export interface TicketStats {

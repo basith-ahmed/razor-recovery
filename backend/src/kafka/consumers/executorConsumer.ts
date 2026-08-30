@@ -1,17 +1,7 @@
-/**
- * Executor Consumer — group `executor-service`
- *
- * Subscribes to DECISIONS. For each message:
- * 1. Dedup via Redis SETNX
- * 2. Calls executeAction() from Phase 6 (which already persists the Action row)
- * 3. Publishes { event, diagnosis, decision, action } to ACTIONS
- */
-
 import { Prisma } from "@prisma/client";
 import { kafka } from "../../config/kafka";
 import { prisma } from "../../config/prisma";
 import { logError } from "../../config/logger";
-import { redis } from "../../config/redis";
 import { executeAction } from "../../services/executorService";
 import {
   ActionResult,
@@ -22,10 +12,11 @@ import {
 import { publish } from "../producer";
 import { TOPICS } from "../topics";
 import { recordFailureAuditEntry } from "../../services/auditService";
+import { checkAndSetDedup } from "../../utils/redisUtils";
+import { revenueEventExists } from "../../services/revenueEventService";
 
 const CONSUMER_GROUP = "executor-service";
 const STAGE = "executor";
-const DEDUP_TTL = 3600; // 1 hour
 
 const consumer = kafka.consumer({
   groupId: CONSUMER_GROUP,
@@ -54,18 +45,14 @@ export async function startExecutorConsumer(): Promise<void> {
         payload = JSON.parse(message.value.toString()) as DecisionPayload;
         const { event, diagnosis, decision } = payload;
 
-        // Idempotency: Redis SETNX dedup
-        const dedupKey = `razorrecovery:dedup:${event.id}:${STAGE}`;
-        const isNew = await redis.set(dedupKey, "1", "EX", DEDUP_TTL, "NX");
+        const isNew = await checkAndSetDedup(event.id, STAGE);
         if (!isNew) {
           console.log(`[executor] Skipping duplicate event ${event.id}`);
           return;
         }
 
-        // executeAction() already persists the Action row
         const action: ActionResult = await executeAction(decision, event);
 
-        // Publish to ACTIONS
         await publish(TOPICS.ACTIONS, event.id, {
           event,
           diagnosis,
@@ -79,13 +66,10 @@ export async function startExecutorConsumer(): Promise<void> {
         logError("executor", error);
         if (payload?.event) {
           try {
-            const eventExists = await prisma.revenueEvent.findUnique({
-              where: { id: payload.event.id },
-              select: { id: true },
-            });
+            const eventExists = await revenueEventExists(payload.event.id);
             if (!eventExists) {
               console.warn(
-                `[executor] Skipping failure audit entry for ${payload.event.id}: RevenueEvent does not exist in DB (orphaned message).`,
+                `[executor] Skipping failure audit entry for ${payload.event.id}: RevenueEvent does not exist in DB. Skipping.`,
               );
               return;
             }

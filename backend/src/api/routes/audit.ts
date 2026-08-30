@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { verifyChain } from "../../services/auditService";
+import { handleRouteError } from "../../utils/apiResponse";
 
 export const auditRouter = Router();
 
@@ -20,8 +21,6 @@ auditRouter.get("/verify", async (req: Request, res: Response) => {
     const result = await verifyChain(fromSequence, toSequence);
     return res.status(200).json(result);
   } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : "Failed to verify audit chain";
-    console.error("[auditRouter] Error verifying audit chain:", error);
-    return res.status(500).json({ error: errMessage });
+    return handleRouteError(res, error, "Failed to verify audit chain");
   }
 });

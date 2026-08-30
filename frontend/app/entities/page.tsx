@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { listEntities } from "../../lib/api";
 import { EntityItem, EntityFilters } from "../../types";
 import { EntityTable } from "../../components/EntityTable";
-
 import { useLiveStream } from "../../lib/socket";
 
 export default function EntitiesPage() {
@@ -59,11 +58,11 @@ export default function EntitiesPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Revenue Entities</h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-500">
             Query and inspect failed payment & recovery entities with real-time server-side filtering and pagination.
           </p>
         </div>
-        <div className="text-xs font-mono bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-md">
+        <div className="text-xs font-mono bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded">
           Total Found: {pagination.total}
         </div>
       </div>

@@ -1,11 +1,3 @@
-/**
- * Executor Service — maps a DecisionResult to the appropriate integration call,
- * persists the Action record, and returns the ActionResult.
- *
- * Contains draftRecoveryEmail(), the third AI touchpoint (alongside diagnosis
- * and decision), which asks the LLM for email copy in a billing-recovery tone.
- */
-
 import { logWarn } from "../config/logger";
 import { prisma } from "../config/prisma";
 import * as razorpayIntegration from "../integrations/razorpayIntegration";
@@ -20,14 +12,16 @@ import {
 import {
   generateRecoveryEmail,
   buildEmailTemplate,
+  buildPromiseConfirmationEmail,
 } from "../domain/emailTemplates";
+
+import { findCustomerById } from "./customerService";
+import { revenueEventExists } from "./revenueEventService";
 
 export { buildEmailTemplate };
 
 const RETRY_ACTIONS = new Set(["retry_payment_immediate"]);
-
 const PAYMENT_LINK_ACTIONS = new Set(["send_payment_link"]);
-
 const EMAIL_ACTIONS = new Set([
   "send_reminder_email",
   "send_soft_chase_email",
@@ -37,10 +31,6 @@ const EMAIL_ACTIONS = new Set([
   "send_winback_offer",
 ]);
 
-/**
- * Drafts recovery email copy using pre-generated, parameterized templates.
- * Deterministic, instant, brand-compliant, with zero token latency or cost.
- */
 export async function draftRecoveryEmail(
   event: EnrichedRevenueEvent,
   customerName: string,
@@ -61,26 +51,6 @@ export async function draftRecoveryEmail(
   });
 }
 
-/**
- * Look up customer details needed for integration calls.
- */
-async function lookupCustomer(customerId: string) {
-  const customer = await prisma.customer.findUnique({
-    where: { id: customerId },
-  });
-  if (!customer) {
-    throw new DomainError(
-      `Customer ${customerId} not found.`,
-      "CUSTOMER_NOT_FOUND",
-    );
-  }
-  return customer;
-}
-
-/**
- * Executes the chosen action from a DecisionResult by dispatching to the
- * appropriate integration, persists the Action row, and returns the result.
- */
 export async function executeAction(
   decision: DecisionResult,
   event: EnrichedRevenueEvent,
@@ -95,10 +65,6 @@ export async function executeAction(
       integration: "MOCK",
     };
   } else if (chosenAction === "retry_payment_delayed") {
-    // Honest delayed retry: do NOT hit Razorpay now. Persist the intent as
-    // "scheduled"; the follow-up scheduler executes the real retry once this
-    // cause's cooldown window lapses. The scheduled action still starts the
-    // cooldown clock (see auditService) so nothing else contacts meanwhile.
     const hasIdentifier =
       event.entityType === "SUBSCRIPTION"
         ? Boolean(
@@ -118,8 +84,7 @@ export async function executeAction(
       actionType: chosenAction,
       result: "scheduled",
       integration: "RAZORPAY",
-      detail:
-        "Retry deferred; will execute when the cause cooldown window lapses.",
+      detail: "Retry deferred; will execute when the cause cooldown window lapses.",
     };
   } else if (RETRY_ACTIONS.has(chosenAction)) {
     if (event.entityType === "SUBSCRIPTION") {
@@ -146,7 +111,7 @@ export async function executeAction(
       actionResult = { ...actionResult, actionType: chosenAction };
     }
   } else if (PAYMENT_LINK_ACTIONS.has(chosenAction)) {
-    const customer = await lookupCustomer(event.customerId);
+    const customer = await findCustomerById(event.customerId);
     actionResult = await razorpayIntegration.createRecoveryPaymentLink({
       amount: event.amount,
       currency: event.currency,
@@ -159,7 +124,7 @@ export async function executeAction(
     });
     actionResult = { ...actionResult, actionType: chosenAction };
   } else if (EMAIL_ACTIONS.has(chosenAction)) {
-    const customer = await lookupCustomer(event.customerId);
+    const customer = await findCustomerById(event.customerId);
     
     let paymentUrl: string | undefined;
     let paymentLinkId: string | undefined;
@@ -172,7 +137,7 @@ export async function executeAction(
         customerEmail: customer.email,
         customerPhone: customer.phone ?? undefined,
         description: `Recovery payment for ${event.eventType} — ${event.entityId}`,
-        notify: false, // Do not let Razorpay send its default email/SMS
+        notify: false,
         eventId: event.id,
         actionType: chosenAction,
       });
@@ -202,7 +167,7 @@ export async function executeAction(
       paymentLinkShortUrl: paymentUrl
     };
   } else if (chosenAction === "start_promise_to_pay_tracking") {
-    const customer = await lookupCustomer(event.customerId);
+    const customer = await findCustomerById(event.customerId);
     const rawPayload = (event.rawPayload || {}) as Record<string, unknown>;
     const promisedDateStr = rawPayload.promisedDate as string | undefined;
     const promisedDate = promisedDateStr ? new Date(promisedDateStr) : new Date(Date.now() + 7 * 86400 * 1000);
@@ -219,11 +184,7 @@ export async function executeAction(
       actionType: chosenAction,
     });
 
-    // Check if event exists before creating the PromiseToPay relation
-    const eventExists = await prisma.revenueEvent.findUnique({
-      where: { id: event.id },
-      select: { id: true },
-    });
+    const eventExists = await revenueEventExists(event.id);
 
     await prisma.promiseToPay.create({
       data: {
@@ -240,19 +201,12 @@ export async function executeAction(
       },
     });
 
-    const formattedDate = promisedDate.toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
+    const { subject, html } = buildPromiseConfirmationEmail({
+      customerName: customer.name,
+      amount: event.amount,
+      promisedDate,
+      paymentUrl: linkResult.paymentLinkShortUrl,
     });
-
-    const subject = `Promise-to-Pay Confirmation: ₹${event.amount} commitment due by ${formattedDate}`;
-    const html = buildEmailTemplate([
-      `Hi ${customer.name},`,
-      `Thank you for confirming your commitment to pay. We have recorded your promise to settle ₹${event.amount} on or before <strong>${formattedDate}</strong>.`,
-      `You can complete your payment securely anytime before the due date using the button below:`,
-      `If you have any questions or require an adjustment to your schedule, please feel free to reply to this email.`,
-    ], event.amount, linkResult.paymentLinkShortUrl);
 
     let emailMsgId: string | undefined;
     try {
@@ -266,6 +220,8 @@ export async function executeAction(
       logWarn("executor", err);
       console.warn("[executor] Failed to send promise confirmation email; payment link remains active.");
     }
+
+    const formattedDate = promisedDate.toISOString().split("T")[0];
 
     actionResult = {
       actionType: chosenAction,
@@ -294,24 +250,16 @@ export async function executeAction(
     };
   } else {
     throw new DomainError(
-      `Unrecognized action "${chosenAction}" — no integration mapping exists. This is a correctness guard; every action in policy.json must be mapped.`,
+      `Unrecognized action "${chosenAction}" — no integration mapping exists.`,
       "UNMAPPED_ACTION",
     );
   }
 
-  // Persist the Action row.
-  // Upsert: Kafka is at-least-once, so replays after a consumer restart or
-  // rebalance must not fail on the eventId unique constraint. External side
-  // effects above remain at-least-once; the stage dedup key is the first line
-  // of defense against re-execution.
-  const eventExists = await prisma.revenueEvent.findUnique({
-    where: { id: event.id },
-    select: { id: true },
-  });
+  const eventExists = await revenueEventExists(event.id);
 
   if (!eventExists) {
     console.warn(
-      `[executor] Cannot persist Action for event ${event.id}: RevenueEvent does not exist in DB (orphaned Kafka message). Skipping.`,
+      `[executor] Cannot persist Action for event ${event.id}: RevenueEvent does not exist in DB. Skipping.`,
     );
     return actionResult;
   }

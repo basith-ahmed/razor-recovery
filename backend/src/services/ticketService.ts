@@ -6,9 +6,10 @@ import { writeLedgerEntry } from "./ledgerService";
 import { createRecoveryPaymentLink } from "../integrations/razorpayIntegration";
 import { sendRecoveryEmail } from "../integrations/emailIntegration";
 import { buildTicketOutreachEmail } from "../domain/emailTemplates";
+import { parsePagination } from "../utils/pagination";
 
 export interface ListTicketsParams {
-  status?: string; // "open" | "resolved" | "recovered" | "all"
+  status?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -57,13 +58,8 @@ export interface TicketStatsDto {
   totalRecovered: number;
 }
 
-/**
- * List tickets with search and status filtering, enriched with customer and event details.
- */
 export async function listTickets(params: ListTicketsParams = {}) {
-  const page = Math.max(1, params.page ?? 1);
-  const limit = Math.max(1, Math.min(100, params.limit ?? 20));
-  const skip = (page - 1) * limit;
+  const { page, limit, skip } = parsePagination(params as Record<string, unknown>);
 
   const where: any = {};
   if (params.status && params.status !== "all") {
@@ -87,7 +83,6 @@ export async function listTickets(params: ListTicketsParams = {}) {
 
   const entityIds = tickets.map((t) => t.entityId);
 
-  // Fetch the latest revenue events for these entities
   const revenueEvents = await prisma.revenueEvent.findMany({
     where: { entityId: { in: entityIds } },
     orderBy: { occurredAt: "desc" },
@@ -167,9 +162,6 @@ export async function listTickets(params: ListTicketsParams = {}) {
   };
 }
 
-/**
- * Get aggregated statistics for the tickets dashboard.
- */
 export async function getTicketStats(): Promise<TicketStatsDto> {
   const [openTickets, writtenOffTickets, recoveredTickets] = await Promise.all([
     prisma.ticket.findMany({ where: { status: "open" }, select: { entityId: true } }),
@@ -212,9 +204,6 @@ export async function getTicketStats(): Promise<TicketStatsDto> {
   };
 }
 
-/**
- * Get full ticket details by ID including notes history and audit events.
- */
 export async function getTicketById(ticketId: string) {
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
@@ -267,9 +256,6 @@ export async function getTicketById(ticketId: string) {
   };
 }
 
-/**
- * Add an internal note to a ticket.
- */
 export async function addTicketNote(
   ticketId: string,
   params: { author?: string; content: string; type?: string },
@@ -287,9 +273,6 @@ export async function addTicketNote(
   });
 }
 
-/**
- * Send an outreach email to the customer from the ticket interface.
- */
 export async function sendTicketEmail(
   ticketId: string,
   params: {
@@ -349,7 +332,6 @@ export async function sendTicketEmail(
     html: fullHtml,
   });
 
-  // Append note to the ticket
   const noteContent = `[Email Sent] To: ${customer.email}\nSubject: ${params.subject}\n\n${params.message}${paymentUrl ? `\n\nPayment Link: ${paymentUrl}` : ""}`;
   await prisma.ticketNote.create({
     data: {
@@ -363,9 +345,6 @@ export async function sendTicketEmail(
   return { success: true, paymentUrl };
 }
 
-/**
- * Resolve or recover a ticket, updating state, financial ledger, and workflow records.
- */
 export async function resolveTicket(
   ticketId: string,
   params: {
@@ -386,7 +365,6 @@ export async function resolveTicket(
   const now = new Date();
 
   return await prisma.$transaction(async (tx) => {
-    // 1. Update ticket record
     const updatedTicket = await tx.ticket.update({
       where: { id: ticketId },
       data: {
@@ -396,7 +374,6 @@ export async function resolveTicket(
       },
     });
 
-    // 2. Add status change note
     await tx.ticketNote.create({
       data: {
         ticketId,
@@ -409,7 +386,6 @@ export async function resolveTicket(
     if (params.status === "recovered" && latestEvent) {
       const amount = params.recoveredAmount ?? latestEvent.amount;
 
-      // Update workflow state to RECOVERED
       await tx.entityWorkflowState.upsert({
         where: { entityId: ticket.entityId },
         create: {
@@ -425,12 +401,10 @@ export async function resolveTicket(
         },
       });
 
-      // Clear cause cooldowns
       await tx.entityCauseState.deleteMany({
         where: { entityId: ticket.entityId },
       });
 
-      // Write Ledger Entry
       await writeLedgerEntry(tx, {
         entityId: ticket.entityId,
         eventId: latestEvent.id,
@@ -440,10 +414,8 @@ export async function resolveTicket(
         referenceId: `human_recovery_${ticketId}`,
       });
 
-      // Cache recovery in Redis
       await redis.set(`razorrecovery:recovered:${ticket.entityId}`, "true", "EX", 86400 * 30);
     } else if ((params.status === "written_off" || params.status === "resolved") && latestEvent) {
-      // Mark as WRITTEN_OFF in workflow state
       await tx.entityWorkflowState.upsert({
         where: { entityId: ticket.entityId },
         create: {

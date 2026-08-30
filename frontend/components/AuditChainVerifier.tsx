@@ -27,13 +27,13 @@ export function AuditChainVerifier() {
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+    <div className="bg-white border border-slate-200 rounded p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
         <div>
-          <h3 className="text-md font-semibold text-slate-900">
+          <h3 className="text-sm font-semibold text-slate-900">
             Audit Integrity & Cryptographic Hash Chain
           </h3>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500">
             Verify SHA-256 tamper-evident sequential hash chain across all recorded audit entries.
           </p>
         </div>
@@ -41,14 +41,14 @@ export function AuditChainVerifier() {
         <button
           onClick={handleVerify}
           disabled={loading}
-          className="inline-flex items-center justify-center px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-md transition-colors shadow-sm"
+          className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded"
         >
           {loading ? "Verifying Chain..." : "Verify Audit Integrity"}
         </button>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-md mb-3">
+        <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-2.5 rounded mb-3">
           Error verifying chain: {error}
         </div>
       )}
@@ -56,7 +56,7 @@ export function AuditChainVerifier() {
       {result && (
         <div className="mt-3">
           {result.valid ? (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-3 rounded-md flex items-center justify-between">
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-2.5 rounded flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm">✓</span>
                 <span>
@@ -68,7 +68,7 @@ export function AuditChainVerifier() {
               )}
             </div>
           ) : (
-            <div className="bg-red-50 border border-red-200 text-red-800 text-xs p-3 rounded-md space-y-1">
+            <div className="bg-red-50 border border-red-200 text-red-800 text-xs p-2.5 rounded space-y-1">
               <div className="flex items-center gap-2 font-bold">
                 <span className="text-sm">✗</span>
                 <span>Audit Chain Integrity Violation Detected!</span>

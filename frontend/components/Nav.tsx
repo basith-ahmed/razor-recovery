@@ -43,10 +43,10 @@ export function Nav() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded text-sm font-medium ${
                     isActive
                       ? "bg-slate-100 text-slate-900 font-semibold"
-                      : "text-slate-400 hover:text-slate-800 hover:bg-slate-100/50"
+                      : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
                   {link.label}
@@ -57,17 +57,14 @@ export function Nav() {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Recovered Counter */}
-          <div className="bg-emerald-50/80 border border-emerald-200/50 text-emerald-700 px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm font-mono font-semibold">
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1.5 rounded flex items-center gap-2 text-sm font-mono font-semibold">
             <span className="text-emerald-600 text-xs">RECOVERED:</span>
             <span>₹{recoveredAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
           </div>
 
-          {/* System Status Pill — the pipeline is always live; there is no
-              idle/running/complete state for a continuous stream */}
-          <div className="flex items-center gap-2 bg-slate-100 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium">
-            <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-500"}`} />
-            <span className={isConnected ? "text-emerald-700 font-semibold uppercase" : "text-slate-400"}>
+          <div className="flex items-center gap-2 bg-slate-100 border border-slate-300 px-3 py-1.5 rounded text-xs font-medium">
+            <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-500" : "bg-slate-400"}`} />
+            <span className={isConnected ? "text-emerald-700 font-semibold uppercase" : "text-slate-500"}>
               {isConnected ? "Live" : "Connecting..."}
             </span>
           </div>

@@ -646,7 +646,7 @@ describe("per-cause attempt/cooldown scoping", () => {
     // this cause's attemptCount is 0 regardless of gateway_timeout's 2.
     expect(legalActions).toEqual([
       "retry_payment_immediate",
-      "send_payment_link",
+      "send_reminder_email",
       "escalate_to_human",
     ]);
   });

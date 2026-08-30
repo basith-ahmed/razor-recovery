@@ -41,21 +41,18 @@ export function LiveActivityFeed({ items }: LiveActivityFeedProps) {
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-5 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-md font-semibold text-slate-900 flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
+    <div className="bg-white border border-slate-200 rounded p-4 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
           Live Activity Feed
         </h3>
         <span className="text-xs text-slate-400 font-mono">{items.length} events logged</span>
       </div>
 
-      <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+      <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
         {items.length === 0 ? (
-          <div className="text-center py-8 text-slate-500 text-sm">
+          <div className="text-center py-6 text-slate-500 text-xs">
             No live events yet. Start a stream injection to watch events flow through live.
           </div>
         ) : (
@@ -63,16 +60,16 @@ export function LiveActivityFeed({ items }: LiveActivityFeedProps) {
             <div
               key={idx}
               onClick={() => handleRowClick(item)}
-              className="bg-slate-50 hover:bg-slate-100/80 transition-colors border border-slate-200/80 rounded p-3 text-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 cursor-pointer group"
+              className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded p-2.5 text-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 cursor-pointer"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <span className="font-mono text-slate-500 text-[11px] whitespace-nowrap">
                   {new Date(item.timestamp).toLocaleTimeString()}
                 </span>
-                <span className="font-semibold text-slate-800 truncate group-hover:text-blue-700 transition-colors">
+                <span className="font-semibold text-slate-800 truncate">
                   {item.customerName}
                 </span>
-                <span className="bg-slate-100 text-slate-400 px-2 py-0.5 rounded font-mono text-[10px] uppercase">
+                <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono text-[10px] uppercase border border-slate-200">
                   {item.eventType}
                 </span>
               </div>
@@ -86,7 +83,7 @@ export function LiveActivityFeed({ items }: LiveActivityFeedProps) {
                   Action: <strong className="text-slate-700 font-normal">{item.action}</strong>
                 </span>
                 {item.actionResult && item.actionResult !== "success" && (
-                  <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-[10px] uppercase">
+                  <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono text-[10px] uppercase border border-slate-200">
                     {item.actionResult}
                   </span>
                 )}

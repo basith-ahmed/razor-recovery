@@ -140,7 +140,7 @@ describe("filterLegalActions", () => {
       );
       expect(result).toEqual([
         "retry_payment_immediate",
-        "send_payment_link",
+        "send_reminder_email",
         "escalate_to_human",
       ]);
     });
@@ -168,7 +168,7 @@ describe("filterLegalActions", () => {
       );
       expect(result).toEqual([
         "retry_payment_immediate",
-        "send_payment_link",
+        "send_reminder_email",
         "escalate_to_human",
       ]);
     });
@@ -239,7 +239,7 @@ describe("filterLegalActions", () => {
   });
 
   describe("mandate_execution_failed_retryable", () => {
-    it("returns retry_payment_delayed and send_payment_link when under maxAttempts", () => {
+    it("returns retry_payment_delayed and send_reminder_email when under maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({
           causeLabel: "mandate_execution_failed_retryable",
@@ -248,23 +248,23 @@ describe("filterLegalActions", () => {
       );
       expect(result).toEqual([
         "retry_payment_delayed",
-        "send_payment_link",
+        "send_reminder_email",
       ]);
     });
 
-    it("returns send_payment_link when at maxAttempts", () => {
+    it("returns send_reminder_email when at maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({
           causeLabel: "mandate_execution_failed_retryable",
           attemptCount: 3,
         })
       );
-      expect(result).toEqual(["send_payment_link"]);
+      expect(result).toEqual(["send_reminder_email"]);
     });
   });
 
   describe("mandate_requires_reauthorization", () => {
-    it("returns send_payment_link and escalate_to_human without retries when under hardStopDays", () => {
+    it("returns send_reminder_email and escalate_to_human without retries when under hardStopDays", () => {
       const result = filterLegalActions(
         makeCtx({
           causeLabel: "mandate_requires_reauthorization",
@@ -272,7 +272,7 @@ describe("filterLegalActions", () => {
         })
       );
       expect(result).toEqual([
-        "send_payment_link",
+        "send_reminder_email",
         "escalate_to_human",
       ]);
     });

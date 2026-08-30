@@ -2,11 +2,11 @@ import { Router, Request, Response } from "express";
 import { Prisma, EventType, WorkflowState } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 import { eventWindowFilter } from "../../services/metricsService";
-import { Window } from "../../domain/types";
+import { Window, parseWindow } from "../../domain/types";
+import { parsePagination, paginatedResponse } from "../../utils/pagination";
+import { handleRouteError } from "../../utils/apiResponse";
 
 export const entitiesRouter = Router();
-
-const WINDOWS: Window[] = ["1h", "24h", "7d", "all"];
 
 const RETRY_ACTION_TYPES = new Set(["retry_payment_immediate", "retry_payment_delayed"]);
 const ESCALATE_ACTION_TYPES = new Set(["escalate_to_human"]);
@@ -40,14 +40,10 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
     const { state, cause, eventType, minAmount, maxAmount, search, sort } = req.query;
 
     // Optional time-window filter; defaults to no time filter (show everything)
-    let window: Window | undefined;
-    if (typeof req.query.window === "string" && WINDOWS.includes(req.query.window as Window)) {
-      window = req.query.window as Window;
-    }
+    const window = req.query.window ? parseWindow(req.query.window) : undefined;
 
-    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
-    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 20));
-    const skip = (page - 1) * limit;
+    const pagination = parsePagination(req.query);
+    const { page, limit, skip } = pagination;
 
     const where: Prisma.RevenueEventWhereInput = {
       ...(window ? eventWindowFilter(window) : {}),
@@ -240,17 +236,9 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
       };
     });
 
-    return res.status(200).json({
-      items: result,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
-    });
+    return res.status(200).json(paginatedResponse(result, total, pagination));
   } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : "Failed to query entities";
-    console.error("[entitiesRouter] Error fetching entities:", error);
-    return res.status(500).json({ error: errMessage });
+    return handleRouteError(res, error, "Failed to query entities");
   }
 });
 
@@ -294,6 +282,7 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
       prisma.promiseToPay.findMany({
         where: { entityId: targetEntityId },
         orderBy: { createdAt: "desc" },
+        include: { customer: true },
       }),
     ]);
 
@@ -371,6 +360,9 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
         id: p.id,
         entityId: p.entityId,
         customerId: p.customerId,
+        customerName: p.customer?.name ?? "",
+        customerEmail: p.customer?.email ?? "",
+        customerPhone: p.customer?.phone ?? null,
         promisedAmount: p.promisedAmount,
         currency: p.currency,
         promisedDate: p.promisedDate.toISOString(),
@@ -388,8 +380,6 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
 
     return res.status(200).json(responsePayload);
   } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : "Failed to fetch audit entries";
-    console.error("[entitiesRouter] Error fetching audit entries:", error);
-    return res.status(500).json({ error: errMessage });
+    return handleRouteError(res, error, "Failed to fetch audit entries");
   }
 });

@@ -17,11 +17,8 @@ export default function OverviewPage() {
   const [initialMetrics, setInitialMetrics] = useState<MetricsSummary | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  // Live global channel: activity feed always shows the latest events,
-  // regardless of the selected metrics window.
   const { activityFeed, incomingEvents, metrics: socketMetrics } = useLiveStream();
 
-  // Fetch windowed summary on mount and whenever the window changes
   useEffect(() => {
     let ignore = false;
     getMetricsSummary(window)
@@ -42,7 +39,6 @@ export default function OverviewPage() {
     };
   }, [window]);
 
-  // Prefer live WS updates only when they match the selected window
   const effectiveMetrics =
     socketMetrics?.window === window ? socketMetrics : initialMetrics;
 

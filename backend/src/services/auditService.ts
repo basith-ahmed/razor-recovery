@@ -1,11 +1,3 @@
-/**
- * Audit Service — records the full audit trail for a processed event,
- * updates entity workflow state via the state machine, and maintains
- * per-cause attempt/cooldown/last-contact state (EntityCauseState).
- *
- * Implements a tamper-evident cryptographic hash chain across all AuditEntry records.
- */
-
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
@@ -25,29 +17,19 @@ import {
 } from "../domain/types";
 import { writeLedgerEntry } from "./ledgerService";
 
-/**
- * Derive outcome from the action result for audit purposes.
- * recovered | pending | escalated | skipped | failed | written_off
- */
 function deriveOutcome(action: ActionResult): string {
   if (action.result === "skipped") return "skipped";
   if (action.result === "failed") return "failed";
   if (action.actionType === "escalate_to_human") return "escalated";
-  // Terminal write-off actions close the arc — they are not merely "pending".
   if (
     action.actionType === "hard_decline" ||
     action.actionType === "auto_cancel"
   ) {
     return "written_off";
   }
-  // Email sent, payment link sent, retry initiated — not yet confirmed recovered
   return "pending";
 }
 
-/**
- * Map (actionType, result) to the state machine's action outcome string.
- * Returns null if no state transition should occur (e.g. failed action).
- */
 function toStateMachineOutcome(
   action: ActionResult,
   decision?: DecisionResult,
@@ -55,7 +37,6 @@ function toStateMachineOutcome(
 ): string | null {
   if (action.result === "failed") return null;
 
-  // Skipped with actionType 'none'
   if (action.result === "skipped" && action.actionType === "none") {
     if (decision?.reasoning?.includes("DNC") || diagnosis?.causeLabel === "dnc") {
       return "dnc_skip";
@@ -66,7 +47,6 @@ function toStateMachineOutcome(
     return null;
   }
 
-  // Successful actions
   switch (action.actionType) {
     case "retry_payment_immediate":
     case "retry_payment_delayed":
@@ -81,12 +61,10 @@ function toStateMachineOutcome(
       return "payment_link_sent";
     case "escalate_to_human":
       return "escalation_triggered";
-    // Terminal write-off actions — the state machine maps these to WRITTEN_OFF
     case "hard_decline":
       return "hard_decline";
     case "auto_cancel":
       return "auto_cancel";
-    // Subscription lifecycle actions
     case "pause_subscription":
       return "subscription_paused";
     case "send_winback_offer":
@@ -98,13 +76,9 @@ function toStateMachineOutcome(
   }
 }
 
-/**
- * Compute cooldown TTL in seconds from the policy rule's stopping config.
- * Falls back to 1 hour if no window is configured.
- */
 function cooldownTtlSeconds(causeLabel: string): number {
   const rule = getRuleForCause(causeLabel);
-  if (!rule) return 3600; // 1h default
+  if (!rule) return 3600;
 
   const stopping = rule.stopping;
   if (stopping.windowHours !== undefined) {
@@ -113,7 +87,7 @@ function cooldownTtlSeconds(causeLabel: string): number {
   if (stopping.windowDays !== undefined) {
     return stopping.windowDays * 86400;
   }
-  return 3600; // 1h default
+  return 3600;
 }
 
 export interface CreateChainedAuditEntryParams {
@@ -128,17 +102,12 @@ export interface CreateChainedAuditEntryParams {
   timestamp?: Date;
 }
 
-/**
- * Writes an AuditEntry within an interactive Prisma transaction, chaining its
- * hash to the previous head and updating AuditChainHead with serializing row-lock.
- */
 export async function writeChainedAuditEntry(
   tx: Prisma.TransactionClient,
   params: CreateChainedAuditEntryParams,
 ) {
   const now = params.timestamp ?? new Date();
 
-  // Serialized row lock on AuditChainHead
   let head = await tx.$queryRaw<{ hash: string }[]>`
     SELECT hash FROM "AuditChainHead" WHERE id = 1 FOR UPDATE
   `;
@@ -190,12 +159,6 @@ export async function writeChainedAuditEntry(
   return row;
 }
 
-/**
- * Records the full audit entry for a processed event.
- *
- * Atomically creates the hash-chained AuditEntry, transitions EntityWorkflowState,
- * and updates per-cause attempt/cooldown/last-contact state in EntityCauseState.
- */
 export async function recordAuditEntry(params: {
   event: EnrichedRevenueEvent;
   diagnosis: DiagnosisResult;
@@ -207,7 +170,6 @@ export async function recordAuditEntry(params: {
   const now = new Date();
 
   return prisma.$transaction(async (tx) => {
-    // 1. Write chained AuditEntry row
     const auditEntry = await writeChainedAuditEntry(tx, {
       eventId: event.id,
       entityId: event.entityId,
@@ -220,7 +182,6 @@ export async function recordAuditEntry(params: {
       timestamp: now,
     });
 
-    // 2. Update EntityWorkflowState via state machine and unified attempt tracking
     const smOutcome = toStateMachineOutcome(action, decision, diagnosis);
     let newState: WorkflowState | null = null;
 
@@ -267,8 +228,6 @@ export async function recordAuditEntry(params: {
         },
       });
 
-      // Closing the arc for this entity wipes ALL of its per-cause
-      // attempt/cooldown history
       if (isTerm) {
         await tx.entityCauseState.deleteMany({
           where: { entityId: event.entityId },
@@ -294,7 +253,6 @@ export async function recordAuditEntry(params: {
           });
         }
       } else {
-        // Maintain EntityCauseState for backwards compatibility
         await tx.entityCauseState.upsert({
           where: {
             entityId_causeLabel: {
@@ -322,9 +280,6 @@ export async function recordAuditEntry(params: {
   });
 }
 
-/**
- * Fallback to record a failed-state audit entry securely into the hash chain.
- */
 export async function recordFailureAuditEntry(
   event: { id: string; entityId: string },
   snapshots?: {
@@ -348,7 +303,6 @@ export async function recordFailureAuditEntry(
     });
   });
 
-  // Ensure the UI updates live to show the pipeline failure
   const { emitLiveUpdate } = require("../api/websocket");
   await emitLiveUpdate(event.id);
 }
@@ -360,9 +314,6 @@ export interface VerifyChainResult {
   brokenAtSequence?: number;
 }
 
-/**
- * Verifies cryptographic integrity of the audit trail between fromSequence and toSequence.
- */
 export async function verifyChain(
   fromSequence = 1,
   toSequence?: number,
@@ -372,7 +323,6 @@ export async function verifyChain(
   let expectedPrevHash: string | null = null;
   let checked = 0;
 
-  // If starting mid-chain (fromSequence > 1), fetch row immediately before range
   if (fromSequence > 1) {
     const priorRow = await prisma.auditEntry.findFirst({
       where: { sequenceNumber: { lt: fromSequence } },

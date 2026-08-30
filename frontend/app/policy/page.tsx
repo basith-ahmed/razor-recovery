@@ -39,7 +39,7 @@ export default function PolicyPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Policy & Compliance Control</h1>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-slate-500">
           Inspect declarative recovery rules, active Do-Not-Contact (DNC) registers, and compliance audit overrides.
         </p>
       </div>
@@ -49,22 +49,20 @@ export default function PolicyPage() {
       </div>
 
       {loading && !data ? (
-        <div className="bg-white border border-slate-200 rounded-lg p-12 text-center text-slate-500">
+        <div className="bg-white border border-slate-200 rounded p-8 text-center text-slate-500 text-sm">
           Loading policy settings...
         </div>
       ) : data ? (
         <div className="space-y-6">
-          {/* Policy Table */}
           <PolicyTable rules={data.policy.rules} />
 
-          {/* DNC List */}
-          <div className="bg-white border border-slate-200 rounded-lg p-5">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white border border-slate-200 rounded p-4">
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-md font-semibold text-slate-900">Active Do-Not-Contact (DNC) Customer List</h3>
-                <p className="text-xs text-slate-400">Entities registered in Redis / Database to halt dunning communications</p>
+                <h3 className="text-sm font-semibold text-slate-900">Active Do-Not-Contact (DNC) Customer List</h3>
+                <p className="text-xs text-slate-500">Entities registered in Redis / Database to halt dunning communications</p>
               </div>
-              <span className="text-xs font-mono bg-red-50 border border-red-200 text-red-800 px-3 py-1 rounded-md">
+              <span className="text-xs font-mono bg-red-50 border border-red-200 text-red-800 px-2.5 py-1 rounded">
                 {data.dncList.total} DNC Customers
               </span>
             </div>
@@ -72,13 +70,13 @@ export default function PolicyPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-400 border-b border-slate-200">
+                  <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
                     <th className="p-3 font-medium">Customer ID</th>
                     <th className="p-3 font-medium">Name</th>
                     <th className="p-3 font-medium">Email</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200/60">
+                <tbody className="divide-y divide-slate-200">
                   {data.dncList.entries.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="text-center py-6 text-slate-500">
@@ -87,8 +85,8 @@ export default function PolicyPage() {
                     </tr>
                   ) : (
                     data.dncList.entries.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-100/40">
-                        <td className="p-3 font-mono text-slate-400">{c.id}</td>
+                      <tr key={c.id} className="hover:bg-slate-50">
+                        <td className="p-3 font-mono text-slate-500">{c.id}</td>
                         <td className="p-3 font-semibold text-slate-900">{c.name || "N/A"}</td>
                         <td className="p-3 font-mono text-slate-700">{c.email || "N/A"}</td>
                       </tr>
@@ -98,7 +96,6 @@ export default function PolicyPage() {
               </table>
             </div>
 
-            {/* DNC Pagination Controls */}
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200">
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span>Per page:</span>
@@ -118,20 +115,20 @@ export default function PolicyPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-500 font-mono">
                   Page {data.dncList.page} of {data.dncList.totalPages}
                 </span>
                 <button
                   disabled={dncPage <= 1}
                   onClick={() => setDncPage((p) => Math.max(1, p - 1))}
-                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+                  className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
                 >
                   Previous
                 </button>
                 <button
                   disabled={dncPage >= data.dncList.totalPages}
                   onClick={() => setDncPage((p) => p + 1)}
-                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+                  className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
                 >
                   Next
                 </button>
@@ -139,14 +136,13 @@ export default function PolicyPage() {
             </div>
           </div>
 
-          {/* Compliance Log (Policy-blocked entries) */}
-          <div className="bg-white border border-slate-200 rounded-lg p-5">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white border border-slate-200 rounded p-4">
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-md font-semibold text-slate-900">Compliance Audit Log (Blocked / Escalated Actions)</h3>
-                <p className="text-xs text-slate-400">Audit entries stopped or escalated due to policy guardrails</p>
+                <h3 className="text-sm font-semibold text-slate-900">Compliance Audit Log (Blocked / Escalated Actions)</h3>
+                <p className="text-xs text-slate-500">Audit entries stopped or escalated due to policy guardrails</p>
               </div>
-              <span className="text-xs font-mono bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1 rounded-md">
+              <span className="text-xs font-mono bg-amber-50 border border-amber-200 text-amber-800 px-2.5 py-1 rounded">
                 {data.complianceLog.total} Total Blocked Entries
               </span>
             </div>
@@ -154,14 +150,14 @@ export default function PolicyPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-400 border-b border-slate-200">
+                  <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
                     <th className="p-3 font-medium">Timestamp</th>
                     <th className="p-3 font-medium">Customer / Entity</th>
                     <th className="p-3 font-medium">Action Attempted</th>
                     <th className="p-3 font-medium">Outcome</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200/60">
+                <tbody className="divide-y divide-slate-200">
                   {data.complianceLog.entries.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="text-center py-6 text-slate-500">
@@ -170,8 +166,8 @@ export default function PolicyPage() {
                     </tr>
                   ) : (
                     data.complianceLog.entries.map((entry) => (
-                      <tr key={entry.id} className="hover:bg-slate-100/40">
-                        <td className="p-3 font-mono text-slate-400">
+                      <tr key={entry.id} className="hover:bg-slate-50">
+                        <td className="p-3 font-mono text-slate-500">
                           {new Date(entry.timestamp).toLocaleString("en-IN")}
                         </td>
                         <td className="p-3 font-semibold text-slate-900">
@@ -190,7 +186,6 @@ export default function PolicyPage() {
               </table>
             </div>
 
-            {/* Compliance Log Pagination controls */}
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200">
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span>Per page:</span>
@@ -210,20 +205,20 @@ export default function PolicyPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-500 font-mono">
                   Page {data.complianceLog.page} of {data.complianceLog.totalPages}
                 </span>
                 <button
                   disabled={logPage <= 1}
                   onClick={() => setLogPage((p) => Math.max(1, p - 1))}
-                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+                  className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
                 >
                   Previous
                 </button>
                 <button
                   disabled={logPage >= data.complianceLog.totalPages}
                   onClick={() => setLogPage((p) => p + 1)}
-                  className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+                  className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
                 >
                   Next
                 </button>

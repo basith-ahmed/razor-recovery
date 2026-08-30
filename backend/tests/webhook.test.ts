@@ -11,7 +11,11 @@ const mockTx = {
   decision: { findUnique: jest.fn().mockResolvedValue(null) },
   entityCauseState: { deleteMany: jest.fn() },
   ledgerEntry: { create: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
-  promiseToPay: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+  promiseToPay: {
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    findFirst: jest.fn().mockResolvedValue(null),
+    update: jest.fn().mockResolvedValue({}),
+  },
   auditChainHead: {
     findUnique: jest.fn().mockResolvedValue({ id: 1, hash: "head-hash" }),
     update: jest.fn(),

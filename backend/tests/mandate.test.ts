@@ -212,34 +212,34 @@ describe("diagnose() — SUBSCRIPTION_FAILED mandate routing", () => {
 describe("Policy: mandate_execution_failed_retryable", () => {
   beforeEach(() => _resetCache());
 
-  it("Test 7: attemptCount=1 — returns retry_payment_delayed and send_payment_link", () => {
+  it("Test 7: attemptCount=1 — returns retry_payment_delayed and send_reminder_email", () => {
     const actions = filterLegalActions(makeCtx({
       causeLabel: "mandate_execution_failed_retryable",
       attemptCount: 1,
     }));
     expect(actions).toContain("retry_payment_delayed");
-    expect(actions).toContain("send_payment_link");
+    expect(actions).toContain("send_reminder_email");
     expect(actions).not.toContain("retry_payment_immediate");
   });
 
-  it("Test 8: attemptCount=3 (onMaxAction) — returns only send_payment_link", () => {
+  it("Test 8: attemptCount=3 (onMaxAction) — returns only send_reminder_email", () => {
     const actions = filterLegalActions(makeCtx({
       causeLabel: "mandate_execution_failed_retryable",
       attemptCount: 3,
     }));
-    expect(actions).toEqual(["send_payment_link"]);
+    expect(actions).toEqual(["send_reminder_email"]);
   });
 });
 
 describe("Policy: mandate_requires_reauthorization", () => {
   beforeEach(() => _resetCache());
 
-  it("Test 9: attemptCount=0 — returns send_payment_link and escalate_to_human, NO gateway retries", () => {
+  it("Test 9: attemptCount=0 — returns send_reminder_email and escalate_to_human, NO gateway retries", () => {
     const actions = filterLegalActions(makeCtx({
       causeLabel: "mandate_requires_reauthorization",
       attemptCount: 0,
     }));
-    expect(actions).toContain("send_payment_link");
+    expect(actions).toContain("send_reminder_email");
     expect(actions).toContain("escalate_to_human");
     // Hard gate: gateway retries are strictly prohibited for halted/revoked mandates
     expect(actions).not.toContain("retry_payment_immediate");
@@ -274,7 +274,7 @@ describe("Execution: retry_payment_delayed on Subscription", () => {
     const result = await executeAction(
       {
         chosenAction: "retry_payment_delayed",
-        legalActions: ["retry_payment_delayed", "send_payment_link"],
+        legalActions: ["retry_payment_delayed", "send_reminder_email"],
         policyVersion: "1.0.0",
         reasoning: "Schedule deferred retry",
       },

@@ -7,11 +7,71 @@ import {
   buildPromiseConfirmationEmail,
   buildPromiseReminderEmail,
 } from "../../domain/emailTemplates";
+import { listLookupCustomers } from "../../services/customerService";
+import { writeLedgerEntry } from "../../services/ledgerService";
+import { parsePagination, paginatedResponse } from "../../utils/pagination";
+import { handleRouteError } from "../../utils/apiResponse";
 import { emitLiveUpdate } from "../websocket";
 
 export const promisesRouter = Router();
 
-// GET /promises/stats — summary metrics for Promise-to-Pay dashboard
+function formatPromiseToPay(p: {
+  id: string;
+  entityId: string;
+  customerId: string;
+  promisedAmount: number;
+  currency: string;
+  promisedDate: Date | string;
+  status: string;
+  reminderSentAt?: Date | string | null;
+  gracePeriodUntil?: Date | string | null;
+  razorpayPaymentLinkId?: string | null;
+  paymentLinkUrl?: string | null;
+  notes?: string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  customer?: {
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
+}) {
+  const promisedDateObj = p.promisedDate instanceof Date ? p.promisedDate : new Date(p.promisedDate);
+  const targetDateObj =
+    p.status === "reminder_sent" && p.gracePeriodUntil
+      ? p.gracePeriodUntil instanceof Date
+        ? p.gracePeriodUntil
+        : new Date(p.gracePeriodUntil)
+      : promisedDateObj;
+  const msRemaining = targetDateObj.getTime() - Date.now();
+
+  return {
+    id: p.id,
+    entityId: p.entityId,
+    customerId: p.customerId,
+    customerName: p.customer?.name ?? "",
+    customerEmail: p.customer?.email ?? "",
+    customerPhone: p.customer?.phone ?? null,
+    promisedAmount: p.promisedAmount,
+    currency: p.currency,
+    promisedDate: promisedDateObj.toISOString(),
+    status: p.status,
+    reminderSentAt: p.reminderSentAt
+      ? (p.reminderSentAt instanceof Date ? p.reminderSentAt.toISOString() : new Date(p.reminderSentAt).toISOString())
+      : null,
+    gracePeriodUntil: p.gracePeriodUntil
+      ? (p.gracePeriodUntil instanceof Date ? p.gracePeriodUntil.toISOString() : new Date(p.gracePeriodUntil).toISOString())
+      : null,
+    razorpayPaymentLinkId: p.razorpayPaymentLinkId ?? null,
+    paymentLinkUrl: p.paymentLinkUrl ?? null,
+    notes: p.notes ?? null,
+    createdAt: (p.createdAt instanceof Date ? p.createdAt : new Date(p.createdAt)).toISOString(),
+    updatedAt: (p.updatedAt instanceof Date ? p.updatedAt : new Date(p.updatedAt)).toISOString(),
+    msRemaining,
+    isOverdue: msRemaining < 0 && (p.status === "pending" || p.status === "reminder_sent"),
+  };
+}
+
 promisesRouter.get("/stats", async (_req: Request, res: Response) => {
   try {
     const [allPromises, keptPromises] = await Promise.all([
@@ -42,40 +102,24 @@ promisesRouter.get("/stats", async (_req: Request, res: Response) => {
       totalRecoveredAmount,
     });
   } catch (error) {
-    console.error("[promisesRouter] Failed to fetch promise stats:", error);
-    return res.status(500).json({ error: "Failed to fetch promise statistics" });
+    return handleRouteError(res, error, "Failed to fetch promise statistics");
   }
 });
 
-// GET /promises/customers — helper list of customers for creation dropdown
 promisesRouter.get("/customers", async (_req: Request, res: Response) => {
   try {
-    const customers = await prisma.customer.findMany({
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        riskTier: true,
-        dncFlag: true,
-      },
-    });
-
+    const customers = await listLookupCustomers();
     return res.status(200).json(customers);
   } catch (error) {
-    console.error("[promisesRouter] Failed to fetch customers list:", error);
-    return res.status(500).json({ error: "Failed to fetch customers list" });
+    return handleRouteError(res, error, "Failed to fetch customers list");
   }
 });
 
-// GET /promises — list promises with filters & pagination
 promisesRouter.get("/", async (req: Request, res: Response) => {
   try {
     const { status, customerId, entityId, search } = req.query;
-    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
-    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 20));
-    const skip = (page - 1) * limit;
+    const pagination = parsePagination(req.query);
+    const { skip, limit } = pagination;
 
     const where: any = {};
 
@@ -122,48 +166,14 @@ promisesRouter.get("/", async (req: Request, res: Response) => {
       }),
     ]);
 
-    const formatted = items.map((p) => {
-      const now = Date.now();
-      const promisedTime = new Date(p.promisedDate).getTime();
-      const msRemaining = promisedTime - now;
+    const formatted = items.map(formatPromiseToPay);
 
-      return {
-        id: p.id,
-        entityId: p.entityId,
-        customerId: p.customerId,
-        customerName: p.customer.name,
-        customerEmail: p.customer.email,
-        customerPhone: p.customer.phone,
-        promisedAmount: p.promisedAmount,
-        currency: p.currency,
-        promisedDate: p.promisedDate.toISOString(),
-        status: p.status,
-        reminderSentAt: p.reminderSentAt?.toISOString() ?? null,
-        gracePeriodUntil: p.gracePeriodUntil?.toISOString() ?? null,
-        razorpayPaymentLinkId: p.razorpayPaymentLinkId,
-        paymentLinkUrl: p.paymentLinkUrl,
-        notes: p.notes,
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString(),
-        msRemaining,
-        isOverdue: msRemaining < 0 && (p.status === "pending" || p.status === "reminder_sent"),
-      };
-    });
-
-    return res.status(200).json({
-      items: formatted,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
-    });
+    return res.status(200).json(paginatedResponse(formatted, total, pagination));
   } catch (error) {
-    console.error("[promisesRouter] Failed to list promises:", error);
-    return res.status(500).json({ error: "Failed to list promises" });
+    return handleRouteError(res, error, "Failed to list promises");
   }
 });
 
-// POST /promises — create new Promise to Pay commitment
 promisesRouter.post("/", async (req: Request, res: Response) => {
   try {
     const { customerId, entityId, amount, promisedDate, notes, sendEmail } = req.body;
@@ -178,16 +188,7 @@ promisesRouter.post("/", async (req: Request, res: Response) => {
     }
 
     if (!promisedDate) {
-      return res.status(400).json({ error: "Promised date is required." });
-    }
-
-    const parsedDate = new Date(promisedDate);
-    if (isNaN(parsedDate.getTime())) {
-      return res.status(400).json({ error: "Invalid promised date format." });
-    }
-
-    if (notes && typeof notes === "string" && notes.length > 500) {
-      return res.status(400).json({ error: "Notes cannot exceed 500 characters." });
+      return res.status(400).json({ error: "Promised due date is required." });
     }
 
     const customer = await prisma.customer.findUnique({
@@ -198,12 +199,69 @@ promisesRouter.post("/", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Customer not found." });
     }
 
-    // Resolve or generate independent Promise-to-Pay entityId
-    const resolvedEntityId = entityId || `ptp_${crypto.randomUUID().slice(0, 12)}`;
+    let resolvedEntityId = entityId;
+    let eventId: string | null = null;
 
-    // Generate recovery payment link via razorpayIntegration
-    let paymentLinkUrl: string | undefined;
-    let razorpayPaymentLinkId: string | undefined;
+    if (resolvedEntityId) {
+      const existingEvent = await prisma.revenueEvent.findFirst({
+        where: { entityId: resolvedEntityId },
+        orderBy: { occurredAt: "desc" },
+      });
+      if (existingEvent) {
+        eventId = existingEvent.id;
+      }
+    } else {
+      resolvedEntityId = `ptp_${crypto.randomUUID().slice(0, 8)}`;
+    }
+
+    if (!eventId) {
+      const newEvent = await prisma.revenueEvent.create({
+        data: {
+          entityId: resolvedEntityId,
+          entityType: "INVOICE",
+          eventType: "INVOICE_OVERDUE",
+          customerId: customer.id,
+          amount: numericAmount,
+          currency: "INR",
+          occurredAt: new Date(),
+          errorCode: "PROMISE_CREATED",
+          errorReason: "promise_to_pay",
+          rawPayload: {
+            promise: true,
+            notes: notes || undefined,
+            promisedDate,
+          },
+        },
+      });
+      eventId = newEvent.id;
+
+      await writeLedgerEntry(prisma, {
+        entityId: resolvedEntityId,
+        eventId: newEvent.id,
+        type: "AT_RISK",
+        amount: numericAmount,
+        currency: "INR",
+        referenceId: resolvedEntityId,
+      });
+
+      await prisma.entityWorkflowState.upsert({
+        where: { entityId: resolvedEntityId },
+        create: {
+          entityId: resolvedEntityId,
+          customerId: customer.id,
+          state: "CONTACTED",
+          attemptCount: 1,
+          lastContactedAt: new Date(),
+        },
+        update: {
+          state: "CONTACTED",
+          lastContactedAt: new Date(),
+        },
+      });
+    }
+
+    let paymentLinkUrl: string | null = null;
+    let paymentLinkId: string | null = null;
 
     try {
       const linkResult = await razorpayIntegration.createRecoveryPaymentLink({
@@ -212,43 +270,46 @@ promisesRouter.post("/", async (req: Request, res: Response) => {
         customerName: customer.name,
         customerEmail: customer.email,
         customerPhone: customer.phone ?? undefined,
-        description: `Promise-to-Pay for Invoice #${resolvedEntityId.slice(-6)}`,
-        notify: false, // We send our own styled email
+        description: `Promise to Pay commitment — ${resolvedEntityId}`,
+        notify: false,
+        eventId: eventId ?? resolvedEntityId,
+        actionType: "promise_to_pay_link",
       });
-      paymentLinkUrl = linkResult.paymentLinkShortUrl;
-      razorpayPaymentLinkId = linkResult.razorpayPaymentLinkId;
-    } catch (err) {
-      console.warn("[promisesRouter] Razorpay link creation warning, continuing:", err);
+      paymentLinkUrl = linkResult.paymentLinkShortUrl ?? null;
+      paymentLinkId = linkResult.razorpayPaymentLinkId ?? null;
+    } catch (linkErr) {
+      console.warn("[promisesRouter] Could not generate Razorpay payment link:", linkErr);
     }
 
-    // Save PromiseToPay in database
+    const dueDate = new Date(promisedDate);
+
     const record = await prisma.promiseToPay.create({
       data: {
         entityId: resolvedEntityId,
         customerId: customer.id,
+        eventId: eventId ?? null,
         promisedAmount: numericAmount,
         currency: "INR",
-        promisedDate: parsedDate,
+        promisedDate: dueDate,
         status: "pending",
-        razorpayPaymentLinkId,
-        paymentLinkUrl,
-        notes: notes || `Promise-to-Pay registered for ₹${numericAmount} due by ${parsedDate.toISOString().split("T")[0]}.`,
+        razorpayPaymentLinkId: paymentLinkId,
+        paymentLinkUrl: paymentLinkUrl,
+        notes: notes || undefined,
       },
       include: {
         customer: true,
       },
     });
 
-    // Send confirmation email
-    if (sendEmail !== false) {
-      const { subject, html } = buildPromiseConfirmationEmail({
-        customerName: customer.name,
-        amount: numericAmount,
-        promisedDate: parsedDate,
-        paymentUrl: paymentLinkUrl,
-      });
-
+    if (sendEmail) {
       try {
+        const { subject, html } = buildPromiseConfirmationEmail({
+          customerName: customer.name,
+          amount: numericAmount,
+          promisedDate: dueDate,
+          paymentUrl: paymentLinkUrl ?? undefined,
+        });
+
         await emailIntegration.sendRecoveryEmail({
           to: customer.email,
           subject,
@@ -262,14 +323,12 @@ promisesRouter.post("/", async (req: Request, res: Response) => {
 
     await emitLiveUpdate(resolvedEntityId);
 
-    return res.status(201).json(record);
+    return res.status(201).json(formatPromiseToPay(record));
   } catch (error) {
-    console.error("[promisesRouter] Failed to create promise:", error);
-    return res.status(500).json({ error: "Failed to create promise to pay" });
+    return handleRouteError(res, error, "Failed to create promise to pay");
   }
 });
 
-// POST /promises/:id/send-reminder — manually trigger follow-up reminder email
 promisesRouter.post("/:id/send-reminder", async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -312,15 +371,13 @@ promisesRouter.post("/:id/send-reminder", async (req: Request, res: Response) =>
 
     return res.status(200).json({
       message: "Reminder email sent successfully.",
-      promise: updated,
+      promise: formatPromiseToPay(updated),
     });
   } catch (error) {
-    console.error("[promisesRouter] Failed to send reminder email:", error);
-    return res.status(500).json({ error: "Failed to send reminder email" });
+    return handleRouteError(res, error, "Failed to send reminder email");
   }
 });
 
-// PATCH /promises/:id — update notes or status
 promisesRouter.patch("/:id", async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -339,9 +396,8 @@ promisesRouter.patch("/:id", async (req: Request, res: Response) => {
 
     await emitLiveUpdate(updated.entityId);
 
-    return res.status(200).json(updated);
+    return res.status(200).json(formatPromiseToPay(updated));
   } catch (error) {
-    console.error("[promisesRouter] Failed to update promise:", error);
-    return res.status(500).json({ error: "Failed to update promise" });
+    return handleRouteError(res, error, "Failed to update promise");
   }
 });

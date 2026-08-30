@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { EntityItem, EntityFilters } from "../types";
+import { formatCurrency, formatDateTime } from "../lib/formatters";
+import { Badge } from "./Badge";
 
 interface EntityTableProps {
   entities: EntityItem[];
@@ -15,33 +17,6 @@ interface EntityTableProps {
   onFilterChange: (newFilters: Partial<EntityFilters>) => void;
   loading: boolean;
 }
-
-const STATE_BADGES: Record<string, string> = {
-  DETECTED: "bg-slate-100 text-slate-700 border-slate-300",
-  CONTACTED: "bg-blue-50 text-blue-700 border-blue-200",
-  RETRYING: "bg-blue-50 text-blue-700 border-blue-200",
-  COOLING_DOWN: "bg-amber-50 text-amber-700 border-amber-200",
-  ESCALATED: "bg-purple-50 text-purple-700 border-purple-200",
-  RECOVERED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  WRITTEN_OFF: "bg-red-50 text-red-700 border-red-200",
-  DO_NOT_CONTACT: "bg-white text-slate-500 border-slate-300",
-};
-
-const STAGE_BADGES: Record<string, string> = {
-  DETECTED: "bg-slate-100 text-slate-600 border-slate-300",
-  DIAGNOSED: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  DECIDED: "bg-cyan-50 text-cyan-700 border-cyan-200",
-  EXECUTED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-};
-
-const ACTION_RESULT_BADGES: Record<string, string> = {
-  success: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  scheduled: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  dispatched: "bg-cyan-50 text-cyan-700 border-cyan-200",
-  cancelled: "bg-slate-100 text-slate-500 border-slate-300",
-  skipped: "bg-slate-100 text-slate-500 border-slate-300",
-  failed: "bg-red-50 text-red-700 border-red-200",
-};
 
 export function EntityTable({
   entities,
@@ -69,12 +44,10 @@ export function EntityTable({
   const endItem = Math.min(page * limit, total);
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-5">
-      {/* Filter Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-5">
-        {/* Search */}
+    <div className="bg-white border border-slate-200 rounded p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Search</label>
+          <label className="block text-xs text-slate-500 mb-1">Search</label>
           <input
             type="text"
             placeholder="Name, email, ID..."
@@ -84,9 +57,8 @@ export function EntityTable({
           />
         </div>
 
-        {/* State */}
         <div>
-          <label className="block text-xs text-slate-400 mb-1">State</label>
+          <label className="block text-xs text-slate-500 mb-1">State</label>
           <select
             value={filters.state || ""}
             onChange={(e) => onFilterChange({ state: e.target.value })}
@@ -104,9 +76,8 @@ export function EntityTable({
           </select>
         </div>
 
-        {/* Cause */}
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Cause</label>
+          <label className="block text-xs text-slate-500 mb-1">Cause</label>
           <select
             value={filters.cause || ""}
             onChange={(e) => onFilterChange({ cause: e.target.value })}
@@ -130,9 +101,8 @@ export function EntityTable({
           </select>
         </div>
 
-        {/* Event Type */}
         <div>
-          <label className="block text-xs text-slate-400 mb-1">
+          <label className="block text-xs text-slate-500 mb-1">
             Event Type
           </label>
           <select
@@ -148,9 +118,8 @@ export function EntityTable({
           </select>
         </div>
 
-        {/* Min Amount */}
         <div>
-          <label className="block text-xs text-slate-400 mb-1">
+          <label className="block text-xs text-slate-500 mb-1">
             Min Amount (₹)
           </label>
           <input
@@ -162,9 +131,8 @@ export function EntityTable({
           />
         </div>
 
-        {/* Max Amount */}
         <div>
-          <label className="block text-xs text-slate-400 mb-1">
+          <label className="block text-xs text-slate-500 mb-1">
             Max Amount (₹)
           </label>
           <input
@@ -177,11 +145,10 @@ export function EntityTable({
         </div>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className="bg-slate-50 text-slate-400 border-b border-slate-200">
+            <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
               <th className="p-3 font-medium">Customer / Entity</th>
               <th className="p-3 font-medium">Event Type</th>
               <th
@@ -223,16 +190,16 @@ export function EntityTable({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200/60">
+          <tbody className="divide-y divide-slate-200">
             {loading ? (
               <tr>
-                <td colSpan={9} className="text-center py-8 text-slate-500">
+                <td colSpan={9} className="text-center py-6 text-slate-500">
                   Loading entities...
                 </td>
               </tr>
             ) : entities.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-8 text-slate-500">
+                <td colSpan={9} className="text-center py-6 text-slate-500">
                   No revenue entities found matching filters.
                 </td>
               </tr>
@@ -240,7 +207,7 @@ export function EntityTable({
               entities.map((item) => (
                 <tr
                   key={item.entityId || item.id}
-                  className="cursor-pointer hover:bg-slate-100/50 transition-colors"
+                  className="cursor-pointer hover:bg-slate-50"
                   onClick={() => router.push(`/entities/${item.entityId || item.id}`)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -254,44 +221,27 @@ export function EntityTable({
                     <div className="font-semibold text-slate-900">
                       {item.customerName}
                     </div>
-                    <div className="text-slate-400 text-[11px] font-mono">
+                    <div className="text-slate-500 text-[11px] font-mono">
                       {item.customerEmail}
                     </div>
                   </td>
                   <td className="p-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono text-[10px]">
+                      <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono text-[10px] border border-slate-200">
                         {item.eventType}
                       </span>
                     </div>
                   </td>
                   <td className="p-3 font-mono font-semibold text-emerald-700">
-                    ₹
-                    {item.amount.toLocaleString("en-IN", {
-                      maximumFractionDigits: 2,
-                    })}
+                    {formatCurrency(item.amount)}
                   </td>
                   <td className="p-3">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${STATE_BADGES[item.state] || STATE_BADGES.DETECTED}`}
-                    >
-                      {item.state}
-                    </span>
+                    <Badge type="state" value={item.state} />
                   </td>
                   <td className="p-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {/* Hide the stage echo when it adds nothing beyond the
-                          lifecycle state (both DETECTED) */}
-                      {!(
-                        item.stage === "DETECTED" && item.state === "DETECTED"
-                      ) && (
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                            STAGE_BADGES[item.stage] || STAGE_BADGES.DETECTED
-                          }`}
-                        >
-                          {item.stage}
-                        </span>
+                      {!(item.stage === "DETECTED" && item.state === "DETECTED") && (
+                        <Badge type="stage" value={item.stage} />
                       )}
                     </div>
                   </td>
@@ -300,10 +250,10 @@ export function EntityTable({
                       <span
                         className={
                           item.riskScore > 0.7
-                            ? "text-red-700"
+                            ? "text-red-700 font-semibold"
                             : item.riskScore > 0.4
-                              ? "text-amber-700"
-                              : "text-emerald-700"
+                              ? "text-amber-700 font-semibold"
+                              : "text-emerald-700 font-semibold"
                         }
                       >
                         {(item.riskScore * 100).toFixed(0)}%
@@ -318,25 +268,14 @@ export function EntityTable({
                   <td className="p-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {item.actionResult ? (
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                            ACTION_RESULT_BADGES[item.actionResult] ??
-                            "bg-slate-100 text-slate-600 border-slate-300"
-                          }`}
-                          title={item.actionType ?? undefined}
-                        >
-                          {item.actionResult}
-                        </span>
+                        <Badge type="actionResult" value={item.actionResult} />
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
                     </div>
                   </td>
-                  <td className="p-3 text-slate-400 font-mono">
-                    {new Date(item.occurredAt).toLocaleString("en-IN", {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
+                  <td className="p-3 text-slate-500 font-mono">
+                    {formatDateTime(item.occurredAt)}
                   </td>
                 </tr>
               ))
@@ -345,7 +284,6 @@ export function EntityTable({
         </table>
       </div>
 
-      {/* Pagination Controls */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-3 border-t border-slate-200">
         <div className="flex items-center gap-3 text-xs text-slate-500">
           <span>
@@ -371,20 +309,20 @@ export function EntityTable({
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400 font-mono mr-1">
+          <span className="text-xs text-slate-500 font-mono mr-1">
             Page {page} of {totalPages}
           </span>
           <button
             disabled={page <= 1 || loading}
             onClick={() => onFilterChange({ page: Math.max(1, page - 1) })}
-            className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+            className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
           >
             Previous
           </button>
           <button
             disabled={page >= totalPages || loading}
             onClick={() => onFilterChange({ page: page + 1 })}
-            className="bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs px-3 py-1 rounded transition-colors font-medium"
+            className="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs px-2.5 py-1 rounded font-medium"
           >
             Next
           </button>

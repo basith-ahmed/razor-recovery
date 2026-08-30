@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import policyJson from "../../domain/policy.json";
 import { redis } from "../../config/redis";
 import { prisma } from "../../config/prisma";
+import { handleRouteError } from "../../utils/apiResponse";
 
 export const policyRouter = Router();
 
@@ -74,8 +75,6 @@ policyRouter.get("/", async (req: Request, res: Response) => {
       },
     });
   } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : "Failed to fetch policy configuration";
-    console.error("[policyRouter] Error fetching policy configuration:", error);
-    return res.status(500).json({ error: errMessage });
+    return handleRouteError(res, error, "Failed to fetch policy configuration");
   }
 });
