@@ -39,6 +39,7 @@ jest.mock("../src/config/prisma", () => {
     auditChainHead: { upsert: jest.fn(), update: jest.fn() },
     ledgerEntry: {
       findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockImplementation((args: any) => Promise.resolve({ id: "mock-ledger-id", ...args.data })),
       groupBy: jest.fn().mockResolvedValue([
         { type: "AT_RISK", _sum: { amount: 10000 } },

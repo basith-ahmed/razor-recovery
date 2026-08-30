@@ -263,8 +263,8 @@ export default function MetricsPage() {
               <div className="bg-slate-50 p-4 rounded border border-slate-200">
                 <span className="text-xs text-slate-400 block mb-1">Median Time to Recovery</span>
                 <span className="text-xl font-bold font-mono text-emerald-700">
-                  {metrics?.medianTimeToRecoveryHours != null && metrics.medianTimeToRecoveryHours > 0
-                    ? `${metrics.medianTimeToRecoveryHours.toFixed(2)} hrs`
+                  {metrics?.amountRecovered && metrics.amountRecovered > 0 && metrics?.medianTimeToRecoveryHours != null
+                    ? `${metrics.medianTimeToRecoveryHours < 0.01 ? "< 0.01" : metrics.medianTimeToRecoveryHours.toFixed(2)} hrs`
                     : "N/A"}
                 </span>
               </div>

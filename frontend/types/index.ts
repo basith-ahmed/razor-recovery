@@ -14,7 +14,7 @@ export interface MetricsSummary {
     recoveredCount?: number;
     recoveredAmount: number;
   }[];
-  medianTimeToRecoveryHours: number;
+  medianTimeToRecoveryHours: number | null;
   compliance: { dncBlocked: number; autoEscalated: number; cooldownStopped: number };
 }
 

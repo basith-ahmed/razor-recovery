@@ -110,11 +110,20 @@ export async function computeLiveMetricsUncached(
   let amountAtRisk = 0;
   let amountRecovered = 0;
 
-  const ledgerAgg = await prisma.ledgerEntry.groupBy({
-    by: ["type"],
-    where: eventFilter.occurredAt ? { createdAt: eventFilter.occurredAt } : {},
-    _sum: { amount: true },
-  });
+  const [ledgerAgg, recoveredLedgerEntries] = await Promise.all([
+    prisma.ledgerEntry.groupBy({
+      by: ["type"],
+      where: eventFilter.occurredAt ? { createdAt: eventFilter.occurredAt } : {},
+      _sum: { amount: true },
+    }),
+    prisma.ledgerEntry.findMany({
+      where: {
+        type: "RECOVERED",
+        ...(eventFilter.occurredAt ? { createdAt: eventFilter.occurredAt } : {}),
+      },
+      select: { entityId: true, eventId: true, createdAt: true },
+    }),
+  ]);
 
   const atRiskSum = ledgerAgg.find(g => g.type === "AT_RISK")?._sum.amount ?? 0;
   const recoveredSum = ledgerAgg.find(g => g.type === "RECOVERED")?._sum.amount ?? 0;
@@ -122,6 +131,18 @@ export async function computeLiveMetricsUncached(
 
   amountAtRisk = atRiskSum;
   amountRecovered = Math.max(0, recoveredSum - reversedSum);
+
+  const recoveredEntityIds = new Set<string>(
+    recoveredLedgerEntries.map((l) => l.entityId),
+  );
+  const recoveredEventIds = new Set<string>(
+    recoveredLedgerEntries.map((l) => l.eventId),
+  );
+
+  const recoveryTimestampMap = new Map<string, Date>();
+  for (const l of recoveredLedgerEntries) {
+    recoveryTimestampMap.set(l.entityId, l.createdAt);
+  }
 
   const causeMap: Record<
     string,
@@ -141,19 +162,22 @@ export async function computeLiveMetricsUncached(
     causeMap[causeLabel].count += 1;
     causeMap[causeLabel].amountAtRisk += event.amount;
 
-    // Check if this event was recovered via audit trail
-    const latestAudit = event.auditEntries.sort(
-      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
-    )[0];
+    const isRecovered =
+      recoveredEventIds.has(event.id) ||
+      recoveredEntityIds.has(event.entityId) ||
+      event.auditEntries.some((a) => a.outcome === "recovered");
 
-    if (latestAudit?.outcome === "recovered") {
+    if (isRecovered) {
       causeMap[causeLabel].amountRecovered += event.amount;
 
-      // Time-to-recovery: Action.executedAt - RevenueEvent.occurredAt
-      if (event.action?.executedAt) {
-        recoveryTimesMs.push(
-          event.action.executedAt.getTime() - event.occurredAt.getTime(),
-        );
+      const recoveryTime =
+        recoveryTimestampMap.get(event.entityId) ??
+        event.auditEntries.find((a) => a.outcome === "recovered")?.timestamp ??
+        event.action?.executedAt;
+
+      if (recoveryTime) {
+        const elapsedMs = Math.max(0, recoveryTime.getTime() - event.occurredAt.getTime());
+        recoveryTimesMs.push(elapsedMs);
       }
     }
   }
@@ -183,10 +207,13 @@ export async function computeLiveMetricsUncached(
     if (!normKey) continue;
 
     channelMap[normKey].count += 1;
-    const latestAudit = event.auditEntries.sort(
-      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
-    )[0];
-    if (latestAudit?.outcome === "recovered") {
+
+    const isRecovered =
+      recoveredEventIds.has(event.id) ||
+      recoveredEntityIds.has(event.entityId) ||
+      event.auditEntries.some((a) => a.outcome === "recovered");
+
+    if (isRecovered) {
       channelMap[normKey].recoveredCount += 1;
       channelMap[normKey].recoveredAmount += event.amount;
     }
@@ -232,10 +259,11 @@ export async function computeLiveMetricsUncached(
       ? Number((totalRecoveredRounded / totalAtRiskRounded).toFixed(4))
       : 0;
 
-  const medianMs = median(recoveryTimesMs);
-  const medianTimeToRecoveryHours = medianMs
-    ? Number((medianMs / (1000 * 60 * 60)).toFixed(2))
-    : 0;
+  const medianMs = recoveryTimesMs.length > 0 ? median(recoveryTimesMs) : null;
+  const medianTimeToRecoveryHours =
+    medianMs !== null && totalRecoveredRounded > 0
+      ? Number((medianMs / (1000 * 60 * 60)).toFixed(2))
+      : null;
 
   return {
     window,
