@@ -90,7 +90,7 @@ export default function MetricsPage() {
   const maxTrendEvents = Math.max(1, ...trend.map((t) => t.eventsProcessed));
 
   return (
-    <div className="pb-24">
+    <div className="pb-8">
       <PageHeader
         title="Analytics & Performance Metrics"
         description="Deep recovery efficiency and financial unit economics over the live event stream."

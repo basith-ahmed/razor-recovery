@@ -56,7 +56,7 @@ export default function TicketsPage() {
   };
 
   return (
-    <div className="pb-24">
+    <div className="pb-8">
       <PageHeader
         title="Human Escalation Workspace"
         description="Manage escalated failure cases requiring agent intervention. Click any ticket to view full details."

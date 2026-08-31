@@ -1,9 +1,12 @@
 import { Prisma, EventType, WorkflowState } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { eventWindowFilter } from "./metricsService";
-import { Window, ListEntitiesFilters, ListEntitiesPagination, EntitySummaryItem, EntityAuditDetailsResponse } from "../domain/types";
+import { Window, ListEntitiesFilters, ListEntitiesPagination, EntitySummaryItem, EntityAuditDetailsResponse, DomainError, EnrichedRevenueEvent } from "../domain/types";
 import { deriveEventState } from "../domain/stateMachine";
 import { formatPromiseToPay } from "./promiseService";
+import { escalateToHuman } from "../integrations/ticketMock";
+import { recordAuditEntry } from "./auditService";
+import { emitLiveUpdate } from "../api/websocket";
 
 export { ListEntitiesFilters, ListEntitiesPagination, EntitySummaryItem, EntityAuditDetailsResponse };
 
@@ -335,5 +338,136 @@ export async function getEntityAuditDetails(targetId: string) {
     events: formattedEvents,
     promises: promises.map(formatPromiseToPay),
     auditEntries: formattedAuditEntries,
+  };
+}
+
+/**
+ * Manually escalates an active entity (e.g. DNC customer entities) to human review / tickets.
+ * Updates workflow state, creates or appends to a ticket, and records a hash-chained audit entry.
+ */
+export async function escalateEntityToHuman(
+  targetId: string,
+  options: { reason?: string; agentName?: string } = {}
+) {
+  const latestEvent = await prisma.revenueEvent.findFirst({
+    where: {
+      OR: [{ entityId: targetId }, { id: targetId }],
+    },
+    orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+    include: {
+      customer: true,
+      diagnosis: true,
+      decision: true,
+      action: true,
+    },
+  });
+
+  if (!latestEvent) {
+    throw new DomainError(`Entity ${targetId} not found.`, "ENTITY_NOT_FOUND");
+  }
+
+  const entityId = latestEvent.entityId;
+  const reason =
+    options.reason ||
+    (latestEvent.customer?.dncFlag
+      ? "Manual operator escalation: customer is on DNC list and requires specialized human handling."
+      : "Manual operator escalation to human agent review.");
+
+  // 1. Create / update ticket
+  const actionResult = await escalateToHuman(entityId, reason);
+
+  if (options.agentName && actionResult.detail) {
+    await prisma.ticketNote.create({
+      data: {
+        ticketId: actionResult.detail,
+        author: options.agentName,
+        content: `Transferred to human escalations by operator ${options.agentName}. Reason: ${reason}`,
+        type: "internal",
+      },
+    });
+  }
+
+  // 2. Persist / update action
+  await prisma.action.upsert({
+    where: { eventId: latestEvent.id },
+    create: {
+      eventId: latestEvent.id,
+      actionType: "escalate_to_human",
+      result: "success",
+      integration: "MOCK",
+    },
+    update: {
+      actionType: "escalate_to_human",
+      result: "success",
+      integration: "MOCK",
+    },
+  });
+
+  // 3. Update entity workflow state to ESCALATED
+  await prisma.entityWorkflowState.upsert({
+    where: { entityId },
+    create: {
+      entityId,
+      customerId: latestEvent.customerId,
+      state: "ESCALATED",
+      lastContactedAt: new Date(),
+    },
+    update: {
+      state: "ESCALATED",
+      lastContactedAt: new Date(),
+    },
+  });
+
+  // 4. Record cryptographic audit entry
+  const enrichedEvent: EnrichedRevenueEvent = {
+    id: latestEvent.id,
+    entityType: latestEvent.entityType,
+    entityId: latestEvent.entityId,
+    customerId: latestEvent.customerId,
+    eventType: latestEvent.eventType,
+    amount: latestEvent.amount,
+    currency: latestEvent.currency,
+    occurredAt: latestEvent.occurredAt.toISOString(),
+    razorpayPaymentId: latestEvent.razorpayPaymentId ?? undefined,
+    razorpayOrderId: latestEvent.razorpayOrderId ?? undefined,
+    errorCode: latestEvent.errorCode ?? undefined,
+    errorReason: latestEvent.errorReason ?? undefined,
+    rawPayload: (latestEvent.rawPayload as Record<string, unknown>) ?? {},
+    riskScore: latestEvent.riskScore ?? 0.5,
+    urgency: latestEvent.urgency ?? 0.5,
+  };
+
+  const auditEntry = await recordAuditEntry({
+    event: enrichedEvent,
+    diagnosis: {
+      causeLabel: latestEvent.diagnosis?.causeLabel ?? "dnc_manual_override",
+      confidence: latestEvent.diagnosis?.confidence ?? 1.0,
+      method: latestEvent.diagnosis?.method ?? "RULE",
+      reasoning: latestEvent.customer?.dncFlag
+        ? "Customer is marked Do-Not-Contact (DNC). Manual operator intervention escalated entity for human review."
+        : "Manual operator escalation.",
+    },
+    decision: {
+      legalActions: ["escalate_to_human"],
+      chosenAction: "escalate_to_human",
+      reasoning: reason,
+      policyVersion: "1.0.0",
+    },
+    action: actionResult,
+  });
+
+  // 5. Emit live WebSocket update
+  try {
+    await emitLiveUpdate(latestEvent.id);
+  } catch (err) {
+    console.error("[entityService] Failed to emit live update on escalation:", err);
+  }
+
+  return {
+    success: true,
+    entityId,
+    ticketId: actionResult.detail,
+    state: "ESCALATED",
+    auditEntryId: auditEntry.id,
   };
 }

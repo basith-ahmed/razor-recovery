@@ -61,7 +61,7 @@ export default function EntitiesPage() {
   };
 
   return (
-    <div className="pb-24">
+    <div className="pb-8">
       <PageHeader
         title="Revenue Entities"
         description="Query and inspect failed payment & recovery entities with real-time server-side filtering and pagination."

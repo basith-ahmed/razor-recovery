@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { parseWindow } from "../../domain/types";
 import { parsePagination, paginatedResponse } from "../../utils/pagination";
 import { handleRouteError } from "../../utils/apiResponse";
-import { listEntities, getEntityAuditDetails } from "../../services/entityService";
+import { listEntities, getEntityAuditDetails, escalateEntityToHuman } from "../../services/entityService";
 
 export const entitiesRouter = Router();
 
@@ -41,5 +41,17 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
     return res.status(200).json(details);
   } catch (error: unknown) {
     return handleRouteError(res, error, "Failed to fetch audit entries");
+  }
+});
+
+// POST /entities/:id/escalate — manually move an entity (e.g. DNC customer) to human escalations
+entitiesRouter.post("/:id/escalate", async (req: Request, res: Response) => {
+  try {
+    const targetId = String(req.params.id);
+    const { reason, agentName } = req.body || {};
+    const result = await escalateEntityToHuman(targetId, { reason, agentName });
+    return res.status(200).json(result);
+  } catch (error: unknown) {
+    return handleRouteError(res, error, "Failed to escalate entity to human review");
   }
 });

@@ -58,6 +58,14 @@ export async function getEntityAudit(id: string): Promise<EntityAuditResponse> {
   return response.data;
 }
 
+export async function escalateEntity(
+  id: string,
+  data?: { reason?: string; agentName?: string }
+): Promise<{ success: boolean; entityId: string; ticketId?: string; state: string; auditEntryId?: string }> {
+  const response = await apiClient.post(`/entities/${id}/escalate`, data || {});
+  return response.data;
+}
+
 export async function getPolicy(
   page: number = 1,
   limit: number = 20,

@@ -2,12 +2,13 @@
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import { getEntityAudit } from "../../../lib/api";
+import { getEntityAudit, escalateEntity } from "../../../lib/api";
 import { AuditEntry, EntityAuditResponse, EntityEventItem } from "../../../types";
 import { AuditTimeline } from "../../../components/AuditTimeline";
 import { useLiveStream } from "../../../lib/socket";
 import { formatCurrency, formatDateTime, formatDate } from "../../../lib/formatters";
 import { Badge } from "../../../components/Badge";
+import { ArrowRight, ShieldAlert, UserCheck, CheckCircle2, Loader2 } from "lucide-react";
 
 interface EntityDetailPageProps {
   params: Promise<{ id: string }>;
@@ -18,6 +19,9 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
   const [data, setData] = useState<EntityAuditResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [escalating, setEscalating] = useState<boolean>(false);
+  const [escalationSuccess, setEscalationSuccess] = useState<{ ticketId?: string } | null>(null);
+  const [escalationError, setEscalationError] = useState<string | null>(null);
 
   const { activityFeed } = useLiveStream();
 
@@ -63,8 +67,30 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
 
   const customerName = customer?.name || "Revenue Entity";
 
+  const handleEscalate = async () => {
+    if (escalating) return;
+    setEscalating(true);
+    setEscalationError(null);
+    setEscalationSuccess(null);
+    try {
+      const res = await escalateEntity(actualEntityId, {
+        reason: "Manual operator escalation: moving DNC customer entity to human escalation review",
+        agentName: "Operator",
+      });
+      setEscalationSuccess({ ticketId: res.ticketId });
+      // Refresh entity audit trail
+      const updated = await getEntityAudit(id);
+      setData(updated);
+    } catch (err: any) {
+      console.error("Failed to escalate entity:", err);
+      setEscalationError(err?.response?.data?.error || err?.message || "Failed to escalate entity");
+    } finally {
+      setEscalating(false);
+    }
+  };
+
   return (
-    <div className="pb-24">
+    <div className="pb-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-ink-faint mb-4">
         <Link href="/entities" className="hover:text-ink transition-colors">
@@ -116,7 +142,7 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
               </div>
 
               {/* Right: Financial summary */}
-              <div className="flex items-start gap-8 shrink-0">
+              <div className="flex flex-col items-end gap-8 shrink-0">
                 <div className="text-right">
                   <div className="text-xs text-ink-muted mb-0.5 font-medium">Amount at Risk</div>
                   <div className="text-2xl font-bold text-ink tracking-heading-3">
@@ -144,6 +170,83 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
             </div>
           </div>
 
+          {/* DNC Escalation Action Banner / Status */}
+          {customer?.dncFlag && currentState !== "ESCALATED" && currentState !== "RECOVERED" && currentState !== "WRITTEN_OFF" && (
+            <div className="bg-amber-50 border border-amber-200 rounded-[12px] p-4 mb-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0 max-w-2xl">
+                <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-xs font-bold text-amber-900">
+                    Do-Not-Contact (DNC) Guardrail Active
+                  </div>
+                  <div className="text-xs text-amber-700 mt-0.5">
+                    Automated outreach is suppressed by compliance policy. You can manually move this entity to human agent escalations for white-glove follow-up.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleEscalate}
+                disabled={escalating}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-[8px] text-xs font-semibold shadow-xs flex items-center gap-2 transition-colors shrink-0 cursor-pointer"
+              >
+                {escalating ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Escalating...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>Move to Escalations</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Escalation Success Alert */}
+          {escalationSuccess && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-[12px] p-4 mb-5 shadow-xs flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5 text-xs text-emerald-900 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Entity successfully escalated to human agents. Open ticket created.</span>
+              </div>
+              {escalationSuccess.ticketId && (
+                <Link
+                  href={`/tickets/${escalationSuccess.ticketId}`}
+                  className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1 shrink-0"
+                >
+                  <span>Open Ticket</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
+            </div>
+          )}
+
+          {/* Escalation Error Alert */}
+          {escalationError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-[12px] p-4 mb-5 text-xs font-medium">
+              {escalationError}
+            </div>
+          )}
+
+          {/* Already Escalated Banner for DNC */}
+          {currentState === "ESCALATED" && (
+            <div className="bg-purple-50 border border-purple-200 rounded-[12px] p-4 mb-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5 text-xs text-purple-900 font-medium">
+                <UserCheck className="w-4 h-4 text-purple-600 shrink-0" />
+                <span>This entity is under active human agent review in the Escalations queue.</span>
+              </div>
+              <Link
+                href="/tickets"
+                className="px-3.5 py-1.5 bg-white border border-purple-300 text-purple-700 hover:bg-purple-100 rounded-[8px] text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors shadow-xs"
+              >
+                <span>View Escalations Queue</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          )}
+
           {/* Promises section — only shown when promises exist */}
           {data?.promises && data.promises.length > 0 && (
             <div className="mb-5 border border-hairline rounded-[12px] bg-canvas-soft p-5 shadow-notion-soft">
@@ -156,9 +259,10 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
                 </h3>
                 <Link
                   href="/promises"
-                  className="text-xs text-primary hover:text-primary-active font-medium"
+                  className="text-xs text-primary hover:text-primary-active font-medium inline-flex items-center gap-1"
                 >
-                  Manage →
+                  <span>Manage</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
 

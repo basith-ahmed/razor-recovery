@@ -21,6 +21,7 @@ import { CreatePromiseModal } from "../../components/CreatePromiseModal";
 import { PaginationControl } from "../../components/PaginationControl";
 import { PageHeader } from "../../components/PageHeader";
 import { Badge } from "../../components/Badge";
+import { Plus } from "lucide-react";
 
 export default function PromisesPage() {
   const router = useRouter();
@@ -85,16 +86,16 @@ export default function PromisesPage() {
   }
 
   return (
-    <div className="pb-24">
+    <div className="pb-8">
       <PageHeader
         title="Promise-to-Pay Tracker"
         description="Track, schedule, and automate recovery commitments made by customers."
         actions={
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="px-4 py-1.5 text-xs font-medium bg-primary hover:bg-primary-active active:scale-[0.98] text-white rounded-full transition-all shadow-sm"
+            className="px-4 py-1.5 text-xs font-medium bg-primary hover:bg-primary-active active:scale-[0.98] text-white rounded-full transition-all shadow-sm flex items-center gap-1"
           >
-            + Record Promise to Pay
+            <Plus className="w-3.5 h-3.5" /> Record Promise to Pay
           </button>
         }
       />
@@ -102,7 +103,9 @@ export default function PromisesPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
         <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
-          <div className="text-xs text-ink-muted font-medium">Active Commitments</div>
+          <div className="text-xs text-ink-muted font-medium">
+            Active Commitments
+          </div>
           <div className="text-2xl font-bold text-ink mt-1 tracking-heading-3">
             {(stats?.pendingCount ?? 0) + (stats?.reminderSentCount ?? 0)}
           </div>
@@ -112,7 +115,9 @@ export default function PromisesPage() {
         </div>
 
         <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
-          <div className="text-xs text-ink-muted font-medium">Total Promised Volume</div>
+          <div className="text-xs text-ink-muted font-medium">
+            Total Promised Volume
+          </div>
           <div className="text-2xl font-bold text-ink mt-1 tracking-heading-3">
             {formatCurrency(stats?.totalPromisedAmount ?? 0)}
           </div>
@@ -122,7 +127,9 @@ export default function PromisesPage() {
         </div>
 
         <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
-          <div className="text-xs text-ink-muted font-medium">Recovered & Kept</div>
+          <div className="text-xs text-ink-muted font-medium">
+            Recovered & Kept
+          </div>
           <div className="text-2xl font-bold text-accent-green mt-1 tracking-heading-3">
             {formatCurrency(stats?.totalRecoveredAmount ?? 0)}
           </div>
@@ -132,9 +139,15 @@ export default function PromisesPage() {
         </div>
 
         <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
-          <div className="text-xs text-ink-muted font-medium">Broken / Escalated</div>
-          <div className="text-2xl font-bold text-accent-orange-deep mt-1 tracking-heading-3">{stats?.brokenCount ?? 0}</div>
-          <div className="text-[11px] text-accent-orange-deep mt-0.5">Auto-escalated to support</div>
+          <div className="text-xs text-ink-muted font-medium">
+            Broken / Escalated
+          </div>
+          <div className="text-2xl font-bold text-accent-orange-deep mt-1 tracking-heading-3">
+            {stats?.brokenCount ?? 0}
+          </div>
+          <div className="text-[11px] text-accent-orange-deep mt-0.5">
+            Auto-escalated to support
+          </div>
         </div>
       </div>
 
@@ -156,7 +169,11 @@ export default function PromisesPage() {
                     : "bg-canvas-soft hover:bg-hairline/40 text-ink-secondary border border-hairline"
                 }`}
               >
-                {s === "all" ? "All" : s.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                {s === "all"
+                  ? "All"
+                  : s
+                      .replace("_", " ")
+                      .replace(/\b\w/g, (l) => l.toUpperCase())}
               </button>
             ))}
           </div>
@@ -206,14 +223,20 @@ export default function PromisesPage() {
                     onClick={() => router.push(`/promises/${p.id}`)}
                   >
                     <td className="py-2.5 px-3">
-                      <div className="font-semibold text-ink">{p.customerName}</div>
-                      <div className="text-[11px] text-ink-muted">{p.customerEmail}</div>
+                      <div className="font-semibold text-ink">
+                        {p.customerName}
+                      </div>
+                      <div className="text-[11px] text-ink-muted">
+                        {p.customerEmail}
+                      </div>
                     </td>
                     <td className="py-2.5 px-3 font-semibold text-ink">
                       {formatCurrency(p.promisedAmount, p.currency)}
                     </td>
                     <td className="py-2.5 px-3">
-                      <div className="font-semibold text-ink">{formatDate(p.promisedDate)}</div>
+                      <div className="font-semibold text-ink">
+                        {formatDate(p.promisedDate)}
+                      </div>
                       <div className="text-[10px] text-ink-faint">
                         {formatDateTime(p.promisedDate).split(", ")[1]}
                       </div>

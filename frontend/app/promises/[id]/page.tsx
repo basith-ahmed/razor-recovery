@@ -8,6 +8,7 @@ import { formatCurrency, formatDateTime, formatDate } from "../../../lib/formatt
 import { Badge } from "../../../components/Badge";
 import { CountdownTimer } from "../../../components/CountdownTimer";
 import { PageHeader } from "../../../components/PageHeader";
+import { ArrowRight } from "lucide-react";
 
 interface PromiseDetailPageProps {
   params: Promise<{ id: string }>;
@@ -73,7 +74,7 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
   };
 
   return (
-    <div className="pb-24">
+    <div className="pb-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-ink-faint mb-4">
         <Link href="/promises" className="hover:text-ink transition-colors">
@@ -280,9 +281,10 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
                   <div className="pt-2.5 border-t border-hairline">
                     <Link
                       href={`/entities/${promise.entityId}`}
-                      className="text-primary hover:underline font-semibold"
+                      className="text-primary hover:underline font-semibold inline-flex items-center gap-1.5"
                     >
-                      View Entity Audit Trail →
+                      <span>View Entity Audit Trail</span>
+                      <ArrowRight className="w-4 h-4" />
                     </Link>
                   </div>
                 </div>

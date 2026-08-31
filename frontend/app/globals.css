@@ -80,3 +80,14 @@ body {
 .shadow-notion-elevated {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02), 0 6px 16px rgba(0, 0, 0, 0.03);
 }
+
+/* Hide scrollbars globally across all elements while maintaining scrollability */
+*::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

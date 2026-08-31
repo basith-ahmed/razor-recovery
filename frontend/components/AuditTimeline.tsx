@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, AlertTriangle, Info } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Info, ArrowRight } from "lucide-react";
 import { AuditEntry } from "../types";
 import { formatDateTime } from "../lib/formatters";
 
@@ -70,7 +70,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 <div>
                   <div className="text-sm font-semibold text-ink flex items-center gap-2 flex-wrap">
                     <span>Actor: {entry.actor}</span>
-                    <span className="text-xs text-ink-faint">→</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-ink-faint inline-block" />
                     <span className="text-xs uppercase bg-canvas-soft border border-hairline px-2 py-0.5 rounded-full text-ink-muted font-medium">
                       {entry.outcome}
                     </span>
@@ -103,7 +103,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
             </div>
 
             {entry.actor === "razorpay_webhook" ? (
-              <div className="my-3 bg-accent-green/10 border-l-4 border-accent-green p-3.5 rounded-[8px]">
+              <div className="my-3 bg-accent-green/10 p-3.5 rounded-[8px]">
                 <div className="text-xs font-semibold text-accent-green uppercase tracking-eyebrow mb-1 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-accent-green" />
                   Payment Settlement Confirmed (Razorpay Webhook)
@@ -183,7 +183,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 </div>
 
                 {entry.outcome === "failed" && (
-                  <div className="my-3 bg-accent-orange/10 border-l-4 border-accent-orange p-3.5 rounded-[8px]">
+                  <div className="my-3 bg-accent-orange/10 p-3.5 rounded-[8px]">
                     <div className="text-xs font-semibold text-accent-orange-deep uppercase tracking-eyebrow mb-1 flex items-center gap-1.5">
                       <AlertTriangle className="w-4 h-4 text-accent-orange" />
                       Action Execution Failed
@@ -201,7 +201,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 )}
 
                 {diagnosisReasoning && (
-                  <div className="my-3 bg-canvas-soft border-l-4 border-accent-purple-deep p-3.5 rounded-[8px]">
+                  <div className="my-3 bg-canvas-soft p-3.5 rounded-[8px]">
                     <div className="text-xs font-semibold text-accent-purple-deep uppercase tracking-eyebrow mb-1 flex items-center gap-1.5">
                       <Info className="w-4 h-4 text-accent-purple-deep" />
                       Diagnosis Reasoning
@@ -213,7 +213,7 @@ export function AuditTimeline({ entries }: AuditTimelineProps) {
                 )}
 
                 {decisionReasoning && (
-                  <div className="my-3 bg-primary/5 border-l-4 border-primary p-3.5 rounded-[8px]">
+                  <div className="my-3 bg-primary/5 p-3.5 rounded-[8px]">
                     <div className="text-xs font-semibold text-primary uppercase tracking-eyebrow mb-1 flex items-center gap-1.5">
                       <Info className="w-4 h-4 text-primary" />
                       Decision Reasoning

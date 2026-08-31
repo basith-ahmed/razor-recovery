@@ -182,8 +182,8 @@ export function EntityTable({
                   : ""}
               </th>
               <th className="py-2.5 px-3">Event Type</th>
-              <th className="py-2.5 px-3">State</th>
-              <th className="py-2.5 px-3">Stage</th>
+              <th className="py-2.5 px-3">Last Event State</th>
+              {/* <th className="py-2.5 px-3">Stage</th> */}
               <th
                 className="py-2.5 px-3 cursor-pointer hover:text-ink transition-colors"
                 onClick={() => handleSortToggle("riskScore")}
@@ -196,7 +196,7 @@ export function EntityTable({
                   : ""}
               </th>
               <th className="py-2.5 px-3">Attempts</th>
-              <th className="py-2.5 px-3">Action</th>
+              {/* <th className="py-2.5 px-3">Action</th> */}
               <th
                 className="py-2.5 px-3 cursor-pointer hover:text-ink transition-colors"
                 onClick={() => handleSortToggle("occurredAt")}
@@ -213,13 +213,13 @@ export function EntityTable({
           <tbody className="divide-y divide-hairline bg-white">
             {loading ? (
               <tr>
-                <td colSpan={9} className="py-8 text-center text-ink-muted">
+                <td colSpan={7} className="py-8 text-center text-ink-muted">
                   Loading entities...
                 </td>
               </tr>
             ) : entities.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-8 text-center text-ink-muted">
+                <td colSpan={7} className="py-8 text-center text-ink-muted">
                   No revenue entities found matching filters.
                 </td>
               </tr>
@@ -245,9 +245,9 @@ export function EntityTable({
                   <td className="py-2.5 px-3">
                     <Badge type="state" value={item.state} />
                   </td>
-                  <td className="py-2.5 px-3">
+                  {/* <td className="py-2.5 px-3">
                     <Badge type="stage" value={item.stage} />
-                  </td>
+                  </td> */}
                   <td className="py-2.5 px-3 font-semibold">
                     {item.riskScore !== null ? (
                       <span
@@ -268,13 +268,13 @@ export function EntityTable({
                   <td className="py-2.5 px-3 text-ink-secondary font-medium">
                     {item.attemptCount}
                   </td>
-                  <td className="py-2.5 px-3">
+                  {/* <td className="py-2.5 px-3">
                     {item.actionResult ? (
                       <Badge type="actionResult" value={item.actionResult} />
                     ) : (
                       <span className="text-ink-faint">—</span>
                     )}
-                  </td>
+                  </td> */}
                   <td className="py-2.5 px-3 text-ink-muted">
                     {formatDateTime(item.occurredAt)}
                   </td>

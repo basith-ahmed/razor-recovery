@@ -7,6 +7,7 @@ import { TicketDetailResponse } from "../../../types";
 import { formatCurrency, formatDateTime } from "../../../lib/formatters";
 import { Badge } from "../../../components/Badge";
 import { TicketEmailModal } from "../../../components/TicketEmailModal";
+import { ArrowRight } from "lucide-react";
 
 interface TicketDetailPageProps {
   params: Promise<{ id: string }>;
@@ -120,7 +121,7 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
   const customerName = detail?.customer?.name ?? detail?.ticket.entityId ?? id;
 
   return (
-    <div className="pb-24">
+    <div className="pb-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-ink-faint mb-4">
         <Link href="/tickets" className="hover:text-ink transition-colors">
@@ -359,9 +360,10 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
                     <div className="pt-2.5 border-t border-hairline">
                       <Link
                         href={`/entities/${detail.ticket.entityId}`}
-                        className="text-primary hover:underline text-xs font-semibold"
+                        className="text-primary hover:underline text-xs font-semibold inline-flex items-center gap-1.5"
                       >
-                        View Entity Audit Trail →
+                        <span>View Entity Audit Trail</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
                     </div>
                   </div>
