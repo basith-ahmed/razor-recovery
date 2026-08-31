@@ -263,7 +263,7 @@ export function FloatingAuditAIBar({
         <button
           type="submit"
           disabled={loading}
-          className="bg-primary hover:bg-primary-active active:scale-[0.98] disabled:opacity-50 text-white text-xs font-medium px-4 py-1.5 rounded-full shrink-0 shadow-sm transition-all"
+          className="bg-primary hover:bg-primary-active active:scale-[0.98] disabled:opacity-50 text-white text-xs font-medium px-4 py-1.5 rounded-full shrink-0 shadow-sm transition-all h-9"
         >
           {loading ? "Thinking..." : "Ask AI"}
         </button>
