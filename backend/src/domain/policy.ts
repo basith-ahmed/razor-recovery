@@ -10,18 +10,11 @@ export interface StoppingConfig {
   maxAttempts?: number;
   windowDays?: number;
   windowHours?: number;
-  onMaxEscalate?: boolean;
   onMaxAction?: string;
   noResponseWithinHours?: number;
   onTimeoutAction?: string;
   hardStopDays?: number;
   onHardStopAction?: string;
-  escalateAtDays?: number;
-  always?: boolean;
-  freezeWorkflow?: boolean;
-  overridesAll?: boolean;
-  skipAndLog?: boolean;
-  checkedFirst?: boolean;
 }
 
 export interface PolicyRule {
@@ -51,6 +44,20 @@ export function loadPolicy(): PolicyConfig {
 export function getRuleForCause(cause: string): PolicyRule | undefined {
   const policy = loadPolicy();
   return policy.rules.find((r) => r.cause === cause);
+}
+
+export function cooldownTtlSeconds(causeLabel: string): number {
+  const rule = getRuleForCause(causeLabel);
+  if (!rule) return 3600; // 1h default
+
+  const stopping = rule.stopping;
+  if (stopping.windowHours !== undefined) {
+    return stopping.windowHours * 3600;
+  }
+  if (stopping.windowDays !== undefined) {
+    return stopping.windowDays * 86400;
+  }
+  return 3600; // 1h default
 }
 
 export function getPolicyVersion(): string {

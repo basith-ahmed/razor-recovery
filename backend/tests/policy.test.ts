@@ -45,7 +45,7 @@ describe("policy.ts", () => {
     const rule = getRuleForCause("expired_card");
     expect(rule).toBeDefined();
     expect(rule!.cause).toBe("expired_card");
-    expect(rule!.actions).toContain("retry_payment");
+    expect(rule!.actions).toContain("retry_payment_immediate");
   });
 
   it("getRuleForCause returns undefined for unknown cause", () => {
@@ -73,7 +73,8 @@ describe("filterLegalActions", () => {
       "gateway_timeout",
       "price_friction",
       "no_reason_signal",
-      "subscription_renewal_failed",
+      "mandate_execution_failed_retryable",
+      "mandate_requires_reauthorization",
       "invoice_overdue",
       "invoice_disputed",
     ];
@@ -103,6 +104,26 @@ describe("filterLegalActions", () => {
     }
   });
 
+  it("already recovered entity always gets [] regardless of cause", () => {
+    const causes = [
+      "expired_card",
+      "insufficient_funds",
+      "gateway_timeout",
+      "price_friction",
+      "no_reason_signal",
+      "mandate_execution_failed_retryable",
+      "mandate_requires_reauthorization",
+      "invoice_overdue",
+    ];
+
+    for (const cause of causes) {
+      const result = filterLegalActions(
+        makeCtx({ causeLabel: cause, isRecovered: true })
+      );
+      expect(result).toEqual([]);
+    }
+  });
+
   it("DNC takes priority over dispute", () => {
     const result = filterLegalActions(
       makeCtx({ isDnc: true, isDisputed: true })
@@ -118,9 +139,8 @@ describe("filterLegalActions", () => {
         makeCtx({ causeLabel: "expired_card", attemptCount: 0 })
       );
       expect(result).toEqual([
-        "retry_payment",
-        "send_payment_link",
-        "send_sms_reminder",
+        "retry_payment_immediate",
+        "send_reminder_email",
         "escalate_to_human",
       ]);
     });
@@ -130,7 +150,7 @@ describe("filterLegalActions", () => {
         makeCtx({ causeLabel: "expired_card", attemptCount: 3 })
       );
       expect(result).toEqual(["escalate_to_human"]);
-      expect(result).not.toContain("retry_payment");
+      expect(result).not.toContain("retry_payment_immediate");
     });
 
     it("returns [] when in cooldown", () => {
@@ -147,9 +167,8 @@ describe("filterLegalActions", () => {
         makeCtx({ causeLabel: "insufficient_funds", attemptCount: 1 })
       );
       expect(result).toEqual([
-        "retry_payment",
-        "send_payment_link",
-        "send_sms_reminder",
+        "retry_payment_immediate",
+        "send_reminder_email",
         "escalate_to_human",
       ]);
     });
@@ -173,7 +192,7 @@ describe("filterLegalActions", () => {
       ]);
     });
 
-    it("returns hard_decline at maxAttempts (onMaxEscalate=false)", () => {
+    it("returns hard_decline at maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({ causeLabel: "gateway_timeout", attemptCount: 2 })
       );
@@ -208,7 +227,7 @@ describe("filterLegalActions", () => {
       expect(result).toEqual(["send_reminder_email"]);
     });
 
-    it("returns [] when noResponseWithinHours exceeded (onTimeoutAction=stop)", () => {
+    it("returns [] when noResponseWithinHours exceeded", () => {
       const result = filterLegalActions(
         makeCtx({
           causeLabel: "no_reason_signal",
@@ -219,48 +238,69 @@ describe("filterLegalActions", () => {
     });
   });
 
-  describe("subscription_renewal_failed", () => {
-    it("returns all dunning actions when under hardStopDays", () => {
+  describe("mandate_execution_failed_retryable", () => {
+    it("returns retry_payment_delayed and send_reminder_email when under maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({
-          causeLabel: "subscription_renewal_failed",
+          causeLabel: "mandate_execution_failed_retryable",
+          attemptCount: 1,
+        })
+      );
+      expect(result).toEqual([
+        "retry_payment_delayed",
+        "send_reminder_email",
+      ]);
+    });
+
+    it("returns send_reminder_email when at maxAttempts", () => {
+      const result = filterLegalActions(
+        makeCtx({
+          causeLabel: "mandate_execution_failed_retryable",
+          attemptCount: 3,
+        })
+      );
+      expect(result).toEqual(["send_reminder_email"]);
+    });
+  });
+
+  describe("mandate_requires_reauthorization", () => {
+    it("returns send_reminder_email and escalate_to_human without retries when under hardStopDays", () => {
+      const result = filterLegalActions(
+        makeCtx({
+          causeLabel: "mandate_requires_reauthorization",
           daysOverdue: 5,
         })
       );
       expect(result).toEqual([
-        "send_dunning_email_1",
-        "send_dunning_email_2",
-        "send_dunning_email_3",
-        "pause_subscription",
-        "send_winback_offer",
+        "send_reminder_email",
+        "escalate_to_human",
       ]);
     });
 
-    it("returns auto_cancel when past hardStopDays", () => {
+    it("returns escalate_to_human when past hardStopDays", () => {
       const result = filterLegalActions(
         makeCtx({
-          causeLabel: "subscription_renewal_failed",
-          daysOverdue: 21,
+          causeLabel: "mandate_requires_reauthorization",
+          daysOverdue: 30,
         })
       );
-      expect(result).toEqual(["auto_cancel"]);
+      expect(result).toEqual(["escalate_to_human"]);
     });
   });
 
   describe("invoice_overdue", () => {
-    it("returns all actions for overdue invoice under escalation threshold", () => {
+    it("returns all actions for overdue invoice", () => {
       const result = filterLegalActions(
         makeCtx({ causeLabel: "invoice_overdue", daysOverdue: 10 })
       );
       expect(result).toEqual([
-        "send_reminder",
+        "send_reminder_email",
         "send_soft_chase_email",
         "escalate_to_human",
-        "start_promise_to_pay_tracking",
       ]);
     });
 
-    it("includes escalate_to_human when past escalateAtDays", () => {
+    it("includes escalate_to_human (already in actions list)", () => {
       const result = filterLegalActions(
         makeCtx({ causeLabel: "invoice_overdue", daysOverdue: 35 })
       );
@@ -269,18 +309,18 @@ describe("filterLegalActions", () => {
   });
 
   describe("invoice_disputed", () => {
-    it("returns only escalate_to_human (freezeWorkflow)", () => {
+    it("returns only escalate_to_human when isDisputed is true", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "invoice_disputed" })
+        makeCtx({ causeLabel: "some_cause", isDisputed: true })
       );
       expect(result).toEqual(["escalate_to_human"]);
     });
   });
 
   describe("dnc rule", () => {
-    it("returns [] for dnc cause (skipAndLog)", () => {
+    it("returns [] when customer is DNC", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "dnc" })
+        makeCtx({ causeLabel: "some_cause", isDnc: true })
       );
       expect(result).toEqual([]);
     });

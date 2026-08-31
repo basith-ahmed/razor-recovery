@@ -40,6 +40,7 @@ const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
   ],
   RETRYING: [
     "RETRYING",
+    "CONTACTED",
     "COOLING_DOWN",
     "RECOVERED",
     "ESCALATED",
@@ -54,7 +55,7 @@ const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
     "WRITTEN_OFF",
     "DO_NOT_CONTACT",
   ],
-  ESCALATED: ["RECOVERED", "WRITTEN_OFF"],
+  ESCALATED: ["ESCALATED", "RECOVERED", "WRITTEN_OFF"],
   RECOVERED: [],
   WRITTEN_OFF: [],
   DO_NOT_CONTACT: [],
@@ -64,6 +65,9 @@ export function canTransition(
   from: WorkflowState,
   to: WorkflowState
 ): boolean {
+  if (from === to && from !== "RECOVERED" && from !== "WRITTEN_OFF" && from !== "DO_NOT_CONTACT") {
+    return true;
+  }
   return ALLOWED_TRANSITIONS[from].includes(to);
 }
 
@@ -73,7 +77,7 @@ export function canTransition(
  * new event on a terminal-state entity as beginning again from DETECTED.
  */
 export function isTerminal(state: WorkflowState): boolean {
-  return ALLOWED_TRANSITIONS[state].length === 0;
+  return state === "RECOVERED" || state === "WRITTEN_OFF" || state === "DO_NOT_CONTACT";
 }
 
 /**
@@ -85,6 +89,10 @@ export function nextState(
   actionOutcome: string
 ): WorkflowState {
   const target = outcomeToState(actionOutcome);
+
+  if (current === target) {
+    return target;
+  }
 
   if (!canTransition(current, target)) {
     throw new Error(
@@ -134,6 +142,8 @@ function outcomeToState(outcome: string): WorkflowState {
       return "RECOVERED";
     case "winback_sent":
       return "CONTACTED";
+    case "promise_tracked":
+      return "CONTACTED";
     case "subscription_paused":
       return "COOLING_DOWN";
     default:
@@ -150,3 +160,33 @@ export function getAllowedTransitions(): Record<
 > {
   return { ...ALLOWED_TRANSITIONS };
 }
+
+const RETRY_ACTION_TYPES = new Set(["retry_payment_immediate", "retry_payment_delayed"]);
+const ESCALATE_ACTION_TYPES = new Set(["escalate_to_human"]);
+const COOLDOWN_ACTION_TYPES = new Set(["pause_subscription"]);
+
+/**
+ * Derives the active WorkflowState from an audit outcome, action type, and reasoning context.
+ */
+export function deriveEventState(
+  outcome?: string | null,
+  actionType?: string | null,
+  reasoning?: string | null,
+): WorkflowState {
+  if (!outcome) return "DETECTED";
+  if (outcome === "recovered" || outcome === "payment_confirmed") return "RECOVERED";
+  if (outcome === "written_off" || outcome === "hard_decline" || outcome === "auto_cancel") return "WRITTEN_OFF";
+  if (outcome === "reversed") return "RECOVERED"; // or REVERSED represented in workflow as terminal
+  if (outcome === "escalated" || (actionType && ESCALATE_ACTION_TYPES.has(actionType))) return "ESCALATED";
+  if (actionType && RETRY_ACTION_TYPES.has(actionType)) return "RETRYING";
+  if (actionType && COOLDOWN_ACTION_TYPES.has(actionType)) return "COOLING_DOWN";
+  if (outcome === "pending") return "CONTACTED";
+  if (outcome === "skipped") {
+    if (reasoning?.includes("cooldown")) return "COOLING_DOWN";
+    if (reasoning?.includes("DNC") || actionType === "dnc") return "DO_NOT_CONTACT";
+    return "DO_NOT_CONTACT";
+  }
+  if (outcome === "failed") return "DETECTED";
+  return "DETECTED";
+}
+

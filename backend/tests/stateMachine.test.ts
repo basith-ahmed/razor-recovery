@@ -171,6 +171,10 @@ describe("stateMachine", () => {
       );
     });
 
+    it("escalation_triggered from ESCALATED → ESCALATED (idempotent)", () => {
+      expect(nextState("ESCALATED", "escalation_triggered")).toBe("ESCALATED");
+    });
+
     // --- Illegal transitions ---
 
     it("illegal transition RECOVERED → RETRYING throws", () => {

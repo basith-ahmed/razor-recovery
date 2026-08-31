@@ -18,7 +18,7 @@ export function initWebSocket(server: http.Server): Server {
   // broadcast. There is no per-run room and no subscribe handshake, because
   // the pipeline itself has no run scope.
   ioInstance.on("connection", (socket) => {
-    console.log(`[websocket] Client connected: ${socket.id}`);
+    // console.log(`[websocket] Client connected: ${socket.id}`);
 
     // Push an initial metrics snapshot so the dashboard renders immediately
     computeLiveMetrics("all")
@@ -28,7 +28,7 @@ export function initWebSocket(server: http.Server): Server {
       );
 
     socket.on("disconnect", () => {
-      console.log(`[websocket] Client disconnected: ${socket.id}`);
+      // console.log(`[websocket] Client disconnected: ${socket.id}`);
     });
   });
 
@@ -76,6 +76,7 @@ export async function emitLiveUpdate(eventId?: string): Promise<void> {
         eventType: latestAudit.event.eventType,
         cause: latestAudit.event.diagnosis?.causeLabel ?? "unknown",
         action: latestAudit.event.action?.actionType ?? "none",
+        actionResult: latestAudit.event.action?.result ?? null,
         outcome: latestAudit.outcome,
       });
     }
@@ -103,6 +104,9 @@ export function emitIncomingEvent(payload: {
   currency: string;
   occurredAt: string;
   riskScore?: number;
+  /** True for scheduler-synthesized events (cooldown expiry, deferred retry). */
+  synthesized?: boolean;
+  followUpType?: string;
 }): void {
   ioInstance?.emit("event:incoming", payload);
 }

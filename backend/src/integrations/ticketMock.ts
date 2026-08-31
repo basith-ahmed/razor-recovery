@@ -7,9 +7,37 @@ export async function escalateToHuman(
   reason: string,
 ): Promise<ActionResult> {
   try {
-    const ticket = await prisma.ticket.create({
-      data: { entityId, reason },
+    // Check if an open ticket already exists for this entity
+    let ticket = await prisma.ticket.findFirst({
+      where: { entityId, status: "open" },
     });
+
+    if (!ticket) {
+      ticket = await prisma.ticket.create({
+        data: {
+          entityId,
+          reason,
+          status: "open",
+          notes: {
+            create: {
+              author: "System / Pipeline",
+              content: `Escalation triggered: ${reason}`,
+              type: "status_change",
+            },
+          },
+        },
+      });
+    } else {
+      // Append a note on the existing open ticket
+      await prisma.ticketNote.create({
+        data: {
+          ticketId: ticket.id,
+          author: "System / Pipeline",
+          content: `Escalation event re-triggered: ${reason}`,
+          type: "status_change",
+        },
+      });
+    }
 
     return {
       actionType: "escalate_to_human",

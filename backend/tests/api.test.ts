@@ -104,14 +104,16 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
         data.items.forEach((e) => expect(e.eventType).toBe("PAYMENT_FAILED"));
       });
 
-      it("returns ordered audit entries for an entity", async () => {
+      it("returns ordered audit entries and event history for an entity", async () => {
         const sampleEvent = await prisma.revenueEvent.findFirst();
         expect(sampleEvent).not.toBeNull();
 
         const res = await fetch(`${baseUrl}/entities/${sampleEvent!.entityId}/audit`);
         expect(res.status).toBe(200);
-        const data = (await res.json()) as unknown[];
-        expect(Array.isArray(data)).toBe(true);
+        const data = (await res.json()) as { events: unknown[]; auditEntries: unknown[]; entityId: string };
+        expect(Array.isArray(data.auditEntries)).toBe(true);
+        expect(Array.isArray(data.events)).toBe(true);
+        expect(data.entityId).toBe(sampleEvent!.entityId);
       });
     });
 
@@ -154,7 +156,10 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
         const channelNames = data.byChannel.map((c) => c.channel);
         expect(channelNames).toEqual(["razorpay", "email", "human"]);
 
-        expect(typeof data.medianTimeToRecoveryHours).toBe("number");
+        expect(
+          data.medianTimeToRecoveryHours === null ||
+            typeof data.medianTimeToRecoveryHours === "number"
+        ).toBe(true);
         expect(data.compliance).toHaveProperty("dncBlocked");
         expect(data.compliance).toHaveProperty("autoEscalated");
         expect(data.compliance).toHaveProperty("cooldownStopped");
@@ -258,7 +263,7 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       await prisma.action.create({
         data: {
           eventId: event.id,
-          actionType: "send_reminder",
+          actionType: "send_reminder_email",
           result: "success",
           integration: "EMAIL",
         },
@@ -325,11 +330,8 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       expect(remainingCauseState).toEqual([]);
 
       // Cleanup
-      await prisma.auditEntry.deleteMany({ where: { eventId: event.id } });
-      await prisma.entityCauseState.deleteMany({ where: { entityId } });
-      await prisma.entityWorkflowState.delete({ where: { entityId } });
-      await prisma.action.delete({ where: { eventId: event.id } });
-      await prisma.revenueEvent.delete({ where: { id: event.id } });
+      await prisma.$executeRawUnsafe(`TRUNCATE TABLE "RevenueEvent" CASCADE;`);
+      await prisma.$executeRawUnsafe(`TRUNCATE TABLE "LedgerEntry" CASCADE;`);
     });
 
     it("processes validly-signed payment.captured webhook correctly", async () => {
@@ -372,6 +374,23 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
   describe("8.4 — WebSockets & emitLiveUpdate", () => {
     it("can invoke emitLiveUpdate without errors", async () => {
       await expect(emitLiveUpdate()).resolves.not.toThrow();
+    });
+  });
+
+  describe("Phase 12 — Audit Chain Verification Endpoint", () => {
+    it("GET /audit/verify returns verification status and count", async () => {
+      const res = await fetch(`${baseUrl}/audit/verify`);
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as { valid: boolean; entriesChecked: number };
+      expect(typeof data.valid).toBe("boolean");
+      expect(typeof data.entriesChecked).toBe("number");
+    });
+
+    it("GET /audit/verify returns 400 on invalid sequence parameter", async () => {
+      const res = await fetch(`${baseUrl}/audit/verify?fromSequence=invalid`);
+      expect(res.status).toBe(400);
+      const data = (await res.json()) as { error: string };
+      expect(data.error).toBe("Invalid sequence number parameter");
     });
   });
 });

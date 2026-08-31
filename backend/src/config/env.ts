@@ -38,6 +38,11 @@ const envSchema = z.object({
     .url()
     .default("https://openrouter.ai/api/v1"),
 
+  // Voyage AI embeddings. Optional so the core recovery pipeline remains
+  // available in local/demo environments that do not have a Voyage key.
+  VOYAGE_API_KEY: z.string().min(1).optional(),
+  VOYAGE_MODEL: z.string().min(1).default("voyage-3"),
+
   // Email (Mailhog)
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().int().positive(),

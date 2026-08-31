@@ -1,139 +1,39 @@
-import crypto from "crypto";
 import { Router, Request, Response } from "express";
-import { Prisma } from "@prisma/client";
-import { env } from "../../config/env";
-import { prisma } from "../../config/prisma";
-import { emitLiveUpdate } from "../websocket";
+import {
+  verifyWebhookSignature,
+  processRazorpayPaymentWebhook,
+} from "../../services/webhookService";
+import { handleRouteError } from "../../utils/apiResponse";
+
+export { verifyWebhookSignature };
 
 export const razorpayWebhookRouter = Router();
 
-export function verifyWebhookSignature(
-  rawBody: string | Buffer,
-  signature: string | undefined,
-  secret: string,
-): boolean {
-  if (!signature || !secret) return false;
+/**
+ * Express handler for inbound Razorpay webhooks.
+ * Validates HMAC SHA256 signature and delegates settlement to webhookService.
+ */
+export async function handleRazorpayWebhook(req: Request, res: Response): Promise<Response> {
+  const signature = req.headers["x-razorpay-signature"] as string | undefined;
+  const rawBody = (req as any).rawBody
+    ? (req as any).rawBody
+    : typeof req.body === "string"
+    ? req.body
+    : JSON.stringify(req.body);
 
-  try {
-    const expectedSignature = crypto
-      .createHmac("sha256", secret)
-      .update(rawBody)
-      .digest("hex");
-
-    const expectedBuf = Buffer.from(expectedSignature, "utf8");
-    const signatureBuf = Buffer.from(signature, "utf8");
-
-    if (expectedBuf.length !== signatureBuf.length) {
-      return false;
-    }
-
-    return crypto.timingSafeEqual(expectedBuf, signatureBuf);
-  } catch (err) {
-    console.error("[razorpayWebhook] Error verifying webhook signature:", err);
-    return false;
-  }
-}
-
-// POST /webhooks/razorpay
-razorpayWebhookRouter.post("/", async (req: Request, res: Response) => {
-  const signature = (req.headers["x-razorpay-signature"] || req.headers["X-Razorpay-Signature"]) as string | undefined;
-
-  // Retrieve raw body buffer if captured by body-parser verify hook, or stringify req.body
-  const rawBody = (req as unknown as { rawBody?: Buffer }).rawBody ?? (typeof req.body === "string" ? req.body : JSON.stringify(req.body));
-
-  const isValid = verifyWebhookSignature(rawBody, signature, env.RAZORPAY_WEBHOOK_SECRET);
-  if (!isValid) {
-    console.warn("[razorpayWebhook] Invalid or missing Razorpay webhook signature.");
+  if (!verifyWebhookSignature(rawBody, signature)) {
+    console.warn("[razorpayWebhook] Signature verification failed.");
     return res.status(400).json({ error: "Invalid webhook signature" });
   }
 
   try {
     const payload = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    const eventName = payload.event as string | undefined;
-
-    console.log(`[razorpayWebhook] Received valid webhook event: ${eventName}`);
-
-    if (eventName === "payment.captured" || eventName === "payment_link.paid") {
-      const paymentEntity = payload.payload?.payment?.entity;
-      const linkEntity = payload.payload?.payment_link?.entity;
-
-      const paymentId = paymentEntity?.id as string | undefined;
-      const orderId = paymentEntity?.order_id as string | undefined;
-      const paymentLinkId = (linkEntity?.id || paymentEntity?.payment_link_id) as string | undefined;
-
-      const conds: Prisma.ActionWhereInput[] = [];
-      if (paymentLinkId) conds.push({ razorpayPaymentLinkId: paymentLinkId });
-      if (paymentId) conds.push({ event: { razorpayPaymentId: paymentId } });
-      if (orderId) conds.push({ event: { razorpayOrderId: orderId } });
-
-      const action =
-        conds.length > 0
-          ? await prisma.action.findFirst({
-              where: { OR: conds },
-              include: { event: true },
-            })
-          : null;
-
-      let event = action?.event;
-      if (!event && (paymentId || orderId)) {
-        const eventConds: Prisma.RevenueEventWhereInput[] = [];
-        if (paymentId) eventConds.push({ razorpayPaymentId: paymentId });
-        if (orderId) eventConds.push({ razorpayOrderId: orderId });
-        if (eventConds.length > 0) {
-          event =
-            (await prisma.revenueEvent.findFirst({
-              where: { OR: eventConds },
-            })) ?? undefined;
-        }
-      }
-
-      if (event) {
-        // Recovery closes this recovery ARC: wipe per-cause attempt/cooldown
-        // memory so the next event on this entity — a genuinely new billing
-        // cycle, or an unrelated cause arriving while this one just resolved —
-        // starts with a clean budget, not stale state from whatever cause just
-        // recovered.
-        await prisma.entityCauseState.deleteMany({
-          where: { entityId: event.entityId },
-        });
-
-        await prisma.entityWorkflowState.upsert({
-          where: { entityId: event.entityId },
-          create: {
-            entityId: event.entityId,
-            customerId: event.customerId,
-            state: "RECOVERED",
-          },
-          update: {
-            state: "RECOVERED",
-          },
-        });
-
-        // Record AuditEntry for recovery
-        await prisma.auditEntry.create({
-          data: {
-            eventId: event.id,
-            entityId: event.entityId,
-            actor: "razorpay_webhook",
-            inputSnapshot: payload,
-            outcome: "recovered",
-            timestamp: new Date(),
-          },
-        });
-
-        // Trigger real-time WebSocket update on the global live channel
-        await emitLiveUpdate(event.id);
-
-        console.log(`[razorpayWebhook] Entity ${event.entityId} marked RECOVERED via payment webhook.`);
-      } else {
-        console.log("[razorpayWebhook] No matching action found for payment webhook payload.");
-      }
-    }
-
-    return res.status(200).json({ status: "ok", processed: true });
+    const result = await processRazorpayPaymentWebhook(payload);
+    return res.status(200).json({ ...result, status: "ok", processed: true });
   } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : "Error processing webhook";
     console.error("[razorpayWebhook] Internal error processing webhook:", error);
-    return res.status(500).json({ error: errMessage });
+    return handleRouteError(res, error, "Internal error processing webhook");
   }
-});
+}
+
+razorpayWebhookRouter.post("/", handleRazorpayWebhook);

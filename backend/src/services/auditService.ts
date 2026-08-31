@@ -1,55 +1,53 @@
-/**
- * Audit Service — records the full audit trail for a processed event,
- * updates entity workflow state via the state machine, and maintains
- * per-cause attempt/cooldown/last-contact state (EntityCauseState).
- */
-
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
+import { redis } from "../config/redis";
 import { logError } from "../config/logger";
 import { getRuleForCause } from "../domain/policy";
 import { isTerminal, nextState, WorkflowState } from "../domain/stateMachine";
+import {
+  computeEntryHash,
+  GENESIS_HASH,
+  HashableEntry,
+} from "../domain/hashChain";
 import {
   ActionResult,
   DecisionResult,
   DiagnosisResult,
   EnrichedRevenueEvent,
 } from "../domain/types";
+import { writeLedgerEntry } from "./ledgerService";
 
-/**
- * Derive outcome from the action result for audit purposes.
- * recovered | pending | escalated | skipped | failed
- */
 function deriveOutcome(action: ActionResult): string {
   if (action.result === "skipped") return "skipped";
   if (action.result === "failed") return "failed";
   if (action.actionType === "escalate_to_human") return "escalated";
-  // Terminal write-off actions close the arc — they are not merely "pending".
   if (
     action.actionType === "hard_decline" ||
     action.actionType === "auto_cancel"
   ) {
     return "written_off";
   }
-  // Email sent, payment link sent, retry initiated — not yet confirmed recovered
   return "pending";
 }
 
-/**
- * Map (actionType, result) to the state machine's action outcome string.
- * Returns null if no state transition should occur (e.g. failed action).
- */
-function toStateMachineOutcome(action: ActionResult): string | null {
+function toStateMachineOutcome(
+  action: ActionResult,
+  decision?: DecisionResult,
+  diagnosis?: DiagnosisResult,
+): string | null {
   if (action.result === "failed") return null;
 
-  // Skipped with actionType 'none' means DNC or policy-blocked
   if (action.result === "skipped" && action.actionType === "none") {
-    return "dnc_skip";
+    if (decision?.reasoning?.includes("DNC") || diagnosis?.causeLabel === "dnc") {
+      return "dnc_skip";
+    }
+    if (decision?.reasoning?.includes("cooldown")) {
+      return "cooldown_started";
+    }
+    return null;
   }
 
-  // Successful actions
   switch (action.actionType) {
-    case "retry_payment":
     case "retry_payment_immediate":
     case "retry_payment_delayed":
       return "retry_initiated";
@@ -58,37 +56,29 @@ function toStateMachineOutcome(action: ActionResult): string | null {
     case "send_dunning_email_1":
     case "send_dunning_email_2":
     case "send_dunning_email_3":
-    case "send_reminder":
       return "email_sent";
     case "send_payment_link":
-    case "send_sms_reminder":
       return "payment_link_sent";
     case "escalate_to_human":
       return "escalation_triggered";
-    // Terminal write-off actions — the state machine maps these to WRITTEN_OFF
     case "hard_decline":
       return "hard_decline";
     case "auto_cancel":
       return "auto_cancel";
-    // Subscription lifecycle actions
     case "pause_subscription":
       return "subscription_paused";
     case "send_winback_offer":
       return "winback_sent";
     case "start_promise_to_pay_tracking":
-      return "reminder_sent";
+      return "promise_tracked";
     default:
       return null;
   }
 }
 
-/**
- * Compute cooldown TTL in seconds from the policy rule's stopping config.
- * Falls back to 1 hour if no window is configured.
- */
 function cooldownTtlSeconds(causeLabel: string): number {
   const rule = getRuleForCause(causeLabel);
-  if (!rule) return 3600; // 1h default
+  if (!rule) return 3600;
 
   const stopping = rule.stopping;
   if (stopping.windowHours !== undefined) {
@@ -97,50 +87,106 @@ function cooldownTtlSeconds(causeLabel: string): number {
   if (stopping.windowDays !== undefined) {
     return stopping.windowDays * 86400;
   }
-  return 3600; // 1h default
+  return 3600;
 }
 
-/**
- * Records the full audit entry for a processed event.
- *
- * Also transitions the EntityWorkflowState and updates per-cause
- * attempt/cooldown/last-contact state in EntityCauseState.
- */
+export interface CreateChainedAuditEntryParams {
+  eventId: string;
+  entityId: string;
+  actor: string;
+  inputSnapshot: unknown;
+  diagnosisSnapshot?: unknown;
+  decisionSnapshot?: unknown;
+  actionSnapshot?: unknown;
+  outcome: string;
+  timestamp?: Date;
+}
+
+export async function writeChainedAuditEntry(
+  tx: Prisma.TransactionClient,
+  params: CreateChainedAuditEntryParams,
+) {
+  const now = params.timestamp ?? new Date();
+
+  let head = await tx.$queryRaw<{ hash: string }[]>`
+    SELECT hash FROM "AuditChainHead" WHERE id = 1 FOR UPDATE
+  `;
+  if (!head || head.length === 0) {
+    await tx.auditChainHead.upsert({
+      where: { id: 1 },
+      create: { id: 1, hash: GENESIS_HASH },
+      update: {},
+    });
+    head = [{ hash: GENESIS_HASH }];
+  }
+  const prevHash = head[0].hash;
+
+  const hashableEntry: HashableEntry = {
+    eventId: params.eventId,
+    entityId: params.entityId,
+    actor: params.actor,
+    inputSnapshot: params.inputSnapshot,
+    diagnosisSnapshot: params.diagnosisSnapshot,
+    decisionSnapshot: params.decisionSnapshot,
+    actionSnapshot: params.actionSnapshot,
+    outcome: params.outcome,
+    timestamp: now.toISOString(),
+  };
+
+  const hash = computeEntryHash(prevHash, hashableEntry);
+
+  const row = await tx.auditEntry.create({
+    data: {
+      eventId: params.eventId,
+      entityId: params.entityId,
+      actor: params.actor,
+      inputSnapshot: params.inputSnapshot as Prisma.InputJsonValue,
+      diagnosisSnapshot: (params.diagnosisSnapshot ?? null) as Prisma.InputJsonValue,
+      decisionSnapshot: (params.decisionSnapshot ?? null) as Prisma.InputJsonValue,
+      actionSnapshot: (params.actionSnapshot ?? null) as Prisma.InputJsonValue,
+      outcome: params.outcome,
+      timestamp: now,
+      prevHash,
+      hash,
+    },
+  });
+
+  await tx.auditChainHead.update({
+    where: { id: 1 },
+    data: { hash },
+  });
+
+  return row;
+}
+
 export async function recordAuditEntry(params: {
   event: EnrichedRevenueEvent;
   diagnosis: DiagnosisResult;
   decision: DecisionResult;
   action: ActionResult;
-}): Promise<void> {
+}) {
   const { event, diagnosis, decision, action } = params;
   const outcome = deriveOutcome(action);
   const now = new Date();
 
-  // 1. Write AuditEntry row
-  await prisma.auditEntry.create({
-    data: {
+  return prisma.$transaction(async (tx) => {
+    const auditEntry = await writeChainedAuditEntry(tx, {
       eventId: event.id,
       entityId: event.entityId,
       actor: "system",
-      inputSnapshot: event as unknown as Prisma.InputJsonValue,
-      diagnosisSnapshot: diagnosis as unknown as Prisma.InputJsonValue,
-      decisionSnapshot: decision as unknown as Prisma.InputJsonValue,
-      actionSnapshot: action as unknown as Prisma.InputJsonValue,
+      inputSnapshot: event,
+      diagnosisSnapshot: diagnosis,
+      decisionSnapshot: decision,
+      actionSnapshot: action,
       outcome,
       timestamp: now,
-    },
-  });
+    });
 
-  // 2. Update EntityWorkflowState via state machine.
-  // A new event on a terminal-state entity (e.g. RECOVERED subscription from a
-  // previous billing cycle) starts a FRESH arc: it is transitioned as if the
-  // entity were at DETECTED again.
-  const smOutcome = toStateMachineOutcome(action);
-  let newState: WorkflowState | null = null;
+    const smOutcome = toStateMachineOutcome(action, decision, diagnosis);
+    let newState: WorkflowState | null = null;
 
-  if (smOutcome) {
-    try {
-      const existing = await prisma.entityWorkflowState.findUnique({
+    if (smOutcome) {
+      const existing = await tx.entityWorkflowState.findUnique({
         where: { entityId: event.entityId },
       });
 
@@ -148,72 +194,195 @@ export async function recordAuditEntry(params: {
       const effectiveCurrent = isTerminal(currentState) ? "DETECTED" : currentState;
       newState = nextState(effectiveCurrent, smOutcome);
 
-      await prisma.entityWorkflowState.upsert({
+      const isTerm = isTerminal(newState);
+      const countsAsAttempt = !isTerm && action.result === "success";
+      const startsCooldown = !isTerm && (countsAsAttempt || action.result === "scheduled");
+      const cooldownUntil = startsCooldown
+        ? new Date(now.getTime() + cooldownTtlSeconds(diagnosis.causeLabel) * 1000)
+        : isTerm ? null : undefined;
+      const touchesCustomer = !isTerm && countsAsAttempt;
+
+      await tx.entityWorkflowState.upsert({
         where: { entityId: event.entityId },
         create: {
           entityId: event.entityId,
           customerId: event.customerId,
           state: newState,
+          attemptCount: countsAsAttempt ? 1 : 0,
+          lastContactedAt: touchesCustomer ? now : null,
+          cooldownUntil: cooldownUntil ?? null,
         },
         update: {
           state: newState,
+          ...(isTerm
+            ? {
+                attemptCount: 0,
+                lastContactedAt: null,
+                cooldownUntil: null,
+              }
+            : {
+                ...(countsAsAttempt ? { attemptCount: { increment: 1 } } : {}),
+                ...(touchesCustomer ? { lastContactedAt: now } : {}),
+                ...(cooldownUntil ? { cooldownUntil } : {}),
+              }),
         },
       });
 
-      // Closing the arc for this entity wipes ALL of its per-cause
-      // attempt/cooldown history, not just the cause that just resolved — a
-      // fresh arc should start with a genuinely clean slate across every
-      // cause, matching the intent documented on isTerminal()/nextState().
-      if (isTerminal(newState)) {
-        await prisma.entityCauseState.deleteMany({
+      if (isTerm) {
+        await tx.entityCauseState.deleteMany({
           where: { entityId: event.entityId },
         });
+
+        if (newState === "RECOVERED") {
+          await redis.set(`razorrecovery:recovered:${event.entityId}`, "true", "EX", 86400 * 30);
+          await writeLedgerEntry(tx, {
+            entityId: event.entityId,
+            eventId: event.id,
+            type: "RECOVERED",
+            amount: event.amount,
+            currency: event.currency,
+            referenceId: action.razorpayPaymentLinkId ?? action.paymentId,
+          });
+        } else if (newState === "WRITTEN_OFF") {
+          await writeLedgerEntry(tx, {
+            entityId: event.entityId,
+            eventId: event.id,
+            type: "WRITTEN_OFF",
+            amount: event.amount,
+            currency: event.currency,
+          });
+        }
+      } else {
+        await tx.entityCauseState.upsert({
+          where: {
+            entityId_causeLabel: {
+              entityId: event.entityId,
+              causeLabel: diagnosis.causeLabel,
+            },
+          },
+          create: {
+            entityId: event.entityId,
+            causeLabel: diagnosis.causeLabel,
+            attemptCount: countsAsAttempt ? 1 : 0,
+            ...(touchesCustomer ? { lastContactedAt: now } : {}),
+            cooldownUntil,
+          },
+          update: {
+            ...(countsAsAttempt ? { attemptCount: { increment: 1 } } : {}),
+            ...(touchesCustomer ? { lastContactedAt: now } : {}),
+            ...(cooldownUntil ? { cooldownUntil } : {}),
+          },
+        });
       }
-    } catch (err) {
-      // Never mask a recorded audit entry behind a state-transition problem;
-      // log and continue so consumers don't write spurious duplicate failures.
-      logError("audit", err);
     }
+
+    return auditEntry;
+  });
+}
+
+export async function recordFailureAuditEntry(
+  event: { id: string; entityId: string },
+  snapshots?: {
+    inputSnapshot?: unknown;
+    diagnosisSnapshot?: unknown;
+    decisionSnapshot?: unknown;
+    actionSnapshot?: unknown;
+  },
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await writeChainedAuditEntry(tx, {
+      eventId: event.id,
+      entityId: event.entityId,
+      actor: "system",
+      inputSnapshot: snapshots?.inputSnapshot ?? event,
+      diagnosisSnapshot: snapshots?.diagnosisSnapshot,
+      decisionSnapshot: snapshots?.decisionSnapshot,
+      actionSnapshot: snapshots?.actionSnapshot,
+      outcome: "failed",
+      timestamp: new Date(),
+    });
+  });
+
+  const { emitLiveUpdate } = require("../api/websocket");
+  await emitLiveUpdate(event.id);
+}
+
+export interface VerifyChainResult {
+  valid: boolean;
+  entriesChecked: number;
+  brokenAtEntryId?: string;
+  brokenAtSequence?: number;
+}
+
+export async function verifyChain(
+  fromSequence = 1,
+  toSequence?: number,
+  batchSize = 500,
+): Promise<VerifyChainResult> {
+  let cursor = fromSequence;
+  let expectedPrevHash: string | null = null;
+  let checked = 0;
+
+  if (fromSequence > 1) {
+    const priorRow = await prisma.auditEntry.findFirst({
+      where: { sequenceNumber: { lt: fromSequence } },
+      orderBy: { sequenceNumber: "desc" },
+    });
+    expectedPrevHash = priorRow?.hash ?? GENESIS_HASH;
+  } else {
+    expectedPrevHash = GENESIS_HASH;
   }
 
-  // 3. Per-cause attempt/cooldown tracking — only while this cause's arc is
-  // still open. If the action above just closed the arc (newState is terminal),
-  // EntityCauseState rows for this entity were already wiped, so don't recreate
-  // one in the same tick.
-  //
-  // Only successful actions consume attempt budget or trigger cooldowns;
-  // skipped (DNC/policy-blocked) and failed actions are not recovery attempts.
-  if (smOutcome && !isTerminal(newState ?? "DETECTED")) {
-    const countsAsAttempt = action.result === "success";
-    // A scheduled retry starts the cooldown clock immediately — that window
-    // IS the deferral the follow-up scheduler fires on — but it is not a
-    // contact yet, so it consumes no attempt budget and doesn't count as a
-    // customer touch.
-    const startsCooldown = countsAsAttempt || action.result === "scheduled";
-    const cooldownUntil = startsCooldown
-      ? new Date(now.getTime() + cooldownTtlSeconds(diagnosis.causeLabel) * 1000)
-      : undefined;
-    const touchesCustomer = countsAsAttempt;
-
-    await prisma.entityCauseState.upsert({
+  while (true) {
+    const rows = await prisma.auditEntry.findMany({
       where: {
-        entityId_causeLabel: {
-          entityId: event.entityId,
-          causeLabel: diagnosis.causeLabel,
+        sequenceNumber: {
+          gte: cursor,
+          ...(toSequence ? { lte: toSequence } : {}),
         },
       },
-      create: {
-        entityId: event.entityId,
-        causeLabel: diagnosis.causeLabel,
-        attemptCount: countsAsAttempt ? 1 : 0,
-        ...(touchesCustomer ? { lastContactedAt: now } : {}),
-        cooldownUntil,
-      },
-      update: {
-        ...(countsAsAttempt ? { attemptCount: { increment: 1 } } : {}),
-        ...(touchesCustomer ? { lastContactedAt: now } : {}),
-        ...(cooldownUntil ? { cooldownUntil } : {}),
-      },
+      orderBy: { sequenceNumber: "asc" },
+      take: batchSize,
     });
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      if (row.prevHash !== expectedPrevHash) {
+        return {
+          valid: false,
+          entriesChecked: checked,
+          brokenAtEntryId: row.id,
+          brokenAtSequence: row.sequenceNumber,
+        };
+      }
+      const hashable: HashableEntry = {
+        eventId: row.eventId,
+        entityId: row.entityId,
+        actor: row.actor,
+        inputSnapshot: row.inputSnapshot,
+        diagnosisSnapshot: row.diagnosisSnapshot,
+        decisionSnapshot: row.decisionSnapshot,
+        actionSnapshot: row.actionSnapshot,
+        outcome: row.outcome,
+        timestamp:
+          row.timestamp instanceof Date
+            ? row.timestamp.toISOString()
+            : new Date(row.timestamp).toISOString(),
+      };
+      const recomputed = computeEntryHash(row.prevHash, hashable);
+      if (recomputed !== row.hash) {
+        return {
+          valid: false,
+          entriesChecked: checked,
+          brokenAtEntryId: row.id,
+          brokenAtSequence: row.sequenceNumber,
+        };
+      }
+      expectedPrevHash = row.hash;
+      checked++;
+    }
+    cursor = rows[rows.length - 1].sequenceNumber + 1;
   }
+
+  return { valid: true, entriesChecked: checked };
 }

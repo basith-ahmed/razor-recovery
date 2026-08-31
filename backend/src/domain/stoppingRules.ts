@@ -11,6 +11,8 @@ export interface FilterContext {
   customerId: string;
   isDnc: boolean;
   isDisputed: boolean;
+  isRecovered?: boolean;
+  hasActivePromise?: boolean;
   attemptCount: number;
   isInCooldown: boolean;
   daysOverdue?: number;
@@ -20,24 +22,39 @@ export interface FilterContext {
 }
 
 export function filterLegalActions(ctx: FilterContext): string[] {
-  // 1. DNC always checked first → return []
-  if (ctx.isDnc) {
+  // 0. Recovered entities are closed — no further recovery action is legal → return []
+  if (ctx.isRecovered) {
     return [];
   }
 
-  // 2. Dispute flag always overrides everything else → return ["escalate_to_human"] only
-  if (ctx.isDisputed) {
+  // 1. DNC always checked first → return []
+  if (ctx.isDnc || ctx.causeLabel === "dnc") {
+    return [];
+  }
+
+  // 2. Dispute flag or broken promise always overrides standard actions → return ["escalate_to_human"] only
+  if (ctx.isDisputed || ctx.causeLabel === "invoice_disputed" || ctx.causeLabel === "promise_broken") {
     return ["escalate_to_human"];
   }
 
-  // 3. Look up the policy rule for ctx.causeLabel
+  // 3. If customer has an active unbroken Promise-to-Pay, pause all automated outreach
+  if (ctx.hasActivePromise) {
+    return [];
+  }
+
+  // 4. Look up the policy rule for ctx.causeLabel
   const rule = getRuleForCause(ctx.causeLabel);
   if (!rule) {
     // Unknown cause — no legal actions
     return [];
   }
 
-  // 4. Apply stopping conditions to prune the action list
+  // 4. Apply stopping conditions to prune the action list.
+  //
+  // NOTE: mandate_requires_reauthorization enforcement works purely through
+  // policy.json — retry_payment_immediate and retry_payment_delayed are simply
+  // absent from that rule's actions array. No special-case code is needed here.
+  // "Policy is data" — the omission IS the hard gate.
   return applyStoppingConditions(rule, ctx);
 }
 
@@ -46,22 +63,18 @@ function applyStoppingConditions(
   ctx: FilterContext
 ): string[] {
   const stopping = rule.stopping;
-  let actions = [...rule.actions];
+  const actions = [...rule.actions];
 
   // If in cooldown, no actions are legal right now
   if (ctx.isInCooldown) {
     return [];
   }
 
-  // maxAttempts: if attemptCount >= maxAttempts, only escalation is legal (if onMaxEscalate)
-  // or the onMaxAction if specified
+  // maxAttempts: if attemptCount >= maxAttempts, only the onMaxAction is legal (if specified)
   if (
     stopping.maxAttempts !== undefined &&
     ctx.attemptCount >= stopping.maxAttempts
   ) {
-    if (stopping.onMaxEscalate) {
-      return ["escalate_to_human"];
-    }
     if (stopping.onMaxAction) {
       return [stopping.onMaxAction];
     }
@@ -80,42 +93,18 @@ function applyStoppingConditions(
     return [];
   }
 
-  // escalateAtDays: if daysOverdue >= escalateAtDays, ensure escalation is included
-  if (
-    stopping.escalateAtDays !== undefined &&
-    ctx.daysOverdue !== undefined &&
-    ctx.daysOverdue >= stopping.escalateAtDays
-  ) {
-    if (!actions.includes("escalate_to_human")) {
-      actions.push("escalate_to_human");
-    }
-  }
-
-  // noResponseWithinHours: if time since last contact exceeds the threshold,
-  // apply the timeout action
+  // noResponseWithinHours: if time since last contact exceeds the threshold, apply the timeout action
   if (stopping.noResponseWithinHours !== undefined) {
     const hoursThreshold = stopping.noResponseWithinHours;
     const hoursSinceLastContact =
       ctx.hoursSinceLastContact ??
       (ctx.daysSinceLastContact ?? 0) * 24;
     if (hoursSinceLastContact >= hoursThreshold) {
-      if (stopping.onTimeoutAction === "stop") {
-        return [];
-      }
       if (stopping.onTimeoutAction) {
         return [stopping.onTimeoutAction];
       }
+      return [];
     }
-  }
-
-  // freezeWorkflow: only escalation allowed
-  if (stopping.freezeWorkflow) {
-    return actions.filter((a) => a === "escalate_to_human");
-  }
-
-  // skipAndLog: no actions — just log
-  if (stopping.skipAndLog) {
-    return [];
   }
 
   return actions;

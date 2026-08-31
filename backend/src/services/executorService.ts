@@ -1,12 +1,3 @@
-/**
- * Executor Service — maps a DecisionResult to the appropriate integration call,
- * persists the Action record, and returns the ActionResult.
- *
- * Contains draftRecoveryEmail(), the third AI touchpoint (alongside diagnosis
- * and decision), which asks the LLM for email copy in a billing-recovery tone.
- */
-
-import { requestJson } from "../config/openai";
 import { logWarn } from "../config/logger";
 import { prisma } from "../config/prisma";
 import * as razorpayIntegration from "../integrations/razorpayIntegration";
@@ -18,168 +9,49 @@ import {
   DomainError,
   EnrichedRevenueEvent,
 } from "../domain/types";
+import {
+  generateRecoveryEmail,
+  buildEmailTemplate,
+  buildPromiseConfirmationEmail,
+} from "../domain/emailTemplates";
 
-const RETRY_ACTIONS = new Set(["retry_payment", "retry_payment_immediate"]);
+import { findCustomerById } from "./customerService";
+import { revenueEventExists } from "./revenueEventService";
+import { getOrCreatePaymentLink } from "./paymentLinkService";
 
-const PAYMENT_LINK_ACTIONS = new Set(["send_payment_link", "send_sms_reminder"]);
+export { buildEmailTemplate };
 
+const RETRY_ACTIONS = new Set(["retry_payment_immediate"]);
+const PAYMENT_LINK_ACTIONS = new Set(["send_payment_link"]);
 const EMAIL_ACTIONS = new Set([
   "send_reminder_email",
   "send_soft_chase_email",
   "send_dunning_email_1",
   "send_dunning_email_2",
   "send_dunning_email_3",
-  "send_reminder",
   "send_winback_offer",
 ]);
 
-const EMAIL_DRAFT_SYSTEM_PROMPT = `You are RazorRecovery's email copywriter. Write a short, highly personalized, friendly billing-recovery email.
-Return JSON only with "subject" and "body_paragraphs" fields. 
-The "body_paragraphs" should be an array of simple text strings. Do not include HTML tags.
-
-CRITICAL INSTRUCTIONS FOR PERSONALIZATION:
-- Analyze the "eventType" (e.g., PAYMENT_FAILED, SUBSCRIPTION_FAILED, INVOICE_OVERDUE).
-- Analyze the "errorReason" and "errorCode" (e.g., insufficient_balance, card_expired). Mention this specifically but politely in the email (e.g., "It looks like your card might have expired" or "It seems the payment failed due to insufficient funds").
-- Provide context (e.g., "your recent subscription renewal", "your pending invoice").
-- Include the "entityId" if it helps identify the transaction (e.g., "Order/Invoice #${`{entityId}`.slice(-6)}").
-Keep the tone empathetic, professional, and action-oriented. Do not include unsubscribe links or legal disclaimers.`;
-
-const emailDraftSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["subject", "body_paragraphs"],
-  properties: {
-    subject: { type: "string" },
-    body_paragraphs: { 
-      type: "array", 
-      items: { type: "string" } 
-    },
-  },
-};
-
-function buildEmailTemplate(paragraphs: string[], amount: number, paymentUrl?: string): string {
-  const contentHtml = paragraphs.map(p => `<p style="margin-bottom: 16px;">${p}</p>`).join("");
-  const buttonHtml = paymentUrl 
-    ? `<div style="text-align: center; margin: 32px 0;">
-         <a href="${paymentUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">Pay \u20b9${amount} Now</a>
-       </div>`
-    : "";
-
-  return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #333; background-color: #ffffff; border-radius: 8px; border: 1px solid #eaeaea;">
-      <h2 style="color: #4f46e5; margin-top: 0; margin-bottom: 24px;">RazorRecovery</h2>
-      ${contentHtml}
-      ${buttonHtml}
-      <hr style="border: none; border-top: 1px solid #eaeaea; margin: 32px 0;" />
-      <p style="font-size: 12px; color: #888; margin: 0;">
-        This is an automated message regarding a pending payment of \u20b9${amount}. If you've already resolved this, please ignore this email.
-      </p>
-    </div>
-  `;
-}
-
-function parseEmailDraftJson(raw: string): { subject: string; paragraphs: string[] } | null {
-  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-  
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (parsed && typeof parsed.subject === "string" && Array.isArray(parsed.body_paragraphs)) {
-      return { subject: parsed.subject, paragraphs: parsed.body_paragraphs };
-    }
-  } catch (err) {
-    // Basic repair: if LLM returned unescaped newlines inside strings, remove them
-    let repaired = cleaned.replace(/\n/g, " ").replace(/\r/g, "");
-    try {
-      const parsed = JSON.parse(repaired);
-      if (parsed && typeof parsed.subject === "string" && Array.isArray(parsed.body_paragraphs)) {
-        return { subject: parsed.subject, paragraphs: parsed.body_paragraphs };
-      }
-    } catch (err2) {
-      return null;
-    }
-  }
-  return null;
-}
-
-/**
- * AI Touchpoint #3: Drafts recovery email copy using the LLM.
- * Kept as a separate, clearly-labeled function for easy identification.
- */
 export async function draftRecoveryEmail(
   event: EnrichedRevenueEvent,
   customerName: string,
   cause: string,
-  paymentUrl?: string,
+  paymentLinkUrl?: string,
 ): Promise<{ subject: string; html: string }> {
-  try {
-    const input = JSON.stringify({
-      customerName,
-      cause,
-      amount: event.amount,
-      currency: event.currency,
-      eventType: event.eventType,
-      entityType: event.entityType,
-      entityId: event.entityId,
-      errorCode: event.errorCode,
-      errorReason: event.errorReason,
-      hasPaymentLinkIncluded: !!paymentUrl,
-    });
-    const raw = await requestJson({
-      instructions: EMAIL_DRAFT_SYSTEM_PROMPT,
-      input,
-      schemaName: "recovery_email_draft",
-      schema: emailDraftSchema,
-    });
-
-    const parsed = parseEmailDraftJson(raw);
-    if (parsed) {
-      const html = buildEmailTemplate(parsed.paragraphs, event.amount, paymentUrl);
-      return { subject: parsed.subject, html };
-    }
-
-    console.warn(`[executor] LLM returned unrepairable non-standard email JSON. Using fallback.`);
-    return fallbackEmail(customerName, event.amount, paymentUrl);
-  } catch (error) {
-    console.warn(`[executor] LLM request unavailable; using fallback email copy.`);
-    return fallbackEmail(customerName, event.amount, paymentUrl);
-  }
-}
-
-function fallbackEmail(
-  customerName: string,
-  amount: number,
-  paymentUrl?: string,
-): { subject: string; html: string } {
-  return {
-    subject: `Action required: pending payment of \u20b9${amount}`,
-    html: buildEmailTemplate([
-      `Hi ${customerName},`,
-      `We noticed a pending payment of \u20b9${amount}. Please update your payment method at your earliest convenience.`,
-      `Best regards,<br/>The RazorRecovery Team`
-    ], amount, paymentUrl),
-  };
-}
-
-/**
- * Look up customer details needed for integration calls.
- */
-async function lookupCustomer(customerId: string) {
-  const customer = await prisma.customer.findUnique({
-    where: { id: customerId },
+  return generateRecoveryEmail({
+    customerName,
+    amount: event.amount,
+    currency: event.currency,
+    entityId: event.entityId,
+    entityType: event.entityType,
+    eventType: event.eventType,
+    errorReason: event.errorReason,
+    errorCode: event.errorCode,
+    cause,
+    paymentLinkUrl,
   });
-  if (!customer) {
-    throw new DomainError(
-      `Customer ${customerId} not found.`,
-      "CUSTOMER_NOT_FOUND",
-    );
-  }
-  return customer;
 }
 
-/**
- * Executes the chosen action from a DecisionResult by dispatching to the
- * appropriate integration, persists the Action row, and returns the result.
- */
 export async function executeAction(
   decision: DecisionResult,
   event: EnrichedRevenueEvent,
@@ -194,13 +66,18 @@ export async function executeAction(
       integration: "MOCK",
     };
   } else if (chosenAction === "retry_payment_delayed") {
-    // Honest delayed retry: do NOT hit Razorpay now. Persist the intent as
-    // "scheduled"; the follow-up scheduler executes the real retry once this
-    // cause's cooldown window lapses. The scheduled action still starts the
-    // cooldown clock (see auditService) so nothing else contacts meanwhile.
-    if (!event.razorpayOrderId) {
+    const hasIdentifier =
+      event.entityType === "SUBSCRIPTION"
+        ? Boolean(
+            event.entityId ||
+              (event.rawPayload as Record<string, unknown>)?.subscription_id ||
+              (event.rawPayload as Record<string, unknown>)?.razorpay_subscription_id,
+          )
+        : Boolean(event.razorpayOrderId);
+
+    if (!hasIdentifier) {
       throw new DomainError(
-        `Cannot schedule retry: event ${event.id} has no razorpayOrderId.`,
+        `Cannot schedule retry: event ${event.id} has no ${event.entityType === "SUBSCRIPTION" ? "subscription identifier" : "razorpayOrderId"}.`,
         "MISSING_ORDER_ID",
       );
     }
@@ -208,49 +85,69 @@ export async function executeAction(
       actionType: chosenAction,
       result: "scheduled",
       integration: "RAZORPAY",
-      detail:
-        "Retry deferred; will execute when the cause cooldown window lapses.",
+      detail: "Retry deferred; will execute when the cause cooldown window lapses.",
     };
   } else if (RETRY_ACTIONS.has(chosenAction)) {
-    if (!event.razorpayOrderId) {
-      throw new DomainError(
-        `Cannot retry payment: event ${event.id} has no razorpayOrderId.`,
-        "MISSING_ORDER_ID",
+    if (event.entityType === "SUBSCRIPTION") {
+      const subId =
+        ((event.rawPayload as Record<string, unknown>)?.razorpay_subscription_id as string) ||
+        ((event.rawPayload as Record<string, unknown>)?.subscription_id as string) ||
+        event.entityId;
+      actionResult = {
+        actionType: chosenAction,
+        result: "success",
+        integration: "RAZORPAY",
+        detail: `Subscription ${subId} queued for retry re-presentation via Razorpay.`,
+      };
+    } else {
+      if (!event.razorpayOrderId) {
+        throw new DomainError(
+          `Cannot retry payment: event ${event.id} has no razorpayOrderId.`,
+          "MISSING_ORDER_ID",
+        );
+      }
+      actionResult = await razorpayIntegration.retryPayment(
+        event.razorpayOrderId,
       );
+      actionResult = { ...actionResult, actionType: chosenAction };
     }
-    actionResult = await razorpayIntegration.retryPayment(
-      event.razorpayOrderId,
-    );
-    actionResult = { ...actionResult, actionType: chosenAction };
   } else if (PAYMENT_LINK_ACTIONS.has(chosenAction)) {
-    const customer = await lookupCustomer(event.customerId);
-    actionResult = await razorpayIntegration.createRecoveryPaymentLink({
+    const customer = await findCustomerById(event.customerId);
+    const link = await getOrCreatePaymentLink({
+      entityId: event.entityId,
+      eventId: event.id,
       amount: event.amount,
       currency: event.currency,
-      customerName: customer.name,
-      customerEmail: customer.email,
-      customerPhone: customer.phone ?? undefined,
+      customer: { name: customer.name, email: customer.email, phone: customer.phone },
       description: `Recovery payment for ${event.eventType} — ${event.entityId}`,
+      actionType: chosenAction,
     });
-    actionResult = { ...actionResult, actionType: chosenAction };
+    actionResult = {
+      actionType: chosenAction,
+      result: "success",
+      integration: "RAZORPAY",
+      razorpayPaymentLinkId: link.razorpayPaymentLinkId,
+      paymentLinkUrl: link.paymentLinkUrl,
+    };
   } else if (EMAIL_ACTIONS.has(chosenAction)) {
-    const customer = await lookupCustomer(event.customerId);
-    
-    let paymentUrl: string | undefined;
+    const customer = await findCustomerById(event.customerId);
+
+    let paymentLinkUrl: string | undefined;
     let paymentLinkId: string | undefined;
 
     try {
-      const linkResult = await razorpayIntegration.createRecoveryPaymentLink({
+      const link = await getOrCreatePaymentLink({
+        entityId: event.entityId,
+        eventId: event.id,
         amount: event.amount,
         currency: event.currency,
-        customerName: customer.name,
-        customerEmail: customer.email,
-        customerPhone: customer.phone ?? undefined,
+        customer: { name: customer.name, email: customer.email, phone: customer.phone },
         description: `Recovery payment for ${event.eventType} — ${event.entityId}`,
-        notify: false, // Do not let Razorpay send its default email/SMS
+        notify: false,
+        actionType: chosenAction,
       });
-      paymentUrl = linkResult.paymentLinkShortUrl;
-      paymentLinkId = linkResult.razorpayPaymentLinkId;
+      paymentLinkUrl = link.paymentLinkUrl;
+      paymentLinkId = link.razorpayPaymentLinkId;
     } catch (err) {
       logWarn("executor", err);
       console.warn("[executor] Proceeding without payment-link button in email.");
@@ -260,19 +157,92 @@ export async function executeAction(
       event,
       customer.name,
       event.errorReason ?? "payment issue",
-      paymentUrl
+      paymentLinkUrl,
     );
     actionResult = await emailIntegration.sendRecoveryEmail({
       to: customer.email,
       subject,
       html,
     });
-    
-    actionResult = { 
-      ...actionResult, 
+
+    actionResult = {
+      ...actionResult,
       actionType: chosenAction,
       razorpayPaymentLinkId: paymentLinkId,
-      paymentLinkShortUrl: paymentUrl
+      paymentLinkUrl,
+    };
+  } else if (chosenAction === "start_promise_to_pay_tracking") {
+    const customer = await findCustomerById(event.customerId);
+    const rawPayload = (event.rawPayload || {}) as Record<string, unknown>;
+    const promisedDateStr = rawPayload.promisedDate as string | undefined;
+    const promisedDate = promisedDateStr ? new Date(promisedDateStr) : new Date(Date.now() + 7 * 86400 * 1000);
+
+    // Create PtP first (no link yet) so we have an id to embed in link notes
+    const eventExists = await revenueEventExists(event.id);
+    const ptp = await prisma.promiseToPay.create({
+      data: {
+        entityId: event.entityId,
+        customerId: event.customerId,
+        eventId: eventExists ? event.id : null,
+        promisedAmount: event.amount,
+        currency: event.currency,
+        promisedDate,
+        status: "pending",
+        notes: (rawPayload.notes as string) || `Promise-to-pay commitment registered for ₹${event.amount} due by ${promisedDate.toISOString().split("T")[0]}.`,
+      },
+    });
+
+    const link = await getOrCreatePaymentLink({
+      entityId: event.entityId,
+      eventId: event.id,
+      promiseId: ptp.id,
+      amount: event.amount,
+      currency: event.currency,
+      customer: { name: customer.name, email: customer.email, phone: customer.phone },
+      description: `Promise-to-Pay for ${event.eventType} — ${event.entityId}`,
+      notify: false,
+      actionType: chosenAction,
+    });
+
+    // Persist link back to the PtP record
+    await prisma.promiseToPay.update({
+      where: { id: ptp.id },
+      data: {
+        razorpayPaymentLinkId: link.razorpayPaymentLinkId,
+        paymentLinkUrl: link.paymentLinkUrl,
+      },
+    });
+
+    const { subject, html } = buildPromiseConfirmationEmail({
+      customerName: customer.name,
+      amount: event.amount,
+      promisedDate,
+      paymentLinkUrl: link.paymentLinkUrl,
+    });
+
+    let emailMsgId: string | undefined;
+    try {
+      const emailRes = await emailIntegration.sendRecoveryEmail({
+        to: customer.email,
+        subject,
+        html,
+      });
+      emailMsgId = emailRes.emailMessageId;
+    } catch (err) {
+      logWarn("executor", err);
+      console.warn("[executor] Failed to send promise confirmation email; payment link remains active.");
+    }
+
+    const formattedDate = promisedDate.toISOString().split("T")[0];
+
+    actionResult = {
+      actionType: chosenAction,
+      result: "success",
+      integration: "RAZORPAY",
+      razorpayPaymentLinkId: link.razorpayPaymentLinkId,
+      paymentLinkUrl: link.paymentLinkUrl,
+      emailMessageId: emailMsgId,
+      detail: `Promise-to-pay commitment registered for ₹${event.amount} due by ${formattedDate}. Payment link generated.`,
     };
   } else if (chosenAction === "escalate_to_human") {
     actionResult = await ticketMock.escalateToHuman(
@@ -282,8 +252,7 @@ export async function executeAction(
   } else if (
     chosenAction === "pause_subscription" ||
     chosenAction === "auto_cancel" ||
-    chosenAction === "hard_decline" ||
-    chosenAction === "start_promise_to_pay_tracking"
+    chosenAction === "hard_decline"
   ) {
     actionResult = {
       actionType: chosenAction,
@@ -293,16 +262,20 @@ export async function executeAction(
     };
   } else {
     throw new DomainError(
-      `Unrecognized action "${chosenAction}" — no integration mapping exists. This is a correctness guard; every action in policy.json must be mapped.`,
+      `Unrecognized action "${chosenAction}" — no integration mapping exists.`,
       "UNMAPPED_ACTION",
     );
   }
 
-  // Persist the Action row.
-  // Upsert: Kafka is at-least-once, so replays after a consumer restart or
-  // rebalance must not fail on the eventId unique constraint. External side
-  // effects above remain at-least-once; the stage dedup key is the first line
-  // of defense against re-execution.
+  const eventExistsCheck = await revenueEventExists(event.id);
+
+  if (!eventExistsCheck) {
+    console.warn(
+      `[executor] Cannot persist Action for event ${event.id}: RevenueEvent does not exist in DB. Skipping.`,
+    );
+    return actionResult;
+  }
+
   await prisma.action.upsert({
     where: { eventId: event.id },
     update: {
@@ -310,6 +283,7 @@ export async function executeAction(
       result: actionResult.result,
       integration: actionResult.integration,
       razorpayPaymentLinkId: actionResult.razorpayPaymentLinkId ?? null,
+      paymentLinkUrl: actionResult.paymentLinkUrl ?? null,
       emailMessageId: actionResult.emailMessageId ?? null,
     },
     create: {
@@ -318,6 +292,7 @@ export async function executeAction(
       result: actionResult.result,
       integration: actionResult.integration,
       razorpayPaymentLinkId: actionResult.razorpayPaymentLinkId ?? null,
+      paymentLinkUrl: actionResult.paymentLinkUrl ?? null,
       emailMessageId: actionResult.emailMessageId ?? null,
     },
   });

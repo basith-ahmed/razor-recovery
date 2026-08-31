@@ -13,10 +13,11 @@
 // Must be declared before imports so jest.mock hoists correctly.
 
 jest.mock("../src/config/openai", () => ({ requestJson: jest.fn() }));
-jest.mock("../src/config/prisma", () => ({
-  prisma: {
+jest.mock("../src/config/prisma", () => {
+  const mockPrisma: Record<string, unknown> = {
     customer: { findUnique: jest.fn() },
-    action: { create: jest.fn(), upsert: jest.fn(), count: jest.fn() },
+    action: { create: jest.fn(), upsert: jest.fn(), count: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
+    promiseToPay: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: "mock-ptp-id" }), update: jest.fn().mockResolvedValue({ id: "mock-ptp-id" }) },
     auditEntry: { create: jest.fn(), findMany: jest.fn() },
     entityWorkflowState: { findUnique: jest.fn(), upsert: jest.fn() },
     entityCauseState: {
@@ -25,14 +26,44 @@ jest.mock("../src/config/prisma", () => ({
       deleteMany: jest.fn(),
       findMany: jest.fn(),
     },
-    revenueEvent: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
+    revenueEvent: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue({ id: "mock-event-id" }),
+    },
     diagnosis: { count: jest.fn() },
-    ticket: { create: jest.fn() },
+    ticket: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: "mock-ticket-id" }),
+      update: jest.fn().mockResolvedValue({ id: "mock-ticket-id" }),
+      findUnique: jest.fn().mockResolvedValue({ id: "mock-ticket-id" }),
+    },
+    ticketNote: {
+      create: jest.fn().mockResolvedValue({ id: "mock-note-id" }),
+      deleteMany: jest.fn(),
+    },
     invoice: { findFirst: jest.fn() },
     cart: { findFirst: jest.fn() },
     subscription: { findFirst: jest.fn() },
-  },
-}));
+    auditChainHead: { upsert: jest.fn(), update: jest.fn() },
+    ledgerEntry: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockImplementation((args: any) => Promise.resolve({ id: "mock-ledger-id", ...args.data })),
+      groupBy: jest.fn().mockResolvedValue([
+        { type: "AT_RISK", _sum: { amount: 10000 } },
+        { type: "RECOVERED", _sum: { amount: 5000 } },
+        { type: "REVERSED", _sum: { amount: 0 } },
+      ]),
+    },
+    $queryRaw: jest.fn().mockResolvedValue([
+      { hash: "d7c09e32ebdfa4ba13e9ef94a91b828552fe899d08ccd52969f4882651343b5d" },
+    ]),
+    $transaction: jest.fn((cb: (tx: unknown) => Promise<unknown>) => cb(mockPrisma)),
+  };
+  return { prisma: mockPrisma };
+});
 jest.mock("../src/config/redis", () => {
   const redisMock = { incr: jest.fn(), set: jest.fn(), get: jest.fn() };
   return { redis: redisMock };
@@ -127,8 +158,8 @@ function makeDiagnosis(overrides: Partial<DiagnosisResult> = {}): DiagnosisResul
 
 function makeDecision(overrides: Partial<DecisionResult> = {}): DecisionResult {
   return {
-    legalActions: ["retry_payment", "send_payment_link"],
-    chosenAction: "retry_payment",
+    legalActions: ["retry_payment_immediate", "send_payment_link"],
+    chosenAction: "retry_payment_immediate",
     reasoning: "Customer has an expired card; retry is the safest first action.",
     policyVersion: "1.0.0",
     ...overrides,
@@ -156,92 +187,51 @@ describe("executorService", () => {
     (mockedPrisma.action.create as jest.Mock).mockResolvedValue({
       id: "action-1",
       eventId: "event-1",
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
     });
   });
 
   describe("draftRecoveryEmail", () => {
-    it("sends complete event context to Gemini", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({
-          subject: "Update your payment method",
-          body_paragraphs: ["Hi Aarav, please update your card."],
-        }),
-      );
-
-      await draftRecoveryEmail(
-        makeEvent({ errorReason: "card_expired", errorCode: "BAD_REQUEST_ERROR" }),
-        "Aarav Sharma",
-        "expired_card",
-      );
-
-      expect(mockedRequestJson).toHaveBeenCalledTimes(1);
-      const requestArg = mockedRequestJson.mock.calls[0][0];
-      const parsedInput = JSON.parse(requestArg.input);
-      expect(parsedInput).toMatchObject({
-        customerName: "Aarav Sharma",
-        cause: "expired_card",
-        amount: 5000,
-        currency: "INR",
-        eventType: "PAYMENT_FAILED",
-        entityType: "INVOICE",
-        entityId: "entity-1",
-        errorReason: "card_expired",
-        errorCode: "BAD_REQUEST_ERROR",
-      });
-    });
-
-    it("wraps body_paragraphs into the templated HTML email", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({
-          subject: "Update your payment method",
-          body_paragraphs: ["Hi Aarav,", "Your card has expired."],
-        }),
-      );
-
+    it("generates deterministic parameterized email for expired_card", async () => {
       const result = await draftRecoveryEmail(
-        makeEvent(),
+        makeEvent({ amount: 5000, errorReason: "card_expired", errorCode: "BAD_REQUEST_ERROR" }),
         "Aarav Sharma",
         "expired_card",
+        "https://rzp.io/i/plink_123"
       );
 
-      expect(result.subject).toBe("Update your payment method");
-      expect(result.html).toContain("Hi Aarav,");
-      expect(result.html).toContain("Your card has expired.");
-      expect(result.html).toContain("₹5000");
-    });
-
-    it("renders body paragraphs into template when Gemini returns body_paragraphs field", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({
-          subject: "Update your payment method",
-          body_paragraphs: ["Hi Aarav, please update your card."],
-        }),
-      );
-
-      const result = await draftRecoveryEmail(
-        makeEvent(),
-        "Aarav Sharma",
-        "expired_card",
-      );
-
-      expect(result.subject).toBe("Update your payment method");
-      expect(result.html).toContain("Hi Aarav, please update your card.");
-    });
-
-    it("uses fallback copy when Gemini fails", async () => {
-      mockedRequestJson.mockRejectedValueOnce(new Error("Gemini down"));
-
-      const result = await draftRecoveryEmail(
-        makeEvent({ amount: 5000 }),
-        "Aarav Sharma",
-        "expired_card",
-      );
-
-      expect(result.subject).toContain("5000");
+      expect(result.subject).toContain("Update card details");
+      expect(result.subject).toContain("5,000");
       expect(result.html).toContain("Aarav Sharma");
+      expect(result.html).toContain("card on file has expired");
+      expect(result.html).toContain("https://rzp.io/i/plink_123");
+    });
+
+    it("generates deterministic email for insufficient_funds", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ amount: 3000 }),
+        "Priya Patel",
+        "insufficient_funds"
+      );
+
+      expect(result.subject).toContain("Payment Unsuccessful");
+      expect(result.subject).toContain("3,000");
+      expect(result.html).toContain("Priya Patel");
+      expect(result.html).toContain("insufficient balance");
+    });
+
+    it("generates deterministic email for mandate re-authorization", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ eventType: "SUBSCRIPTION_FAILED", entityType: "SUBSCRIPTION", amount: 1999 }),
+        "Rohan Gupta",
+        "mandate_requires_reauthorization"
+      );
+
+      expect(result.subject).toContain("Re-authorize your subscription");
+      expect(result.html).toContain("Rohan Gupta");
+      expect(result.html).toContain("UPI Autopay / e-NACH mandate");
     });
   });
 
@@ -253,14 +243,14 @@ describe("executorService", () => {
       });
 
       const result = await executeAction(
-        makeDecision({ chosenAction: "retry_payment" }),
+        makeDecision({ chosenAction: "retry_payment_immediate" }),
         makeEvent(),
       );
 
       expect(mockedRazorpay.orders.fetch).toHaveBeenCalledWith("order_sim_xyz");
       expect(result.result).toBe("success");
       expect(result.integration).toBe("RAZORPAY");
-      expect(result.actionType).toBe("retry_payment");
+      expect(result.actionType).toBe("retry_payment_immediate");
       expect(mockedPrisma.action.upsert).toHaveBeenCalledTimes(1);
     });
 
@@ -284,9 +274,6 @@ describe("executorService", () => {
 
     it("routes email actions through draftRecoveryEmail + sendRecoveryEmail", async () => {
       (mockedPrisma.customer.findUnique as jest.Mock).mockResolvedValueOnce(mockCustomer);
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({ subject: "Payment reminder", body_paragraphs: ["Hi"] }),
-      );
       mockedMailer.sendMail.mockResolvedValueOnce({ messageId: "msg-123" });
 
       const result = await executeAction(
@@ -294,10 +281,9 @@ describe("executorService", () => {
         makeEvent(),
       );
 
-      expect(mockedRequestJson).toHaveBeenCalledTimes(1); // AI touchpoint for email draft
       expect(mockedMailer.sendMail).toHaveBeenCalledTimes(1);
-      expect(mockedMailer.sendMail.mock.calls[0][0].subject).toBe("Payment reminder");
-      expect(mockedMailer.sendMail.mock.calls[0][0].html).toContain("Hi");
+      expect(mockedMailer.sendMail.mock.calls[0][0].subject).toContain("Update card details");
+      expect(mockedMailer.sendMail.mock.calls[0][0].html).toContain("Hi Aarav Sharma");
       expect(result.result).toBe("success");
       expect(result.integration).toBe("EMAIL");
       expect(result.actionType).toBe("send_reminder_email");
@@ -357,7 +343,7 @@ describe("executorService", () => {
     it("throws DomainError when retry has no razorpayOrderId", async () => {
       await expect(
         executeAction(
-          makeDecision({ chosenAction: "retry_payment" }),
+          makeDecision({ chosenAction: "retry_payment_immediate" }),
           makeEvent({ razorpayOrderId: undefined }),
         ),
       ).rejects.toThrow("no razorpayOrderId");
@@ -386,7 +372,7 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis();
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
     };
@@ -406,7 +392,7 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis();
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
     };
@@ -447,7 +433,7 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis({ causeLabel: "gateway_timeout" });
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
     };
@@ -507,7 +493,7 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis({ causeLabel: "insufficient_funds" });
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment",
+      actionType: "retry_payment_immediate",
       result: "success",
       integration: "RAZORPAY",
     };
@@ -660,9 +646,8 @@ describe("per-cause attempt/cooldown scoping", () => {
     // Full action list for insufficient_funds — NOT escalation-only, because
     // this cause's attemptCount is 0 regardless of gateway_timeout's 2.
     expect(legalActions).toEqual([
-      "retry_payment",
-      "send_payment_link",
-      "send_sms_reminder",
+      "retry_payment_immediate",
+      "send_reminder_email",
       "escalate_to_human",
     ]);
   });
@@ -759,7 +744,7 @@ describe("metricsService", () => {
           amount: 3000,
           occurredAt: oneHourAgo,
           diagnosis: { causeLabel: "invoice_disputed" },
-          action: { integration: "MOCK", executedAt: now },
+          action: { integration: "MOCK", actionType: "escalate_to_human", result: "success", executedAt: now },
           auditEntries: [{ outcome: "escalated", timestamp: now }],
         },
         // Event 3: DNC-skipped
@@ -768,7 +753,7 @@ describe("metricsService", () => {
           amount: 2000,
           occurredAt: oneHourAgo,
           diagnosis: { causeLabel: "dnc" },
-          action: { integration: "MOCK", executedAt: now },
+          action: { integration: "MOCK", actionType: "none", result: "skipped", executedAt: now },
           auditEntries: [{ outcome: "skipped", timestamp: now }],
         },
       ];
@@ -826,9 +811,9 @@ describe("metricsService", () => {
 
       // byChannel breakdown
       expect(summary.byChannel).toEqual([
-        { channel: "razorpay", count: 1, recoveredAmount: 5000 },
-        { channel: "email", count: 0, recoveredAmount: 0 },
-        { channel: "human", count: 2, recoveredAmount: 0 },
+        { channel: "razorpay", count: 1, recoveredCount: 1, recoveredAmount: 5000 },
+        { channel: "email", count: 0, recoveredCount: 0, recoveredAmount: 0 },
+        { channel: "human", count: 1, recoveredCount: 0, recoveredAmount: 0 },
       ]);
 
       // Median time-to-recovery = 1 hour
@@ -857,6 +842,7 @@ describe("metricsService", () => {
       (mockedPrisma.revenueEvent.count as jest.Mock).mockResolvedValueOnce(0);
       (mockedPrisma.diagnosis.count as jest.Mock).mockResolvedValueOnce(0);
       (mockedPrisma.action.count as jest.Mock).mockResolvedValueOnce(0);
+      (mockedPrisma.ledgerEntry.groupBy as jest.Mock).mockResolvedValueOnce([]);
       (mockedPrisma.auditEntry.findMany as jest.Mock)
         .mockResolvedValueOnce([]) // recovered audits
         .mockResolvedValueOnce([]) // compliance audits
@@ -940,7 +926,7 @@ describe("Definition of Done — Full Pipeline", () => {
 
     // Mock Gemini LLM requestJson
     mockedRequestJson.mockResolvedValue(
-      JSON.stringify({ chosen_action: "retry_payment", reasoning: "Retry payment recommended by policy." }),
+      JSON.stringify({ chosen_action: "retry_payment_immediate", reasoning: "Retry payment recommended by policy." }),
     );
 
     // Mock Mailer
@@ -1061,46 +1047,56 @@ describe("Definition of Done — DNC Compliance", () => {
     expect(auditCall.data.outcome).toBe("skipped");
   });
 
-  describe("draftRecoveryEmail response parsing", () => {
-    it("handles body_paragraphs responses and templates them", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({ subject: "Action Required", body_paragraphs: ["Please update payment."] }),
+  describe("draftRecoveryEmail parameterized templates", () => {
+    it("renders amount and entity reference into HTML email", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ amount: 1000, entityId: "inv_123456", entityType: "INVOICE" }),
+        "Alice",
+        "expired_card"
       );
-
-      const result = await draftRecoveryEmail(makeEvent({ amount: 1000 }), "Alice", "expired_card");
-      expect(result.subject).toBe("Action Required");
+      expect(result.subject).toContain("1,000");
       expect(result.html).toContain("<p");
-      expect(result.html).toContain("Please update payment.");
-      expect(result.html).toContain("₹1000");
+      expect(result.html).toContain("Alice");
+      expect(result.html).toContain("1,000");
     });
 
-    it("handles structured JSON responses with body paragraphs", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        JSON.stringify({ subject: "Action Required", body_paragraphs: ["Please update payment."] }),
+    it("renders payment button when payment link URL is provided", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ amount: 500 }),
+        "Bob",
+        "insufficient_funds",
+        "https://rzp.io/i/testlink"
       );
-
-      const result = await draftRecoveryEmail(makeEvent({ amount: 1000 }), "Alice", "expired_card");
-      expect(result.subject).toBe("Action Required");
-      expect(result.html).toContain("Please update payment.");
-      expect(result.html).toContain("₹1000");
+      expect(result.subject).toContain("500");
+      expect(result.html).toContain("https://rzp.io/i/testlink");
+      expect(result.html).toContain("Pay ₹500 Now");
     });
+  });
 
-    it("strips markdown code blocks (```json ... ```) from Gemini responses", async () => {
-      mockedRequestJson.mockResolvedValueOnce(
-        "```json\n{\n  \"subject\": \"Markdown Subject\",\n  \"body_paragraphs\": [\"Markdown Body\"]\n}\n```",
+  describe("Unified Entity-Level Attempt Counter & Cross-Cause Stopping Rules", () => {
+    it("increments the entity attempt counter across different cause events", async () => {
+      const entityId = "entity-multi-cause-1";
+      const event1 = makeEvent({ entityId, eventType: "PAYMENT_FAILED" });
+      const diag1 = makeDiagnosis({ causeLabel: "insufficient_funds" });
+      const dec1 = makeDecision({ chosenAction: "send_payment_link" });
+      const action1: ActionResult = {
+        actionType: "send_payment_link",
+        result: "success",
+        integration: "RAZORPAY",
+      };
+
+      // 1st Attempt: insufficient_funds
+      await recordAuditEntry({ event: event1, diagnosis: diag1, decision: dec1, action: action1 });
+      expect(mockedPrisma.entityWorkflowState.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { entityId },
+          create: expect.objectContaining({ attemptCount: 1 }),
+          update: expect.objectContaining({
+            attemptCount: { increment: 1 },
+          }),
+        }),
       );
-
-      const result = await draftRecoveryEmail(makeEvent({ amount: 500 }), "Bob", "insufficient_funds");
-      expect(result.subject).toBe("Markdown Subject");
-      expect(result.html).toContain("Markdown Body");
-    });
-
-    it("uses fallback copy when Gemini returns unparseable output", async () => {
-      mockedRequestJson.mockResolvedValueOnce("not json at all");
-
-      const result = await draftRecoveryEmail(makeEvent({ amount: 500 }), "Bob", "insufficient_funds");
-      expect(result.subject).toContain("₹500");
-      expect(result.html).toContain("Bob");
     });
   });
 });
+

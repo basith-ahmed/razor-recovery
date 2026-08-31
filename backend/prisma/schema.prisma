@@ -1,9 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
 enum EntityType {
@@ -57,6 +59,7 @@ model Customer {
   subscriptions Subscription[]
   events        RevenueEvent[]
   workflowStates EntityWorkflowState[]
+  promises      PromiseToPay[]
 }
 
 model Invoice {
@@ -109,10 +112,12 @@ model RevenueEvent {
   riskScore         Float?
   urgency           Float?
 
-  diagnosis    Diagnosis?
-  decision     Decision?
-  action       Action?
-  auditEntries AuditEntry[]
+  diagnosis     Diagnosis?
+  decision      Decision?
+  action        Action?
+  auditEntries  AuditEntry[]
+  ledgerEntries LedgerEntry[]
+  promises      PromiseToPay[]
 }
 
 model Diagnosis {
@@ -146,7 +151,10 @@ model Action {
   result                String
   integration           ActionIntegration
   razorpayPaymentLinkId String?
+  paymentLinkUrl        String?
   emailMessageId        String?
+
+  @@index([razorpayPaymentLinkId])
 }
 
 model AuditEntry {
@@ -161,15 +169,37 @@ model AuditEntry {
   actionSnapshot    Json?
   outcome           String
   timestamp         DateTime     @default(now())
+  sequenceNumber    Int          @unique @default(autoincrement())
+  prevHash          String
+  hash              String
+
+  embedding         AuditEmbedding?
+}
+
+model AuditEmbedding {
+  id           String     @id @default(uuid())
+  auditEntryId String     @unique
+  auditEntry   AuditEntry @relation(fields: [auditEntryId], references: [id])
+  embedding    Unsupported("vector(1024)")
+  createdAt    DateTime   @default(now())
+}
+
+model AuditChainHead {
+  id        Int      @id @default(1)
+  hash      String
+  updatedAt DateTime @updatedAt
 }
 
 model EntityWorkflowState {
-  id         String        @id @default(uuid())
-  entityId   String        @unique
-  customerId String?
-  customer   Customer?     @relation(fields: [customerId], references: [id])
-  state      WorkflowState @default(DETECTED)
-  updatedAt  DateTime      @updatedAt
+  id              String        @id @default(uuid())
+  entityId        String        @unique
+  customerId      String?
+  customer        Customer?     @relation(fields: [customerId], references: [id])
+  state           WorkflowState @default(DETECTED)
+  attemptCount    Int           @default(0)
+  lastContactedAt DateTime?
+  cooldownUntil   DateTime?
+  updatedAt       DateTime      @updatedAt
 }
 
 // Attempt/cooldown/last-contact state scoped per (entityId, causeLabel):
@@ -188,10 +218,88 @@ model EntityCauseState {
   @@index([entityId])
 }
 
-model Ticket {
-  id        String   @id @default(uuid())
-  entityId  String
-  reason    String
-  status    String   @default("open")
-  createdAt DateTime @default(now())
+enum LedgerEntryType {
+  AT_RISK
+  RECOVERED
+  WRITTEN_OFF
+  REVERSED
 }
+
+model LedgerEntry {
+  id          String          @id @default(uuid())
+  entityId    String
+  eventId     String
+  type        LedgerEntryType
+  amount      Float
+  currency    String          @default("INR")
+  referenceId String?         // Idempotency key or external reference (e.g. payment_id)
+  createdAt   DateTime        @default(now())
+  
+  event       RevenueEvent    @relation(fields: [eventId], references: [id])
+
+  @@index([entityId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([eventId, type])
+}
+
+model Ticket {
+  id                    String       @id @default(uuid())
+  entityId              String
+  reason                String
+  status                String       @default("open") // "open" | "resolved" | "recovered" | "written_off"
+  assignedTo            String?
+  resolutionNotes       String?
+  resolvedAt            DateTime?
+  razorpayPaymentLinkId String?
+  paymentLinkUrl        String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  notes                 TicketNote[]
+
+  @@index([entityId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([razorpayPaymentLinkId])
+}
+
+model TicketNote {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author    String   @default("Human Agent")
+  content   String
+  type      String   @default("note") // "note" | "email_sent" | "status_change"
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([createdAt])
+}
+
+model PromiseToPay {
+  id                    String        @id @default(uuid())
+  entityId              String
+  customerId            String
+  customer              Customer      @relation(fields: [customerId], references: [id])
+  eventId               String?
+  event                 RevenueEvent? @relation(fields: [eventId], references: [id])
+  promisedAmount        Float
+  currency              String        @default("INR")
+  promisedDate          DateTime
+  status                String        @default("pending") // "pending" | "reminder_sent" | "kept" | "broken" | "cancelled"
+  reminderSentAt        DateTime?
+  gracePeriodUntil      DateTime?
+  razorpayPaymentLinkId String?
+  paymentLinkUrl        String?
+  notes                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([entityId])
+  @@index([customerId])
+  @@index([status])
+  @@index([promisedDate])
+  @@index([razorpayPaymentLinkId])
+}
+

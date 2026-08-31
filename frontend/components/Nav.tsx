@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Menu } from "lucide-react";
 import { useLiveStream } from "../lib/socket";
 import { getMetricsSummary } from "../lib/api";
 
-export function Nav() {
-  const pathname = usePathname();
+interface NavProps {
+  onMenuToggle: () => void;
+}
+
+export function Nav({ onMenuToggle }: NavProps) {
   const { isConnected, metrics: socketMetrics } = useLiveStream();
   const [initialMetrics, setInitialMetrics] = useState<{ amountRecovered: number } | null>(null);
 
@@ -19,57 +22,59 @@ export function Nav() {
 
   const recoveredAmount = socketMetrics?.amountRecovered ?? initialMetrics?.amountRecovered ?? 0;
 
-  const links = [
-    { href: "/", label: "Overview" },
-    { href: "/entities", label: "Entities" },
-    { href: "/metrics", label: "Metrics" },
-    { href: "/policy", label: "Policy & Compliance" },
-  ];
-
   return (
-    <header className="bg-white border-b border-slate-200 text-slate-900 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <Link href="/" className="font-bold text-xl tracking-tight text-slate-900 flex items-center gap-2">
-            <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded font-mono uppercase">Razor</span>
-            <span>Recovery</span>
-          </Link>
-          <nav className="flex items-center gap-1">
-            {links.map((link) => {
-              const isActive = pathname === link.href;
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-slate-100 text-slate-900 font-semibold"
-                      : "text-slate-400 hover:text-slate-800 hover:bg-slate-100/50"
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
+    <header className="fixed top-0 left-0 right-0 z-40 h-14 bg-white border-b border-hairline flex items-center px-4 sm:px-6 gap-4">
+      {/* Mobile menu toggle */}
+      <button
+        type="button"
+        onClick={onMenuToggle}
+        className="lg:hidden p-1.5 rounded-[8px] text-ink-muted hover:text-ink hover:bg-canvas-soft transition-colors"
+        aria-label="Toggle navigation"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
 
-        <div className="flex items-center gap-4">
-          {/* Recovered Counter */}
-          <div className="bg-emerald-50/80 border border-emerald-200/50 text-emerald-700 px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm font-mono font-semibold">
-            <span className="text-emerald-600 text-xs">RECOVERED:</span>
-            <span>₹{recoveredAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
-          </div>
+      {/* Logo */}
+      <Link
+        href="/"
+        className="font-bold text-lg tracking-[-0.25px] text-ink flex items-center shrink-0"
+      >
+        <span className="text-primary">
+          Razor
+        </span>
+        <span>Recovery</span>
+      </Link>
 
-          {/* System Status Pill — the pipeline is always live; there is no
-              idle/running/complete state for a continuous stream */}
-          <div className="flex items-center gap-2 bg-slate-100 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium">
-            <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-500"}`} />
-            <span className={isConnected ? "text-emerald-700 font-semibold uppercase" : "text-slate-400"}>
-              {isConnected ? "Live" : "Connecting..."}
-            </span>
-          </div>
-        </div>
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Recovered amount */}
+      <div className="hidden sm:flex items-center gap-1.5 bg-accent-green/10 border border-accent-green/25 text-accent-green px-3 py-1 rounded-full text-xs font-semibold">
+        <span className="text-accent-green text-[10px] uppercase tracking-eyebrow">
+          Recovered
+        </span>
+        <span>
+          ₹
+          {recoveredAmount.toLocaleString("en-IN", {
+            maximumFractionDigits: 2,
+          })}
+        </span>
+      </div>
+
+      {/* Live indicator */}
+      <div className="flex items-center gap-2 bg-canvas-soft border border-hairline px-3 py-1 rounded-full text-xs font-medium">
+        <span
+          className={`w-2 h-2 rounded-full shrink-0 ${
+            isConnected ? "bg-accent-green animate-pulse" : "bg-ink-faint"
+          }`}
+        />
+        <span
+          className={
+            isConnected ? "text-accent-green font-semibold" : "text-ink-muted"
+          }
+        >
+          {isConnected ? "Connected" : "Connecting"}
+        </span>
       </div>
     </header>
   );

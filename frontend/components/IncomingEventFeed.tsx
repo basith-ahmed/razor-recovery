@@ -7,10 +7,6 @@ interface IncomingEventFeedProps {
   items: IncomingEventItem[];
 }
 
-/**
- * Live ingestion feed — shows each raw event the moment it enters the
- * pipeline (detection stage), before diagnosis/decision/audit complete.
- */
 export function IncomingEventFeed({ items }: IncomingEventFeedProps) {
   const router = useRouter();
 
@@ -19,23 +15,20 @@ export function IncomingEventFeed({ items }: IncomingEventFeedProps) {
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-5 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-md font-semibold text-slate-900 flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-          </span>
+    <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft h-full flex flex-col">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px] flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-primary" />
           Incoming Events
         </h3>
-        <span className="text-xs text-slate-400 font-mono">
-          {items.length} events received — processing in progress below
+        <span className="text-xs text-ink-faint">
+          {items.length} events received
         </span>
       </div>
 
-      <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+      <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
         {items.length === 0 ? (
-          <div className="text-center py-8 text-slate-500 text-sm">
+          <div className="text-center py-6 text-ink-muted text-xs">
             No incoming events yet. Start a stream injection to watch events arrive live.
           </div>
         ) : (
@@ -43,30 +36,38 @@ export function IncomingEventFeed({ items }: IncomingEventFeedProps) {
             <div
               key={`${item.eventId}-${idx}`}
               onClick={() => handleRowClick(item)}
-              className="bg-slate-50 hover:bg-slate-100/80 transition-colors border border-slate-200/80 rounded p-3 text-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 cursor-pointer group"
+              className="bg-canvas-soft hover:bg-hairline/40 border border-hairline rounded-[6px] p-2.5 text-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 cursor-pointer transition-colors"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <span className="font-mono text-slate-500 text-[11px] whitespace-nowrap">
+                <span className="text-ink-muted text-[11px] whitespace-nowrap">
                   {new Date(item.occurredAt).toLocaleTimeString()}
                 </span>
-                <span className="font-semibold text-slate-800 truncate group-hover:text-blue-700 transition-colors">
+                <span className="font-semibold text-ink truncate">
                   {item.customerName}
                 </span>
-                <span className="bg-slate-100 text-slate-400 px-2 py-0.5 rounded font-mono text-[10px] uppercase">
+                <span className="bg-white text-ink-muted px-1.5 py-0.5 rounded-[4px] text-[10px] uppercase border border-hairline font-medium">
                   {item.eventType}
                 </span>
+                {item.synthesized && (
+                  <span
+                    className="bg-accent-purple/30 text-accent-purple-deep border border-accent-purple/60 px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-eyebrow"
+                    title={`Scheduler-generated follow-up (${item.followUpType ?? "unknown"})`}
+                  >
+                    ⟳ {item.followUpType ?? "follow-up"}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-3">
                 {item.riskScore != null && (
-                  <span className="text-slate-400 hidden md:inline">
+                  <span className="text-ink-faint hidden md:inline">
                     Risk:{" "}
-                    <strong className="text-slate-700 font-normal">
+                    <strong className="text-ink-secondary font-normal">
                       {item.riskScore.toFixed(3)}
                     </strong>
                   </span>
                 )}
-                <span className="font-mono text-amber-700 font-semibold">
+                <span className="text-accent-orange font-semibold">
                   ₹{item.amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                 </span>
               </div>

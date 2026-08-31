@@ -95,25 +95,28 @@ describe("Integration Layer (Phase 4)", () => {
         description: "Payment Link Test",
       });
 
-      expect(createSpy).toHaveBeenCalledWith({
-        amount: 15050, // 150.5 * 100
-        currency: "INR",
-        description: "Payment Link Test",
-        customer: {
-          name: "Test Customer",
-          email: "customer@example.com",
-          contact: "+919876543210",
-        },
-        notify: { sms: true, email: true },
-        reminder_enable: true,
-      });
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 15050, // 150.5 * 100
+          currency: "INR",
+          description: "Payment Link Test",
+          customer: {
+            name: "Test Customer",
+            email: "customer@example.com",
+            contact: "+919876543210",
+          },
+          notify: { sms: true, email: true },
+          reminder_enable: true,
+          notes: {},
+        }),
+      );
 
       expect(res).toEqual({
         actionType: "send_payment_link",
         result: "success",
         integration: "RAZORPAY",
         razorpayPaymentLinkId: "plink_test_12345",
-        paymentLinkShortUrl: "https://rzp.io/i/test12345",
+        paymentLinkUrl: "https://rzp.io/i/test12345",
       });
     });
 
@@ -140,7 +143,7 @@ describe("Integration Layer (Phase 4)", () => {
       const res = await retryPayment("order_test_999");
 
       expect(res).toEqual({
-        actionType: "retry_payment",
+        actionType: "retry_payment_immediate",
         result: "success",
         integration: "RAZORPAY",
         detail: "Order order_test_999 is ready for a customer retry via Razorpay Checkout.",

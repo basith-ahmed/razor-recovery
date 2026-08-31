@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getMetricsSummary, getMetricsTrend } from "../../lib/api";
 import { MetricsSummary, MetricsWindow, TrendPoint } from "../../types";
 import { WindowSelector } from "../../components/WindowSelector";
+import { PageHeader } from "../../components/PageHeader";
 
 const CHANNEL_COST_MAP: Record<string, number> = {
   email: 0.5,
@@ -89,52 +90,74 @@ export default function MetricsPage() {
   const maxTrendEvents = Math.max(1, ...trend.map((t) => t.eventsProcessed));
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Analytics & Performance Metrics</h1>
-          <p className="text-sm text-slate-400">
-            Deep recovery efficiency and financial unit economics over the live event stream.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <WindowSelector value={window} onChange={setWindow} />
-          <button
-            onClick={handleExportJSON}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-3 py-2 rounded border border-slate-300 transition-colors"
-          >
-            Export JSON
-          </button>
-          <button
-            onClick={handleExportCSV}
-            className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-2 rounded transition-colors"
-          >
-            Export CSV
-          </button>
-        </div>
-      </div>
+    <div className="pb-8">
+      <PageHeader
+        title="Analytics & Performance Metrics"
+        description="Deep recovery efficiency and financial unit economics over the live event stream."
+        actions={
+          <div className="flex items-center gap-2">
+            <WindowSelector value={window} onChange={setWindow} />
+            <button
+              onClick={handleExportJSON}
+              className="bg-white hover:bg-canvas-soft text-ink text-xs font-medium px-3.5 py-1.5 rounded-[8px] border border-hairline shadow-xs transition-colors"
+            >
+              Export JSON
+            </button>
+            <button
+              onClick={handleExportCSV}
+              className="bg-primary hover:bg-primary-active active:scale-[0.98] text-white text-xs font-medium px-4 py-1.5 rounded-full transition-all shadow-sm"
+            >
+              Export CSV
+            </button>
+          </div>
+        }
+      />
 
       {loading ? (
-        <div className="bg-white border border-slate-200 rounded-lg p-12 text-center text-slate-500">
+        <div className="bg-white border border-hairline rounded-[12px] p-8 text-center text-ink-muted text-sm shadow-notion-soft">
           Loading metrics analysis...
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Stream Throughput Trend */}
-          <div className="bg-white border border-slate-200 rounded-lg p-5">
-            <h3 className="text-md font-semibold text-slate-900 mb-1">Stream Throughput Trend</h3>
-            <p className="text-xs text-slate-400 mb-4">
+        <div className="space-y-5">
+
+          {/* Row 1: Key summary stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+              <span className="text-xs text-ink-muted block mb-1 font-medium">Median Time to Recovery</span>
+              <span className="text-2xl font-bold text-accent-green tracking-heading-3">
+                {metrics?.amountRecovered && metrics.amountRecovered > 0 && metrics?.medianTimeToRecoveryHours != null
+                  ? `${metrics.medianTimeToRecoveryHours < 0.01 ? "< 0.01" : metrics.medianTimeToRecoveryHours.toFixed(2)} hrs`
+                  : "N/A"}
+              </span>
+            </div>
+            <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+              <span className="text-xs text-ink-muted block mb-1 font-medium">Events Processed</span>
+              <span className="text-2xl font-bold text-ink tracking-heading-3">
+                {metrics?.eventsProcessed ?? 0}
+              </span>
+            </div>
+            <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+              <span className="text-xs text-ink-muted block mb-1 font-medium">Overall Recovery Rate</span>
+              <span className="text-2xl font-bold text-accent-orange tracking-heading-3">
+                {metrics ? (metrics.recoveryRate * 100).toFixed(1) : "0.0"}%
+              </span>
+            </div>
+          </div>
+
+          {/* Row 2: Trend chart — full width */}
+          <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+            <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-0.5">Stream Throughput Trend</h3>
+            <p className="text-xs text-ink-muted mb-4">
               Events processed per hour across the live stream (recovered amount in ₹)
             </p>
 
             {trend.length === 0 ? (
-              <p className="text-xs text-slate-500 py-4 text-center">No events in this window yet.</p>
+              <p className="text-xs text-ink-muted py-4 text-center">No events in this window yet.</p>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {trend.map((point) => (
                   <div key={point.bucketStart} className="flex items-center gap-3 text-xs">
-                    <span className="w-36 shrink-0 font-mono text-slate-500">
+                    <span className="w-36 shrink-0 text-ink-muted text-[11px]">
                       {new Date(point.bucketStart).toLocaleString("en-IN", {
                         month: "short",
                         day: "numeric",
@@ -142,14 +165,14 @@ export default function MetricsPage() {
                         minute: "2-digit",
                       })}
                     </span>
-                    <div className="flex-1 bg-slate-100 rounded overflow-hidden h-4">
+                    <div className="flex-1 bg-canvas-soft border border-hairline rounded-full overflow-hidden h-3.5">
                       <div
-                        className="h-full bg-blue-500"
+                        className="h-full bg-primary rounded-full transition-all"
                         style={{ width: `${(point.eventsProcessed / maxTrendEvents) * 100}%` }}
                       />
                     </div>
-                    <span className="w-10 text-right font-mono text-slate-700">{point.eventsProcessed}</span>
-                    <span className="w-28 text-right font-mono text-emerald-700">
+                    <span className="w-10 text-right text-ink font-semibold">{point.eventsProcessed}</span>
+                    <span className="w-28 text-right text-accent-green font-semibold">
                       ₹{point.amountRecovered.toLocaleString("en-IN", { maximumFractionDigits: 0 })} rec.
                     </span>
                   </div>
@@ -158,16 +181,19 @@ export default function MetricsPage() {
             )}
           </div>
 
-          {/* Recovery Rate by Cause Table */}
-          <div className="bg-white border border-slate-200 rounded-lg p-5">
+          {/* Row 3: Recovery by cause — full width */}
+          <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-md font-semibold text-slate-900">Recovery Performance by Failure Cause</h3>
+              <div>
+                <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px]">Recovery Performance by Failure Cause</h3>
+                <p className="text-xs text-ink-muted mt-0.5">Comparative recovery success rates across identified root causes</p>
+              </div>
               <select
                 value={causeSort}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                   setCauseSort(e.target.value as "rate_desc" | "count_desc" | "recovered_desc")
                 }
-                className="bg-slate-50 border border-slate-300 text-xs text-slate-700 rounded px-2.5 py-1"
+                className="bg-white border border-hairline-input text-xs text-ink rounded-[4px] px-2.5 py-1 focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
               >
                 <option value="rate_desc">Sort by Recovery Rate ↓</option>
                 <option value="count_desc">Sort by Volume ↓</option>
@@ -175,30 +201,30 @@ export default function MetricsPage() {
               </select>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto border border-hairline rounded-[8px]">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-400 border-b border-slate-200">
-                    <th className="p-3 font-medium">Failure Cause</th>
-                    <th className="p-3 font-medium">At Risk (₹)</th>
-                    <th className="p-3 font-medium">Recovered (₹)</th>
-                    <th className="p-3 font-medium">Recovery Rate</th>
+                  <tr className="bg-canvas-soft text-ink-muted border-b border-hairline text-[11px] font-semibold uppercase tracking-eyebrow">
+                    <th className="p-3">Failure Cause</th>
+                    <th className="p-3">At Risk (₹)</th>
+                    <th className="p-3">Recovered (₹)</th>
+                    <th className="p-3">Recovery Rate</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200/60">
+                <tbody className="divide-y divide-hairline bg-white">
                   {sortedCauses.map((c) => {
                     const rate = c.atRisk > 0 ? (c.recovered / c.atRisk) * 100 : 0;
                     return (
-                      <tr key={c.cause} className="hover:bg-slate-100/40">
-                        <td className="p-3 font-semibold text-slate-900">{c.cause}</td>
-                        <td className="p-3 font-mono text-amber-700">
+                      <tr key={c.cause} className="hover:bg-canvas-soft transition-colors">
+                        <td className="p-3 font-semibold text-ink">{c.cause}</td>
+                        <td className="p-3 text-ink">
                           ₹{c.atRisk.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                         </td>
-                        <td className="p-3 font-mono text-emerald-700">
+                        <td className="p-3 text-accent-green font-semibold">
                           ₹{c.recovered.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                         </td>
-                        <td className="p-3 font-mono font-bold">
-                          <span className={rate > 50 ? "text-emerald-700" : rate > 20 ? "text-amber-700" : "text-slate-400"}>
+                        <td className="p-3 font-bold">
+                          <span className={rate > 50 ? "text-accent-green" : rate > 20 ? "text-accent-orange" : "text-ink-muted"}>
                             {rate.toFixed(1)}%
                           </span>
                         </td>
@@ -210,40 +236,40 @@ export default function MetricsPage() {
             </div>
           </div>
 
-          {/* Channel Cost-per-Recovery Unit Economics */}
-          <div className="bg-white border border-slate-200 rounded-lg p-5">
-            <h3 className="text-md font-semibold text-slate-900 mb-1">Channel Cost-Per-Recovery Unit Economics</h3>
-            <p className="text-xs text-slate-400 mb-4">
+          {/* Row 4: Channel economics — full width */}
+          <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+            <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px] mb-0.5">Channel Cost-Per-Recovery Unit Economics</h3>
+            <p className="text-xs text-ink-muted mb-4">
               Estimated communication channel costs vs revenue yield (computed via presentation overlay model)
             </p>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto border border-hairline rounded-[8px]">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-400 border-b border-slate-200">
-                    <th className="p-3 font-medium">Channel</th>
-                    <th className="p-3 font-medium">Unit Cost / Event</th>
-                    <th className="p-3 font-medium">Total Events</th>
-                    <th className="p-3 font-medium">Recovered Amount (₹)</th>
-                    <th className="p-3 font-medium">Est. Total Cost</th>
-                    <th className="p-3 font-medium">Cost per Event</th>
+                  <tr className="bg-canvas-soft text-ink-muted border-b border-hairline text-[11px] font-semibold uppercase tracking-eyebrow">
+                    <th className="p-3">Channel</th>
+                    <th className="p-3">Unit Cost / Event</th>
+                    <th className="p-3">Total Events</th>
+                    <th className="p-3">Recovered Amount (₹)</th>
+                    <th className="p-3">Est. Total Cost</th>
+                    <th className="p-3">Cost per Event</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200/60">
+                <tbody className="divide-y divide-hairline bg-white">
                   {metrics?.byChannel?.map((ch) => {
                     const unitCost = CHANNEL_COST_MAP[ch.channel.toLowerCase()] || CHANNEL_COST_MAP.default;
                     const totalCost = ch.count * unitCost;
                     const costPerEvent = ch.count > 0 ? totalCost / ch.count : 0;
                     return (
-                      <tr key={ch.channel} className="hover:bg-slate-100/40">
-                        <td className="p-3 font-semibold text-slate-900 uppercase font-mono">{ch.channel}</td>
-                        <td className="p-3 font-mono text-slate-400">₹{unitCost.toFixed(2)}</td>
-                        <td className="p-3 font-mono text-slate-700">{ch.count}</td>
-                        <td className="p-3 font-mono text-emerald-700 font-semibold">
+                      <tr key={ch.channel} className="hover:bg-canvas-soft transition-colors">
+                        <td className="p-3 font-semibold text-ink uppercase">{ch.channel}</td>
+                        <td className="p-3 text-ink-muted">₹{unitCost.toFixed(2)}</td>
+                        <td className="p-3 text-ink">{ch.count}</td>
+                        <td className="p-3 text-accent-green font-semibold">
                           ₹{ch.recoveredAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                         </td>
-                        <td className="p-3 font-mono text-amber-700">₹{totalCost.toFixed(2)}</td>
-                        <td className="p-3 font-mono font-bold text-blue-700">
+                        <td className="p-3 text-ink-secondary">₹{totalCost.toFixed(2)}</td>
+                        <td className="p-3 font-bold text-primary">
                           ₹{costPerEvent.toFixed(2)}
                         </td>
                       </tr>
@@ -254,33 +280,6 @@ export default function MetricsPage() {
             </div>
           </div>
 
-          {/* Time to Recovery — Median Latency (from backend) */}
-          <div className="bg-white border border-slate-200 rounded-lg p-5">
-            <h3 className="text-md font-semibold text-slate-900 mb-1">Time-to-Recovery Latency</h3>
-            <p className="text-xs text-slate-400 mb-4">Median elapsed time between failure detection and recovery resolution</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-slate-50 p-4 rounded border border-slate-200">
-                <span className="text-xs text-slate-400 block mb-1">Median Time to Recovery</span>
-                <span className="text-xl font-bold font-mono text-emerald-700">
-                  {metrics?.medianTimeToRecoveryHours != null && metrics.medianTimeToRecoveryHours > 0
-                    ? `${metrics.medianTimeToRecoveryHours.toFixed(2)} hrs`
-                    : "N/A"}
-                </span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded border border-slate-200">
-                <span className="text-xs text-slate-400 block mb-1">Events Processed</span>
-                <span className="text-xl font-bold font-mono text-blue-700">
-                  {metrics?.eventsProcessed ?? 0}
-                </span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded border border-slate-200">
-                <span className="text-xs text-slate-400 block mb-1">Overall Recovery Rate</span>
-                <span className="text-xl font-bold font-mono text-amber-700">
-                  {metrics ? (metrics.recoveryRate * 100).toFixed(1) : "0.0"}%
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
       )}
     </div>

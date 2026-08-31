@@ -1,10 +1,3 @@
-/**
- * Metrics Service — read-only aggregation queries over rolling time windows.
- * Metrics are computed over a window ('1h' | '24h' | '7d' | 'all') across all
- * events in the system, and cached briefly in Redis so dashboard polling stays
- * snappy. There is no run/batch scoping anywhere.
- */
-
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
 import {
@@ -16,9 +9,6 @@ import {
 
 const CACHE_TTL_SECONDS = 5;
 
-/**
- * Median of an array of numbers. Returns null for empty arrays.
- */
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -49,22 +39,15 @@ export function eventWindowFilter(window: Window) {
   };
 }
 
-/**
- * Returns funnel stage counts within the given time window:
- * detected → diagnosed → contacted → recovered
- */
 export async function recoveryFunnel(window: Window): Promise<FunnelStage[]> {
   const eventFilter = eventWindowFilter(window);
 
-  // detected = total events in the window
   const detected = await prisma.revenueEvent.count({ where: eventFilter });
 
-  // diagnosed = events that have a Diagnosis row
   const diagnosed = await prisma.diagnosis.count({
     where: { event: eventFilter },
   });
 
-  // contacted = events that have an Action row with result != 'skipped'
   const contacted = await prisma.action.count({
     where: {
       event: eventFilter,
@@ -72,7 +55,6 @@ export async function recoveryFunnel(window: Window): Promise<FunnelStage[]> {
     },
   });
 
-  // recovered = events where an audit entry has outcome 'recovered'
   const recoveredAudits = await prisma.auditEntry.findMany({
     where: {
       event: eventFilter,
@@ -91,7 +73,7 @@ export async function recoveryFunnel(window: Window): Promise<FunnelStage[]> {
   ];
 }
 
-async function computeLiveMetricsUncached(
+export async function computeLiveMetricsUncached(
   window: Window,
 ): Promise<MetricsSummary> {
   const eventFilter = eventWindowFilter(window);
@@ -109,15 +91,81 @@ async function computeLiveMetricsUncached(
 
   let amountAtRisk = 0;
   let amountRecovered = 0;
+
+  const [allLedgerEntries, recoveredLedgerEntries] = await Promise.all([
+    prisma.ledgerEntry.findMany({
+      where: eventFilter.occurredAt ? { createdAt: eventFilter.occurredAt } : {},
+      select: { entityId: true, type: true, amount: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.ledgerEntry.findMany({
+      where: {
+        type: "RECOVERED",
+        ...(eventFilter.occurredAt ? { createdAt: eventFilter.occurredAt } : {}),
+      },
+      select: { entityId: true, eventId: true, createdAt: true },
+    }),
+  ]);
+
+  // Aggregate distinct entity amounts to guarantee zero double counting
+  const distinctAtRisk = new Map<string, number>();
+  const distinctRecovered = new Map<string, number>();
+  let reversedSum = 0;
+
+  if (allLedgerEntries && allLedgerEntries.length > 0) {
+    for (const entry of allLedgerEntries) {
+      if (entry.type === "AT_RISK") {
+        if (!distinctAtRisk.has(entry.entityId)) {
+          distinctAtRisk.set(entry.entityId, entry.amount);
+        }
+      } else if (entry.type === "RECOVERED") {
+        if (!distinctRecovered.has(entry.entityId)) {
+          distinctRecovered.set(entry.entityId, entry.amount);
+        }
+      } else if (entry.type === "REVERSED") {
+        reversedSum += entry.amount;
+      }
+    }
+  } else {
+    for (const ev of events) {
+      const k = ev.entityId || ev.id;
+      if (!distinctAtRisk.has(k)) {
+        distinctAtRisk.set(k, ev.amount);
+      }
+      if (ev.auditEntries.some((a) => a.outcome === "recovered") && !distinctRecovered.has(k)) {
+        distinctRecovered.set(k, ev.amount);
+      }
+    }
+  }
+
+  const atRiskSum = Array.from(distinctAtRisk.values()).reduce((a, b) => a + b, 0);
+  const recoveredSum = Array.from(distinctRecovered.values()).reduce((a, b) => a + b, 0);
+
+  amountAtRisk = atRiskSum;
+  amountRecovered = Math.max(0, recoveredSum - reversedSum);
+
+  const recoveredEntityIds = new Set<string>(
+    recoveredLedgerEntries.map((l) => l.entityId),
+  );
+  const recoveredEventIds = new Set<string>(
+    recoveredLedgerEntries.map((l) => l.eventId),
+  );
+
+  const recoveryTimestampMap = new Map<string, Date>();
+  for (const l of recoveredLedgerEntries) {
+    recoveryTimestampMap.set(l.entityId, l.createdAt);
+  }
+
   const causeMap: Record<
     string,
     { count: number; amountAtRisk: number; amountRecovered: number }
   > = {};
   const recoveryTimesMs: number[] = [];
+  const accountedAtRiskEntities = new Set<string>();
+  const accountedRecoveredEntities = new Set<string>();
 
   for (const event of events) {
-    amountAtRisk += event.amount;
-
+    const entityKey = event.entityId || event.id;
     const causeLabel = event.diagnosis?.causeLabel ?? "unknown";
     if (!causeMap[causeLabel]) {
       causeMap[causeLabel] = {
@@ -127,55 +175,77 @@ async function computeLiveMetricsUncached(
       };
     }
     causeMap[causeLabel].count += 1;
-    causeMap[causeLabel].amountAtRisk += event.amount;
 
-    // Check if this event was recovered via audit trail
-    const latestAudit = event.auditEntries.sort(
-      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
-    )[0];
+    // Attribute at-risk amount once per entity
+    if (!accountedAtRiskEntities.has(entityKey)) {
+      accountedAtRiskEntities.add(entityKey);
+      causeMap[causeLabel].amountAtRisk += event.amount;
+    }
 
-    if (latestAudit?.outcome === "recovered") {
-      amountRecovered += event.amount;
-      causeMap[causeLabel].amountRecovered += event.amount;
+    const isRecovered =
+      recoveredEventIds.has(event.id) ||
+      recoveredEntityIds.has(entityKey) ||
+      event.auditEntries.some((a) => a.outcome === "recovered");
 
-      // Time-to-recovery: Action.executedAt - RevenueEvent.occurredAt
-      if (event.action?.executedAt) {
-        recoveryTimesMs.push(
-          event.action.executedAt.getTime() - event.occurredAt.getTime(),
-        );
+    if (isRecovered) {
+      if (!accountedRecoveredEntities.has(entityKey)) {
+        accountedRecoveredEntities.add(entityKey);
+        causeMap[causeLabel].amountRecovered += event.amount;
+      }
+
+      const recoveryTime =
+        recoveryTimestampMap.get(entityKey) ??
+        event.auditEntries.find((a) => a.outcome === "recovered")?.timestamp ??
+        event.action?.executedAt;
+
+      if (recoveryTime) {
+        const elapsedMs = Math.max(0, recoveryTime.getTime() - event.occurredAt.getTime());
+        recoveryTimesMs.push(elapsedMs);
       }
     }
   }
 
   const channelMap: Record<
     "razorpay" | "email" | "human",
-    { count: number; recoveredAmount: number }
+    { count: number; recoveredCount: number; recoveredAmount: number }
   > = {
-    razorpay: { count: 0, recoveredAmount: 0 },
-    email: { count: 0, recoveredAmount: 0 },
-    human: { count: 0, recoveredAmount: 0 },
+    razorpay: { count: 0, recoveredCount: 0, recoveredAmount: 0 },
+    email: { count: 0, recoveredCount: 0, recoveredAmount: 0 },
+    human: { count: 0, recoveredCount: 0, recoveredAmount: 0 },
   };
 
+  const accountedChannelRecovered = new Set<string>();
+
   for (const event of events) {
-    const integration = event.action?.integration;
-    if (!integration) continue;
-    const keyLower = integration.toLowerCase();
-    const normKey: "razorpay" | "email" | "human" =
-      keyLower === "razorpay"
-        ? "razorpay"
-        : keyLower === "email"
-          ? "email"
-          : "human";
+    const entityKey = event.entityId || event.id;
+    const action = event.action;
+    if (!action || action.result === "skipped") continue;
+
+    let normKey: "razorpay" | "email" | "human" | null = null;
+    if (action.integration === "RAZORPAY") {
+      normKey = "razorpay";
+    } else if (action.integration === "EMAIL") {
+      normKey = "email";
+    } else if (action.actionType === "escalate_to_human") {
+      normKey = "human";
+    }
+
+    if (!normKey) continue;
+
     channelMap[normKey].count += 1;
-    const latestAudit = event.auditEntries.sort(
-      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
-    )[0];
-    if (latestAudit?.outcome === "recovered") {
+
+    const isRecovered =
+      recoveredEventIds.has(event.id) ||
+      recoveredEntityIds.has(entityKey) ||
+      event.auditEntries.some((a) => a.outcome === "recovered");
+
+    if (isRecovered && !accountedChannelRecovered.has(entityKey)) {
+      accountedChannelRecovered.add(entityKey);
+      channelMap[normKey].recoveredCount += 1;
       channelMap[normKey].recoveredAmount += event.amount;
     }
   }
 
-  // Compliance counters over the audit trail in this window
   const audits = await prisma.auditEntry.findMany({
     where: { event: eventFilter },
     select: { outcome: true, decisionSnapshot: true },
@@ -215,10 +285,11 @@ async function computeLiveMetricsUncached(
       ? Number((totalRecoveredRounded / totalAtRiskRounded).toFixed(4))
       : 0;
 
-  const medianMs = median(recoveryTimesMs);
-  const medianTimeToRecoveryHours = medianMs
-    ? Number((medianMs / (1000 * 60 * 60)).toFixed(2))
-    : 0;
+  const medianMs = recoveryTimesMs.length > 0 ? median(recoveryTimesMs) : null;
+  const medianTimeToRecoveryHours =
+    medianMs !== null && totalRecoveredRounded > 0
+      ? Number((medianMs / (1000 * 60 * 60)).toFixed(2))
+      : null;
 
   return {
     window,
@@ -237,6 +308,7 @@ async function computeLiveMetricsUncached(
     byChannel: (["razorpay", "email", "human"] as const).map((channel) => ({
       channel,
       count: channelMap[channel].count,
+      recoveredCount: channelMap[channel].recoveredCount,
       recoveredAmount: Number(
         channelMap[channel].recoveredAmount.toFixed(2),
       ),
@@ -246,10 +318,6 @@ async function computeLiveMetricsUncached(
   };
 }
 
-/**
- * Full live metrics summary for the given rolling window, cached briefly in
- * Redis so dashboard polling stays responsive.
- */
 export async function computeLiveMetrics(
   window: Window,
 ): Promise<MetricsSummary> {
@@ -277,9 +345,6 @@ export async function computeLiveMetrics(
   return summary;
 }
 
-/**
- * Buckets the same aggregation over time for the Metrics page trend chart.
- */
 export async function metricsTrend(
   window: Window,
   bucket: "hour" | "day",
@@ -289,6 +354,7 @@ export async function metricsTrend(
   const events = await prisma.revenueEvent.findMany({
     where: eventFilter,
     select: {
+      entityId: true,
       occurredAt: true,
       amount: true,
       auditEntries: { select: { outcome: true } },
@@ -297,6 +363,8 @@ export async function metricsTrend(
   });
 
   const buckets = new Map<number, TrendPoint>();
+  const recoveredInBucket = new Map<number, Set<string>>();
+
   for (const event of events) {
     const date = new Date(event.occurredAt);
     if (bucket === "hour") {
@@ -311,11 +379,16 @@ export async function metricsTrend(
         eventsProcessed: 0,
         amountRecovered: 0,
       });
+      recoveredInBucket.set(key, new Set<string>());
     }
     const point = buckets.get(key)!;
     point.eventsProcessed += 1;
     if (event.auditEntries.some((a) => a.outcome === "recovered")) {
-      point.amountRecovered += event.amount;
+      const recSet = recoveredInBucket.get(key)!;
+      if (!recSet.has(event.entityId)) {
+        recSet.add(event.entityId);
+        point.amountRecovered += event.amount;
+      }
     }
   }
 

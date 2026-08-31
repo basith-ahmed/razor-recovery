@@ -7,7 +7,9 @@ export type SyntheticFailureType =
   | "payment_failed"
   | "checkout_abandoned"
   | "invoice_overdue"
-  | "subscription_failed";
+  | "subscription_failed"
+  | "mandate_retryable_failure"
+  | "mandate_halted";
 
 export class SimulatorError extends Error {
   constructor(message: string) {
@@ -70,11 +72,11 @@ export async function injectFailure(
 
   const id = crypto.randomUUID();
   const occurredAt = new Date();
-  let entityType: EntityType;
-  let entityId: string;
-  let amount: number;
-  let eventType: EventType;
-  let payload: Record<string, unknown>;
+  let entityType: EntityType = "INVOICE";
+  let entityId: string = "";
+  let amount: number = 0;
+  let eventType: EventType = "PAYMENT_FAILED";
+  let payload: Record<string, unknown> = {};
   let razorpayPaymentId: string | undefined;
   let razorpayOrderId: string | undefined;
   let errorCode: string | undefined;
@@ -179,7 +181,7 @@ export async function injectFailure(
       due_date: invoice.dueDate.toISOString(),
       dispute_flag: invoice.disputeFlag,
     };
-  } else {
+  } else if (type === "subscription_failed" || type === "mandate_retryable_failure" || type === "mandate_halted") {
     const subscription = await prisma.subscription.findFirst({
       where: { customerId, status: "active" },
       orderBy: { nextBillDate: "asc" },
@@ -192,13 +194,50 @@ export async function injectFailure(
     entityId = subscription.id;
     amount = subscription.mrr;
     eventType = "SUBSCRIPTION_FAILED";
-    payload = {
-      simulator: true,
-      event: "subscription.payment_failed",
-      subscription_id: subscription.id,
-      razorpay_subscription_id: subscription.razorpaySubscriptionId,
-      next_bill_date: subscription.nextBillDate.toISOString(),
-    };
+
+    const umn = `rzp.${subscription.id.replace(/-/g, "").slice(0, 16)}@bankpsp`;
+
+    if (type === "mandate_halted") {
+      // Deterministic: mandate halted / cancelled / revoked → mandate_requires_reauthorization
+      errorCode = "BAD_REQUEST_ERROR";
+      errorReason = "mandate_cancelled";
+      payload = {
+        simulator: true,
+        event: "subscription.halted",
+        subscription_id: subscription.id,
+        razorpay_subscription_id: subscription.razorpaySubscriptionId,
+        umn,
+        next_bill_date: subscription.nextBillDate.toISOString(),
+        subscription_status: "halted",
+        mandate_status: "cancelled",
+        daysOverdue: 5,
+      };
+    } else if (type === "mandate_retryable_failure") {
+      // Deterministic: mandate pending with transient bank error → mandate_execution_failed_retryable
+      errorCode = "GATEWAY_ERROR";
+      errorReason = "mandate_debit_failed";
+      payload = {
+        simulator: true,
+        event: "subscription.pending",
+        subscription_id: subscription.id,
+        razorpay_subscription_id: subscription.razorpaySubscriptionId,
+        umn,
+        next_bill_date: subscription.nextBillDate.toISOString(),
+        subscription_status: "pending",
+        mandate_status: "initiated",
+        daysOverdue: 2,
+      };
+    } else {
+      // Generic subscription_failed: no mandate metadata, falls to LLM
+      payload = {
+        simulator: true,
+        event: "subscription.payment_failed",
+        subscription_id: subscription.id,
+        razorpay_subscription_id: subscription.razorpaySubscriptionId,
+        umn,
+        next_bill_date: subscription.nextBillDate.toISOString(),
+      };
+    }
   }
 
   return toRawEvent({

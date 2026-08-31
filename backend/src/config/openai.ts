@@ -111,3 +111,38 @@ export async function requestJson(request: JsonRequest, retries = 3): Promise<st
   }
   throw new Error("LLM request failed after retries.");
 }
+
+/**
+ * Requests plain prose text from the LLM without JSON constraints.
+ * Retries 429s with linear backoff.
+ */
+export async function requestText(
+  request: { instructions: string; input: string },
+  retries = 3,
+): Promise<string> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await openai.chat.completions.create({
+        model: env.LLM_MODEL,
+        messages: [
+          { role: "system", content: request.instructions },
+          { role: "user", content: request.input },
+        ],
+      });
+
+      const content = response.choices[0]?.message.content;
+      if (typeof content !== "string") {
+        throw new Error("LLM returned no text content.");
+      }
+      return content.trim();
+    } catch (err: unknown) {
+      if (isRateLimited(err) && attempt < retries) {
+        console.warn(`[LLM] Rate limited (429). Retrying attempt ${attempt}/${retries} after delay...`);
+        await sleep(2000 * attempt);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("LLM request failed after retries.");
+}

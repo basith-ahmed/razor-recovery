@@ -11,17 +11,15 @@ import { LiveActivityFeed } from "../components/LiveActivityFeed";
 import { FunnelChart } from "../components/FunnelChart";
 import { CauseChannelCharts } from "../components/CauseChannelCharts";
 import { ComplianceStrip } from "../components/ComplianceStrip";
+import { PageHeader } from "../components/PageHeader";
 
 export default function OverviewPage() {
   const [window, setWindow] = useState<MetricsWindow>("24h");
   const [initialMetrics, setInitialMetrics] = useState<MetricsSummary | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  // Live global channel: activity feed always shows the latest events,
-  // regardless of the selected metrics window.
   const { activityFeed, incomingEvents, metrics: socketMetrics } = useLiveStream();
 
-  // Fetch windowed summary on mount and whenever the window changes
   useEffect(() => {
     let ignore = false;
     getMetricsSummary(window)
@@ -42,36 +40,42 @@ export default function OverviewPage() {
     };
   }, [window]);
 
-  // Prefer live WS updates only when they match the selected window
   const effectiveMetrics =
     socketMetrics?.window === window ? socketMetrics : initialMetrics;
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Overview & Operations Center</h1>
-          <p className="text-sm text-slate-400">
-            Monitor real-time revenue failure detection, AI diagnosis, and autonomous dunning workflows.
-          </p>
-        </div>
-        <WindowSelector value={window} onChange={setWindow} />
-      </div>
+      {/* Page header with window selector as action */}
+      <PageHeader
+        title="Overview & Operations Center"
+        description="Monitor real-time revenue failure detection, AI diagnosis, and autonomous dunning workflows."
+        actions={<WindowSelector value={window} onChange={setWindow} />}
+      />
 
-      <IncomingEventFeed items={incomingEvents} />
-
+      {/* Row 1: Key metrics — always full width, highest priority */}
       <HeroMetrics metrics={effectiveMetrics} />
 
-      <LiveActivityFeed items={activityFeed} />
+      {/* Row 2: Live feeds — side by side so operators see both streams simultaneously */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <IncomingEventFeed items={incomingEvents} />
+        <LiveActivityFeed items={activityFeed} />
+      </div>
 
-      <FunnelChart data={effectiveMetrics?.funnel} />
+      {/* Row 3: Conversion funnel (2/3) + Compliance guardrails (1/3) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <div className="lg:col-span-2">
+          <FunnelChart data={effectiveMetrics?.funnel} />
+        </div>
+        <div className="lg:col-span-1">
+          <ComplianceStrip compliance={effectiveMetrics?.compliance} />
+        </div>
+      </div>
 
+      {/* Row 4: Cause & channel breakdown — already a 2-col grid internally */}
       <CauseChannelCharts
         byCause={effectiveMetrics?.byCause}
         byChannel={effectiveMetrics?.byChannel}
       />
-
-      <ComplianceStrip compliance={effectiveMetrics?.compliance} />
     </div>
   );
 }
