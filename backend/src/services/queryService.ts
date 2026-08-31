@@ -129,7 +129,7 @@ export async function queryAuditTrail(params: AuditQueryParams): Promise<AuditQu
     }
     if (specificTicket) {
       entityContextParts.push(
-        `Associated Ticket: ID ${specificTicket.id}, Status: ${specificTicket.status}, Priority: ${specificTicket.priority}, Reason: ${specificTicket.reason}`
+        `Associated Ticket: ID ${specificTicket.id}, Status: ${specificTicket.status}, Reason: ${specificTicket.reason}`
       );
     }
     if (specificPromise) {
@@ -179,7 +179,7 @@ Respond concisely (2-4 sentences).`;
     const ticketsData = recentTickets
       .map(
         (t) =>
-          `[entity:${t.entityId}] Ticket ID: ${t.id}, Status: ${t.status}, Priority: ${t.priority}, Reason: ${t.reason}, Notes Count: ${t.notes.length}, Created: ${t.createdAt.toISOString()}`
+          `[entity:${t.entityId}] Ticket ID: ${t.id}, Status: ${t.status}, Reason: ${t.reason}, Notes Count: ${t.notes.length}, Created: ${t.createdAt.toISOString()}`
       )
       .join("\n");
 

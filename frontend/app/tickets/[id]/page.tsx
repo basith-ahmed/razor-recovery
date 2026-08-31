@@ -4,7 +4,7 @@ import { use, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { getTicket, addTicketNote, resolveTicket, sendTicketEmail } from "../../../lib/api";
 import { TicketDetailResponse } from "../../../types";
-import { formatCurrency, formatDateTime } from "../../../lib/formatters";
+import { formatCurrency, formatDateTime, formatCauseLabel } from "../../../lib/formatters";
 import { Badge } from "../../../components/Badge";
 import { TicketEmailModal } from "../../../components/TicketEmailModal";
 import { ArrowRight } from "lucide-react";
@@ -151,15 +151,19 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
                 <div className="flex items-center gap-2.5 mb-2 flex-wrap">
                   <h1 className="text-xl font-bold text-ink tracking-[-0.625px]">{customerName}</h1>
                   <Badge type="ticketStatus" value={detail.ticket.status} />
-                  <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border uppercase ${
-                    detail.ticket.priority === "high"
-                      ? "bg-accent-orange/10 border-accent-orange/25 text-accent-orange-deep"
-                      : detail.ticket.priority === "medium"
-                      ? "bg-accent-orange/10 border-accent-orange/20 text-accent-orange"
-                      : "bg-canvas-soft border-hairline text-ink-muted"
-                  }`}>
-                    {detail.ticket.priority} priority
-                  </span>
+                  {/* <Badge
+                    type="riskTier"
+                    value={
+                      detail.customer?.riskTier ||
+                      (detail.event?.riskScore !== null && detail.event?.riskScore !== undefined
+                        ? detail.event.riskScore > 0.7
+                          ? "high"
+                          : detail.event.riskScore > 0.4
+                          ? "standard"
+                          : "low"
+                        : "standard")
+                    }
+                  /> */}
                 </div>
                 <div className="text-xs text-ink-muted space-y-0.5">
                   {detail.customer?.email && <div className="text-ink font-medium">{detail.customer.email}</div>}
@@ -239,7 +243,9 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
                     </div>
                     <div>
                       <span className="text-ink-muted">Failure Cause: </span>
-                      <span className="text-ink-secondary font-medium">{detail.event.causeLabel || "N/A"}</span>
+                      <span className="text-ink-secondary font-medium">
+                        {formatCauseLabel(detail.event.causeLabel)}
+                      </span>
                     </div>
                     <div>
                       <span className="text-ink-muted">Error Reason: </span>
@@ -379,13 +385,20 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
                     <Badge type="ticketStatus" value={detail.ticket.status} />
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-ink-muted">Priority</span>
-                    <span className={`font-semibold uppercase text-[11px] ${
-                      detail.ticket.priority === "high" ? "text-accent-orange" :
-                      detail.ticket.priority === "medium" ? "text-accent-orange" : "text-ink-muted"
-                    }`}>
-                      {detail.ticket.priority}
-                    </span>
+                    <span className="text-ink-muted">Risk Tier</span>
+                    <Badge
+                      type="riskTier"
+                      value={
+                        detail.customer?.riskTier ||
+                        (detail.event?.riskScore !== null && detail.event?.riskScore !== undefined
+                          ? detail.event.riskScore > 0.7
+                            ? "high"
+                            : detail.event.riskScore > 0.4
+                            ? "standard"
+                            : "low"
+                          : "standard")
+                      }
+                    />
                   </div>
                   {detail.ticket.assignedTo && (
                     <div className="flex justify-between items-center">

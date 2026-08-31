@@ -17,6 +17,7 @@
     "reset": "npm run clean && npm run seed",
     "test:webhook": "tsx src/scripts/simulateWebhookPayment.ts",
     "test:promise-payment": "tsx src/scripts/simulatePromisePayment.ts",
+    "pay:ticket": "tsx src/scripts/sendPaymentForTicket.ts",
     "migrate": "prisma migrate dev",
     "generate": "prisma generate",
     "studio": "prisma studio",

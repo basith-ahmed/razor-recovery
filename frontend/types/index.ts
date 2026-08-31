@@ -267,7 +267,6 @@ export interface TicketItem {
   entityId: string;
   reason: string;
   status: "open" | "recovered" | "written_off" | "resolved" | "closed";
-  priority: "high" | "medium" | "low";
   assignedTo?: string | null;
   resolutionNotes?: string | null;
   resolvedAt?: string | null;
@@ -302,7 +301,6 @@ export interface TicketDetailResponse {
     entityId: string;
     reason: string;
     status: string;
-    priority: string;
     assignedTo: string | null;
     resolutionNotes: string | null;
     resolvedAt: string | null;

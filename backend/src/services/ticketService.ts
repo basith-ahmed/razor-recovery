@@ -48,14 +48,20 @@ export async function listTickets(params: ListTicketsParams = {}) {
 
   const entityIds = tickets.map((t) => t.entityId);
 
-  const revenueEvents = await prisma.revenueEvent.findMany({
-    where: { entityId: { in: entityIds } },
-    orderBy: { occurredAt: "desc" },
-    include: {
-      customer: true,
-      diagnosis: true,
-    },
-  });
+  const [revenueEvents, workflowStates] = await Promise.all([
+    prisma.revenueEvent.findMany({
+      where: { entityId: { in: entityIds } },
+      orderBy: { occurredAt: "desc" },
+      include: {
+        customer: true,
+        diagnosis: true,
+      },
+    }),
+    prisma.entityWorkflowState.findMany({
+      where: { entityId: { in: entityIds } },
+      include: { customer: true },
+    }),
+  ]);
 
   const eventByEntity = new Map<string, (typeof revenueEvents)[0]>();
   for (const ev of revenueEvents) {
@@ -64,28 +70,36 @@ export async function listTickets(params: ListTicketsParams = {}) {
     }
   }
 
+  const workflowByEntity = new Map<string, (typeof workflowStates)[0]>();
+  for (const ws of workflowStates) {
+    if (!workflowByEntity.has(ws.entityId)) {
+      workflowByEntity.set(ws.entityId, ws);
+    }
+  }
+
   let items: TicketSummaryDto[] = tickets.map((t) => {
     const ev = eventByEntity.get(t.entityId);
+    const ws = workflowByEntity.get(t.entityId);
+    const cust = ev?.customer || ws?.customer;
     return {
       id: t.id,
       entityId: t.entityId,
       reason: t.reason,
       status: t.status,
-      priority: t.priority,
       assignedTo: t.assignedTo,
       resolutionNotes: t.resolutionNotes,
       resolvedAt: t.resolvedAt?.toISOString() ?? null,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
-      customer: ev?.customer
+      customer: cust
         ? {
-            id: ev.customer.id,
-            name: ev.customer.name,
-            email: ev.customer.email,
-            phone: ev.customer.phone,
-            riskTier: ev.customer.riskTier,
-            lifetimeValue: ev.customer.lifetimeValue,
-            dncFlag: ev.customer.dncFlag,
+            id: cust.id,
+            name: cust.name,
+            email: cust.email,
+            phone: cust.phone,
+            riskTier: cust.riskTier,
+            lifetimeValue: cust.lifetimeValue,
+            dncFlag: cust.dncFlag,
           }
         : null,
       event: ev
@@ -207,7 +221,30 @@ export async function getTicketById(ticketId: string) {
       })),
     },
     customer: latestEvent?.customer ?? null,
-    event: latestEvent ?? null,
+    event: latestEvent
+      ? {
+          id: latestEvent.id,
+          entityId: latestEvent.entityId,
+          entityType: latestEvent.entityType,
+          customerId: latestEvent.customerId,
+          customerName: latestEvent.customer?.name ?? "Unknown",
+          customerEmail: latestEvent.customer?.email ?? "Unknown",
+          eventType: latestEvent.eventType,
+          amount: latestEvent.amount,
+          currency: latestEvent.currency,
+          errorReason: latestEvent.errorReason,
+          errorCode: latestEvent.errorCode,
+          causeLabel: latestEvent.diagnosis?.causeLabel ?? null,
+          diagnosis: latestEvent.diagnosis,
+          decision: latestEvent.decision,
+          action: latestEvent.action,
+          riskScore: latestEvent.riskScore,
+          urgency: latestEvent.urgency,
+          state: workflowState?.state ?? "ESCALATED",
+          stage: "EXECUTED",
+          occurredAt: latestEvent.occurredAt.toISOString(),
+        }
+      : null,
     workflowState: workflowState?.state ?? null,
     auditEntries,
   };

@@ -245,7 +245,6 @@ model Ticket {
   entityId        String
   reason          String
   status          String       @default("open") // "open" | "resolved" | "recovered" | "closed"
-  priority        String       @default("medium") // "high" | "medium" | "low"
   assignedTo      String?
   resolutionNotes String?
   resolvedAt      DateTime?

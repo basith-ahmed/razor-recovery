@@ -284,7 +284,6 @@ export interface TicketSummaryDto {
   entityId: string;
   reason: string;
   status: string;
-  priority: string;
   assignedTo: string | null;
   resolutionNotes: string | null;
   resolvedAt: string | null;

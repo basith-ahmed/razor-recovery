@@ -65,26 +65,36 @@ export default function TicketsPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
-          <div className="text-xs text-ink-muted font-medium">Open Escalations</div>
-          <div className="text-2xl font-bold text-ink mt-1 tracking-heading-3">{stats?.openCount ?? 0}</div>
+          <div className="text-xs text-ink-muted font-medium">
+            Open Escalations
+          </div>
+          <div className="text-2xl font-bold text-ink mt-1 tracking-heading-3">
+            {stats?.openCount ?? 0}
+          </div>
         </div>
 
         <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
-          <div className="text-xs text-ink-muted font-medium">Amount Under Escalation</div>
+          <div className="text-xs text-ink-muted font-medium">
+            Amount Under Escalation
+          </div>
           <div className="text-2xl font-bold text-ink mt-1 tracking-heading-3">
             {formatCurrency(stats?.totalAtRisk ?? 0)}
           </div>
         </div>
 
         <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
-          <div className="text-xs text-ink-muted font-medium">Recovered by Agents</div>
+          <div className="text-xs text-ink-muted font-medium">
+            Recovered by Agents
+          </div>
           <div className="text-2xl font-bold text-accent-green mt-1 tracking-heading-3">
             {formatCurrency(stats?.totalRecovered ?? 0)}
           </div>
         </div>
 
         <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
-          <div className="text-xs text-ink-muted font-medium">Written Off Cases</div>
+          <div className="text-xs text-ink-muted font-medium">
+            Written Off Cases
+          </div>
           <div className="text-2xl font-bold text-accent-orange-deep mt-1 tracking-heading-3">
             {stats?.writtenOffCount ?? stats?.resolvedCount ?? 0}
           </div>
@@ -119,7 +129,10 @@ export default function TicketsPage() {
             ))}
           </div>
 
-          <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
+          <form
+            onSubmit={handleSearchSubmit}
+            className="flex items-center gap-2"
+          >
             <input
               type="text"
               placeholder="Search by ID, reason, notes..."
@@ -141,10 +154,10 @@ export default function TicketsPage() {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-canvas-soft text-ink-muted border-b border-hairline text-[11px] font-semibold uppercase tracking-eyebrow">
-                <th className="py-2.5 px-3">Ticket ID</th>
+                <th className="py-2.5 px-3">Customer ID</th>
                 <th className="py-2.5 px-3">Entity ID</th>
                 <th className="py-2.5 px-3">Reason</th>
-                <th className="py-2.5 px-3">Priority</th>
+                <th className="py-2.5 px-3">Risk Tier</th>
                 <th className="py-2.5 px-3">Status</th>
                 <th className="py-2.5 px-3">Notes</th>
                 <th className="py-2.5 px-3">Created</th>
@@ -170,27 +183,31 @@ export default function TicketsPage() {
                     onClick={() => router.push(`/tickets/${t.id}`)}
                     className="hover:bg-canvas-soft cursor-pointer transition-colors"
                   >
-                    <td className="py-2.5 px-3 font-semibold text-primary">
-                      {t.id.slice(0, 8)}...
+                    <td
+                      className="py-2.5 px-3 font-semibold text-primary"
+                      title={t.customer?.id || ""}
+                    >
+                      {t.customer?.name ? t.customer.name : "—"}
                     </td>
-                    <td className="py-2.5 px-3 text-ink-muted">
-                      {t.entityId}
-                    </td>
+                    <td className="py-2.5 px-3 text-ink-muted">{t.entityId}</td>
                     <td className="py-2.5 px-3 text-ink font-medium max-w-xs truncate">
                       {t.reason}
                     </td>
                     <td className="py-2.5 px-3">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
-                          t.priority === "high"
-                            ? "bg-accent-orange/10 text-accent-orange-deep border border-accent-orange/25"
-                            : t.priority === "medium"
-                            ? "bg-accent-orange/10 text-accent-orange border border-accent-orange/25"
-                            : "bg-canvas-soft text-ink-muted border border-hairline"
-                        }`}
-                      >
-                        {t.priority}
-                      </span>
+                      <Badge
+                        type="riskTier"
+                        value={
+                          t.customer?.riskTier ||
+                          (t.event?.riskScore !== null &&
+                          t.event?.riskScore !== undefined
+                            ? t.event.riskScore > 0.7
+                              ? "high"
+                              : t.event.riskScore > 0.4
+                                ? "standard"
+                                : "low"
+                            : "standard")
+                        }
+                      />
                     </td>
                     <td className="py-2.5 px-3">
                       <Badge type="ticketStatus" value={t.status} />

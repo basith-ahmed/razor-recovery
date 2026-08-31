@@ -52,7 +52,8 @@ export async function processRazorpayPaymentWebhook(payload: Record<string, any>
   const notes = (paymentEntity?.notes || linkEntity?.notes || {}) as Record<string, unknown>;
   const notesEntityId = (notes.entity_id || notes.entityId) as string | undefined;
   const notesEventId = (notes.event_id || notes.eventId) as string | undefined;
-  const notesPromiseId = notes.promise_id as string | undefined;
+  const notesPromiseId = (notes.promise_id || notes.promiseId) as string | undefined;
+  const notesTicketId = (notes.ticket_id || notes.ticketId) as string | undefined;
 
   // 1. Check if an Action record matches this payment link or event
   const conds: Prisma.ActionWhereInput[] = [];
@@ -142,6 +143,36 @@ export async function processRazorpayPaymentWebhook(payload: Record<string, any>
           status: "kept",
         },
       });
+
+      // Auto-resolve any open tickets for this entity or specified ticketId
+      const openTickets = await tx.ticket.findMany({
+        where: {
+          OR: [
+            { entityId: event.entityId, status: "open" },
+            ...(notesTicketId ? [{ id: notesTicketId, status: "open" }] : []),
+          ],
+        },
+      });
+
+      for (const t of openTickets) {
+        await tx.ticket.update({
+          where: { id: t.id },
+          data: {
+            status: "recovered",
+            resolvedAt: new Date(),
+            resolutionNotes: `Auto-resolved by Razorpay payment webhook (${paymentId || "captured"}).`,
+          },
+        });
+
+        await tx.ticketNote.create({
+          data: {
+            ticketId: t.id,
+            author: "System / Webhook",
+            content: `Payment received of ₹${event.amount}. Ticket automatically marked RECOVERED.`,
+            type: "status_change",
+          },
+        });
+      }
 
       const recoveryAction = {
         actionType: "webhook_capture",

@@ -33,6 +33,7 @@ export const ACTION_RESULT_BADGE_STYLES: Record<string, string> = {
 export const RISK_TIER_BADGE_STYLES: Record<string, string> = {
   HIGH: "bg-accent-orange/15 text-accent-orange-deep border-accent-orange/30",
   MEDIUM: "bg-accent-orange/10 text-accent-orange border-accent-orange/20",
+  STANDARD: "bg-accent-sky/15 text-primary border-accent-sky/30",
   LOW: "bg-accent-green/10 text-accent-green border-accent-green/25",
 };
 

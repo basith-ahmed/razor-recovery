@@ -20,6 +20,13 @@ const mockTx = {
     findFirst: jest.fn().mockResolvedValue(null),
     update: jest.fn().mockResolvedValue({}),
   },
+  ticket: {
+    findMany: jest.fn().mockResolvedValue([]),
+    update: jest.fn().mockResolvedValue({}),
+  },
+  ticketNote: {
+    create: jest.fn().mockResolvedValue({}),
+  },
   auditChainHead: {
     findUnique: jest.fn().mockResolvedValue({ id: 1, hash: "head-hash" }),
     update: jest.fn(),

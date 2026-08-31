@@ -55,7 +55,7 @@ const ALLOWED_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
     "WRITTEN_OFF",
     "DO_NOT_CONTACT",
   ],
-  ESCALATED: ["RECOVERED", "WRITTEN_OFF"],
+  ESCALATED: ["ESCALATED", "RECOVERED", "WRITTEN_OFF"],
   RECOVERED: [],
   WRITTEN_OFF: [],
   DO_NOT_CONTACT: [],
@@ -65,6 +65,9 @@ export function canTransition(
   from: WorkflowState,
   to: WorkflowState
 ): boolean {
+  if (from === to && from !== "RECOVERED" && from !== "WRITTEN_OFF" && from !== "DO_NOT_CONTACT") {
+    return true;
+  }
   return ALLOWED_TRANSITIONS[from].includes(to);
 }
 
@@ -74,7 +77,7 @@ export function canTransition(
  * new event on a terminal-state entity as beginning again from DETECTED.
  */
 export function isTerminal(state: WorkflowState): boolean {
-  return ALLOWED_TRANSITIONS[state].length === 0;
+  return state === "RECOVERED" || state === "WRITTEN_OFF" || state === "DO_NOT_CONTACT";
 }
 
 /**
@@ -86,6 +89,10 @@ export function nextState(
   actionOutcome: string
 ): WorkflowState {
   const target = outcomeToState(actionOutcome);
+
+  if (current === target) {
+    return target;
+  }
 
   if (!canTransition(current, target)) {
     throw new Error(

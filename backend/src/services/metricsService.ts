@@ -92,11 +92,11 @@ export async function computeLiveMetricsUncached(
   let amountAtRisk = 0;
   let amountRecovered = 0;
 
-  const [ledgerAgg, recoveredLedgerEntries] = await Promise.all([
-    prisma.ledgerEntry.groupBy({
-      by: ["type"],
+  const [allLedgerEntries, recoveredLedgerEntries] = await Promise.all([
+    prisma.ledgerEntry.findMany({
       where: eventFilter.occurredAt ? { createdAt: eventFilter.occurredAt } : {},
-      _sum: { amount: true },
+      select: { entityId: true, type: true, amount: true },
+      orderBy: { createdAt: "desc" },
     }),
     prisma.ledgerEntry.findMany({
       where: {
@@ -107,9 +107,39 @@ export async function computeLiveMetricsUncached(
     }),
   ]);
 
-  const atRiskSum = ledgerAgg.find(g => g.type === "AT_RISK")?._sum.amount ?? 0;
-  const recoveredSum = ledgerAgg.find(g => g.type === "RECOVERED")?._sum.amount ?? 0;
-  const reversedSum = ledgerAgg.find(g => g.type === "REVERSED")?._sum.amount ?? 0;
+  // Aggregate distinct entity amounts to guarantee zero double counting
+  const distinctAtRisk = new Map<string, number>();
+  const distinctRecovered = new Map<string, number>();
+  let reversedSum = 0;
+
+  if (allLedgerEntries && allLedgerEntries.length > 0) {
+    for (const entry of allLedgerEntries) {
+      if (entry.type === "AT_RISK") {
+        if (!distinctAtRisk.has(entry.entityId)) {
+          distinctAtRisk.set(entry.entityId, entry.amount);
+        }
+      } else if (entry.type === "RECOVERED") {
+        if (!distinctRecovered.has(entry.entityId)) {
+          distinctRecovered.set(entry.entityId, entry.amount);
+        }
+      } else if (entry.type === "REVERSED") {
+        reversedSum += entry.amount;
+      }
+    }
+  } else {
+    for (const ev of events) {
+      const k = ev.entityId || ev.id;
+      if (!distinctAtRisk.has(k)) {
+        distinctAtRisk.set(k, ev.amount);
+      }
+      if (ev.auditEntries.some((a) => a.outcome === "recovered") && !distinctRecovered.has(k)) {
+        distinctRecovered.set(k, ev.amount);
+      }
+    }
+  }
+
+  const atRiskSum = Array.from(distinctAtRisk.values()).reduce((a, b) => a + b, 0);
+  const recoveredSum = Array.from(distinctRecovered.values()).reduce((a, b) => a + b, 0);
 
   amountAtRisk = atRiskSum;
   amountRecovered = Math.max(0, recoveredSum - reversedSum);

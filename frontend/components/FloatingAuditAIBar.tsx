@@ -245,7 +245,7 @@ export function FloatingAuditAIBar({
       {/* Floating Bottom Bar (Seamless Pill Style) */}
       <form
         onSubmit={handleSubmit}
-        className="bg-white/95 backdrop-blur-[8px] border border-hairline rounded-full p-1.5 pl-3 shadow-notion-elevated flex items-center gap-2.5 transition-all focus-within:border-primary/40 focus-within:shadow-md"
+        className="bg-white/55 backdrop-blur-[8px] border-2 border-hairline rounded-full p-1.5 pl-3 shadow-notion-elevated flex items-center gap-2.5 transition-all focus-within:border-primary/40 focus-within:shadow-md text-xs"
       >
 
         <input
@@ -256,14 +256,14 @@ export function FloatingAuditAIBar({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           placeholder={currentPlaceholder}
-          className="flex-1 text-xs bg-transparent border-0 outline-none text-ink placeholder:text-ink-faint focus:outline-none focus:ring-0 px-1 py-1"
+          className="flex-1 bg-transparent border-0 outline-none text-ink placeholder:text-ink-faint focus:outline-none focus:ring-0 px-1 py-1"
           disabled={loading}
         />
 
         <button
           type="submit"
           disabled={loading}
-          className="bg-primary hover:bg-primary-active active:scale-[0.98] disabled:opacity-50 text-white text-xs font-medium px-4 py-1.5 rounded-full shrink-0 shadow-sm transition-all h-9"
+          className="bg-primary hover:bg-primary-active active:scale-[0.98] disabled:opacity-50 text-white font-medium px-4 py-1.5 rounded-full shrink-0 shadow-sm transition-all h-9"
         >
           {loading ? "Thinking..." : "Ask AI"}
         </button>
