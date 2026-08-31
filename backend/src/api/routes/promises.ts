@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { listLookupCustomers } from "../../services/customerService";
+import { listLookupCustomers, listCustomerEntities } from "../../services/customerService";
 import {
   getPromise,
   getPromiseStats,
@@ -30,6 +30,17 @@ promisesRouter.get("/customers", async (_req: Request, res: Response) => {
     return res.status(200).json(customers);
   } catch (error) {
     return handleRouteError(res, error, "Failed to fetch customers list");
+  }
+});
+
+// GET /promises/customers/:customerId/entities
+promisesRouter.get("/customers/:customerId/entities", async (req: Request, res: Response) => {
+  try {
+    const customerId = String(req.params.customerId);
+    const entities = await listCustomerEntities(customerId);
+    return res.status(200).json(entities);
+  } catch (error) {
+    return handleRouteError(res, error, "Failed to fetch customer entities");
   }
 });
 

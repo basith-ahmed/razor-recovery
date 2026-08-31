@@ -7,6 +7,8 @@ import {
   buildPromiseReminderEmail,
 } from "../domain/emailTemplates";
 import { writeLedgerEntry } from "./ledgerService";
+import { writeChainedAuditEntry } from "./auditService";
+import { getOrCreatePaymentLink } from "./paymentLinkService";
 import {
   DomainError,
   FormattedPromiseToPay,
@@ -210,6 +212,8 @@ export async function createPromise(input: CreatePromiseInput): Promise<Formatte
     resolvedEntityId = `ptp_${crypto.randomUUID().slice(0, 8)}`;
   }
 
+  const dueDate = new Date(promisedDate);
+
   if (!eventId) {
     const newEvent = await prisma.revenueEvent.create({
       data: {
@@ -239,46 +243,67 @@ export async function createPromise(input: CreatePromiseInput): Promise<Formatte
       currency: "INR",
       referenceId: resolvedEntityId,
     });
+  }
 
-    await prisma.entityWorkflowState.upsert({
-      where: { entityId: resolvedEntityId },
-      create: {
-        entityId: resolvedEntityId,
-        customerId: customer.id,
-        state: "CONTACTED",
-        attemptCount: 1,
-        lastContactedAt: new Date(),
-      },
-      update: {
-        state: "CONTACTED",
-        lastContactedAt: new Date(),
-      },
-    });
+  // Set entity workflow state into COOLING_DOWN until the promised payment date
+  await prisma.entityWorkflowState.upsert({
+    where: { entityId: resolvedEntityId },
+    create: {
+      entityId: resolvedEntityId,
+      customerId: customer.id,
+      state: "COOLING_DOWN",
+      attemptCount: 1,
+      lastContactedAt: new Date(),
+      cooldownUntil: dueDate,
+    },
+    update: {
+      state: "COOLING_DOWN",
+      lastContactedAt: new Date(),
+      cooldownUntil: dueDate,
+    },
+  });
+
+  // Also set cause-level cooldowns to match promise due date
+  await prisma.entityCauseState.updateMany({
+    where: { entityId: resolvedEntityId },
+    data: {
+      cooldownUntil: dueDate,
+      lastContactedAt: new Date(),
+    },
+  });
+
+  // Record cryptographic audit entry for promise-to-pay conversion & cooldown
+  if (eventId) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        await writeChainedAuditEntry(tx, {
+          eventId: eventId!,
+          entityId: resolvedEntityId,
+          actor: "promise_service",
+          inputSnapshot: {
+            promiseToPay: true,
+            promisedAmount: numericAmount,
+            promisedDate: dueDate.toISOString(),
+            notes: notes || undefined,
+          },
+          actionSnapshot: {
+            actionType: "promise_to_pay_created",
+            result: "success",
+            detail: `Entity converted to Promise-to-Pay for ₹${numericAmount.toLocaleString("en-IN")} due by ${dueDate.toISOString().split("T")[0]}. Automated outreach in cooldown until promise date.`,
+          },
+          outcome: "pending",
+          timestamp: new Date(),
+        });
+      });
+    } catch (auditErr) {
+      console.warn("[promiseService] Could not write chained audit entry for promise:", auditErr);
+    }
   }
 
   let paymentLinkUrl: string | null = null;
   let paymentLinkId: string | null = null;
 
-  try {
-    const linkResult = await razorpayIntegration.createRecoveryPaymentLink({
-      amount: numericAmount,
-      currency: "INR",
-      customerName: customer.name,
-      customerEmail: customer.email,
-      customerPhone: customer.phone ?? undefined,
-      description: `Promise to Pay commitment — ${resolvedEntityId}`,
-      notify: false,
-      eventId: eventId ?? resolvedEntityId,
-      actionType: "promise_to_pay_link",
-    });
-    paymentLinkUrl = linkResult.paymentLinkShortUrl ?? null;
-    paymentLinkId = linkResult.razorpayPaymentLinkId ?? null;
-  } catch (linkErr) {
-    console.warn("[promiseService] Could not generate Razorpay payment link:", linkErr);
-  }
-
-  const dueDate = new Date(promisedDate);
-
+  // Create PtP record
   const record = await prisma.promiseToPay.create({
     data: {
       entityId: resolvedEntityId,
@@ -288,14 +313,37 @@ export async function createPromise(input: CreatePromiseInput): Promise<Formatte
       currency: "INR",
       promisedDate: dueDate,
       status: "pending",
-      razorpayPaymentLinkId: paymentLinkId,
-      paymentLinkUrl: paymentLinkUrl,
       notes: notes || undefined,
     },
-    include: {
-      customer: true,
-    },
+    include: { customer: true },
   });
+
+  try {
+    const link = await getOrCreatePaymentLink({
+      entityId: resolvedEntityId,
+      eventId: eventId ?? undefined,
+      promiseId: record.id,
+      amount: numericAmount,
+      currency: "INR",
+      customer: { name: customer.name, email: customer.email, phone: customer.phone },
+      description: `Promise to Pay commitment — ${resolvedEntityId}`,
+      notify: false,
+      actionType: "promise_to_pay_link",
+    });
+    paymentLinkUrl = link.paymentLinkUrl;
+    paymentLinkId = link.razorpayPaymentLinkId;
+
+    // Persist link back to the record
+    await prisma.promiseToPay.update({
+      where: { id: record.id },
+      data: {
+        razorpayPaymentLinkId: paymentLinkId,
+        paymentLinkUrl,
+      },
+    });
+  } catch (linkErr) {
+    console.warn("[promiseService] Could not generate Razorpay payment link:", linkErr);
+  }
 
   if (sendEmail) {
     try {
@@ -303,7 +351,7 @@ export async function createPromise(input: CreatePromiseInput): Promise<Formatte
         customerName: customer.name,
         amount: numericAmount,
         promisedDate: dueDate,
-        paymentUrl: paymentLinkUrl ?? undefined,
+        paymentLinkUrl: paymentLinkUrl ?? undefined,
       });
 
       await emailIntegration.sendRecoveryEmail({
@@ -335,7 +383,7 @@ export async function sendPromiseReminderEmail(id: string): Promise<FormattedPro
     customerName: promise.customer.name,
     amount: promise.promisedAmount,
     promisedDate: promise.promisedDate,
-    paymentUrl: promise.paymentLinkUrl ?? undefined,
+    paymentLinkUrl: promise.paymentLinkUrl ?? undefined,
   });
 
   await emailIntegration.sendRecoveryEmail({

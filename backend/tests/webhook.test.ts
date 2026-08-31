@@ -5,7 +5,7 @@ import { prisma } from "../src/config/prisma";
 import { env } from "../src/config/env";
 
 const mockTx = {
-  entityWorkflowState: { upsert: jest.fn() },
+  entityWorkflowState: { upsert: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
   auditEntry: { create: jest.fn().mockResolvedValue({ id: "audit-1" }) },
   diagnosis: { findUnique: jest.fn().mockResolvedValue(null) },
   decision: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -38,7 +38,7 @@ const mockTx = {
 jest.mock("../src/config/prisma", () => ({
   prisma: {
     $transaction: jest.fn(async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx)),
-    entityWorkflowState: { upsert: jest.fn() },
+    entityWorkflowState: { upsert: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
     action: { findFirst: jest.fn().mockResolvedValue(null) },
     revenueEvent: {
       findFirst: jest.fn().mockResolvedValue({

@@ -371,7 +371,7 @@ export async function scanAndProcessPromises(now: Date): Promise<void> {
       customerName: promise.customer.name,
       amount: promise.promisedAmount,
       promisedDate: promise.promisedDate,
-      paymentUrl: promise.paymentLinkUrl ?? undefined,
+      paymentLinkUrl: promise.paymentLinkUrl ?? undefined,
     });
 
     try {

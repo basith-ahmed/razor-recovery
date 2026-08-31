@@ -35,7 +35,7 @@ async function main(): Promise<void> {
     description: "RazorRecovery integration test payment link",
   });
 
-  console.log(`Payment link: ${paymentLink.paymentLinkShortUrl}`);
+  console.log(`Payment link: ${paymentLink.paymentLinkUrl}`);
 }
 
 main().catch((error: unknown) => {

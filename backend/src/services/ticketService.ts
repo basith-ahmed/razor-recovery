@@ -10,7 +10,7 @@ import {
   TicketDetailResponse,
 } from "../domain/types";
 import { writeLedgerEntry } from "./ledgerService";
-import { createRecoveryPaymentLink } from "../integrations/razorpayIntegration";
+import { getOrCreatePaymentLink } from "./paymentLinkService";
 import { sendRecoveryEmail } from "../integrations/emailIntegration";
 import { buildTicketOutreachEmail } from "../domain/emailTemplates";
 import { parsePagination, paginatedResponse } from "../utils/pagination";
@@ -293,21 +293,30 @@ export async function sendTicketEmail(
   }
 
   const customer = latestEvent.customer;
-  let paymentUrl: string | undefined;
+  let paymentLinkUrl: string | undefined;
 
   if (params.includePaymentLink) {
     try {
-      const linkResult = await createRecoveryPaymentLink({
+      const link = await getOrCreatePaymentLink({
+        entityId: ticket.entityId,
+        eventId: latestEvent.id,
+        ticketId,
         amount: latestEvent.amount,
         currency: latestEvent.currency,
-        customerName: customer.name,
-        customerEmail: customer.email,
-        customerPhone: customer.phone ?? undefined,
+        customer: { name: customer.name, email: customer.email, phone: customer.phone },
         description: `Human Escalation Recovery for ${latestEvent.entityId}`,
-        eventId: latestEvent.id,
         actionType: "human_email_outreach",
       });
-      paymentUrl = linkResult.paymentLinkShortUrl;
+      paymentLinkUrl = link.paymentLinkUrl;
+
+      // Persist payment link to Ticket so webhook can match deterministically
+      await prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          razorpayPaymentLinkId: link.razorpayPaymentLinkId,
+          paymentLinkUrl: link.paymentLinkUrl,
+        },
+      });
     } catch (err) {
       logError("ticketService", err);
     }
@@ -317,7 +326,7 @@ export async function sendTicketEmail(
     customerName: customer.name,
     message: params.message,
     amount: latestEvent.amount,
-    paymentUrl,
+    paymentLinkUrl,
   });
 
   await sendRecoveryEmail({
@@ -326,7 +335,7 @@ export async function sendTicketEmail(
     html: fullHtml,
   });
 
-  const noteContent = `[Email Sent] To: ${customer.email}\nSubject: ${params.subject}\n\n${params.message}${paymentUrl ? `\n\nPayment Link: ${paymentUrl}` : ""}`;
+  const noteContent = `[Email Sent] To: ${customer.email}\nSubject: ${params.subject}\n\n${params.message}${paymentLinkUrl ? `\n\nPayment Link: ${paymentLinkUrl}` : ""}`;
   await prisma.ticketNote.create({
     data: {
       ticketId,
@@ -336,7 +345,7 @@ export async function sendTicketEmail(
     },
   });
 
-  return { success: true, paymentUrl };
+  return { success: true, paymentLinkUrl, paymentUrl: paymentLinkUrl };
 }
 
 export async function resolveTicket(

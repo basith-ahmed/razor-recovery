@@ -8,7 +8,7 @@ import { AuditTimeline } from "../../../components/AuditTimeline";
 import { useLiveStream } from "../../../lib/socket";
 import { formatCurrency, formatDateTime, formatDate } from "../../../lib/formatters";
 import { Badge } from "../../../components/Badge";
-import { ArrowRight, ShieldAlert, UserCheck, CheckCircle2, Loader2 } from "lucide-react";
+import { ArrowRight, ShieldAlert, UserCheck, CheckCircle2, Loader2, Calendar, CalendarCheck, Copy, Check } from "lucide-react";
 
 interface EntityDetailPageProps {
   params: Promise<{ id: string }>;
@@ -22,6 +22,13 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
   const [escalating, setEscalating] = useState<boolean>(false);
   const [escalationSuccess, setEscalationSuccess] = useState<{ ticketId?: string } | null>(null);
   const [escalationError, setEscalationError] = useState<string | null>(null);
+  const [copiedPromiseLink, setCopiedPromiseLink] = useState(false);
+
+  function handleCopyPromiseLink(url: string) {
+    navigator.clipboard.writeText(url);
+    setCopiedPromiseLink(true);
+    setTimeout(() => setCopiedPromiseLink(false), 2000);
+  }
 
   const { activityFeed } = useLiveStream();
 
@@ -57,6 +64,8 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
   const customer = data?.customer || latestEntry?.event?.customer || (latestEvent ? { id: latestEvent.customerId, name: latestEvent.customerName, email: latestEvent.customerEmail, dncFlag: false } : null);
   const workflowState = data?.workflowState;
 
+  const activePromise = data?.promises?.find((p) => p.status === "pending" || p.status === "reminder_sent");
+
   const currentState = workflowState?.state || latestEvent?.state || latestEntry?.state || "DETECTED";
   const actualEntityId = data?.entityId || latestEvent?.entityId || latestEntry?.entityId || id;
   const attemptCount = workflowState?.attemptCount ?? latestEntry?.event?.attemptCount ?? 0;
@@ -74,7 +83,7 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
     setEscalationSuccess(null);
     try {
       const res = await escalateEntity(actualEntityId, {
-        reason: "Manual operator escalation: moving DNC customer entity to human escalation review",
+        reason: "Manual operator escalation, moving DNC customer entity to human escalation review",
         agentName: "Operator",
       });
       setEscalationSuccess({ ticketId: res.ticketId });
@@ -121,6 +130,12 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
                 <div className="flex items-center gap-2.5 mb-2 flex-wrap">
                   <h1 className="text-[26px] font-bold text-ink tracking-heading-2">{customerName}</h1>
                   <Badge type="state" value={currentState} />
+                  {activePromise && (
+                    <span className="bg-blue-50 border border-blue-200 text-blue-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase flex items-center gap-1 shadow-2xs">
+                      <Calendar className="w-3 h-3 text-blue-600" />
+                      Promise-to-Pay Active
+                    </span>
+                  )}
                   {customer?.dncFlag && (
                     <span className="bg-accent-orange/10 border border-accent-orange/25 text-accent-orange-deep text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase">
                       DNC
@@ -158,6 +173,7 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
                   {cooldownUntil && (
                     <div className="text-accent-orange font-medium">
                       Cooldown until {formatDateTime(cooldownUntil)}
+                      {activePromise && " (Promise Due)"}
                     </div>
                   )}
                   {lastContactedAt && (
@@ -169,6 +185,54 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
               </div>
             </div>
           </div>
+
+          {/* Promise to Pay Active Conversion Banner */}
+          {activePromise && (
+            <div className="bg-blue-50/90 border border-blue-200 rounded-[12px] p-4 mb-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0 max-w-2xl">
+                <CalendarCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-xs font-bold text-blue-950 flex items-center gap-2">
+                    <span>Converted to Promise-to-Pay Commitment</span>
+                    <Badge type="promiseStatus" value={activePromise.status}>
+                      {activePromise.status.replace("_", " ")}
+                    </Badge>
+                  </div>
+                  <div className="text-xs text-blue-800 mt-1 leading-relaxed">
+                    Customer committed to settle <strong>{formatCurrency(activePromise.promisedAmount, activePromise.currency)}</strong> by <strong>{formatDate(activePromise.promisedDate)}</strong>. Automated dunning outreach is currently paused in cooldown until the commitment due date.
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {activePromise.paymentLinkUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyPromiseLink(activePromise.paymentLinkUrl!)}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[8px] text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {copiedPromiseLink ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Copied Link</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Payment Link</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <Link
+                  href={`/promises/${activePromise.id}`}
+                  className="px-3.5 py-1.5 bg-white border border-blue-300 text-blue-700 hover:bg-blue-100 rounded-[8px] text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <span>Manage Promise</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          )}
 
           {/* DNC Escalation Action Banner / Status */}
           {customer?.dncFlag && currentState !== "ESCALATED" && currentState !== "RECOVERED" && currentState !== "WRITTEN_OFF" && (
@@ -244,62 +308,6 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
                 <span>View Escalations Queue</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
-            </div>
-          )}
-
-          {/* Promises section — only shown when promises exist */}
-          {data?.promises && data.promises.length > 0 && (
-            <div className="mb-5 border border-hairline rounded-[12px] bg-canvas-soft p-5 shadow-notion-soft">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[16px] font-bold text-ink tracking-[-0.125px]">
-                  Promise-to-Pay Commitments
-                  <span className="ml-2 text-xs bg-white border border-hairline text-ink-muted px-2.5 py-0.5 rounded-full shadow-xs font-semibold">
-                    {data.promises.length}
-                  </span>
-                </h3>
-                <Link
-                  href="/promises"
-                  className="text-xs text-primary hover:text-primary-active font-medium inline-flex items-center gap-1"
-                >
-                  <span>Manage</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {data.promises.map((p) => (
-                  <div
-                    key={p.id}
-                    className="bg-white p-4 rounded-[8px] border border-hairline space-y-2 text-xs shadow-xs"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-ink text-sm">
-                        {formatCurrency(p.promisedAmount, p.currency)}
-                      </span>
-                      <Badge type="promiseStatus" value={p.status}>
-                        {p.status.replace("_", " ")}
-                      </Badge>
-                    </div>
-
-                    <div className="text-ink-secondary">Due: {formatDate(p.promisedDate)}</div>
-
-                    {p.notes && <div className="text-ink-muted truncate">{p.notes}</div>}
-
-                    {p.paymentLinkUrl && (
-                      <div className="pt-1.5 border-t border-hairline">
-                        <a
-                          href={p.paymentLinkUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline text-xs font-medium"
-                        >
-                          Open Payment Link
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 

@@ -8,7 +8,7 @@ import { formatCurrency, formatDateTime, formatDate } from "../../../lib/formatt
 import { Badge } from "../../../components/Badge";
 import { CountdownTimer } from "../../../components/CountdownTimer";
 import { PageHeader } from "../../../components/PageHeader";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Copy, Check } from "lucide-react";
 
 interface PromiseDetailPageProps {
   params: Promise<{ id: string }>;
@@ -236,20 +236,22 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
                     {promise.paymentLinkUrl}
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <a
-                      href={promise.paymentLinkUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 text-xs bg-primary hover:bg-primary-active active:scale-[0.98] text-white rounded-full font-medium transition-all shadow-sm"
-                    >
-                      Open Payment Link
-                    </a>
                     <button
                       type="button"
                       onClick={handleCopyLink}
-                      className="px-3.5 py-2 text-xs border border-hairline rounded-[8px] bg-white text-ink hover:bg-canvas-soft font-medium transition-colors"
+                      className="px-4 py-2 text-xs bg-primary hover:bg-primary-active active:scale-[0.98] text-white rounded-full font-medium transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
                     >
-                      {copiedLink ? "Copied!" : "Copy Link"}
+                      {copiedLink ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Copied Payment Link</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Payment Link</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

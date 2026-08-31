@@ -62,7 +62,7 @@ export interface ActionResult {
   result: "success" | "failed" | "skipped" | "scheduled" | "cancelled";
   integration: "RAZORPAY" | "EMAIL" | "MOCK";
   razorpayPaymentLinkId?: string;
-  paymentLinkShortUrl?: string;
+  paymentLinkUrl?: string; // https://rzp.io/i/... — canonical name, previously paymentLinkShortUrl
   paymentId?: string;
   emailMessageId?: string;
   detail?: string;
@@ -379,6 +379,17 @@ export interface CustomerLookupItem {
   phone: string | null;
   riskTier: string;
   dncFlag: boolean;
+}
+
+export interface CustomerEntityLookupItem {
+  entityId: string;
+  entityType: string;
+  amount: number;
+  currency: string;
+  eventType?: string;
+  state?: string;
+  occurredAt?: string;
+  errorReason?: string | null;
 }
 
 export interface WriteLedgerEntryParams {

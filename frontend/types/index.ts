@@ -129,6 +129,7 @@ export interface EntityFilters {
   maxAmount?: string | number;
   search?: string;
   sort?: string;
+  window?: MetricsWindow;
   page?: number;
   limit?: number;
 }
@@ -223,19 +224,6 @@ export interface PolicyResponse {
   };
 }
 
-export interface EntityFilters {
-  state?: string;
-  cause?: string;
-  eventType?: string;
-  minAmount?: string | number;
-  maxAmount?: string | number;
-  search?: string;
-  sort?: string;
-  window?: MetricsWindow;
-  page?: number;
-  limit?: number;
-}
-
 export interface AuditVerifyResult {
   valid: boolean;
   entriesChecked: number;
@@ -266,10 +254,12 @@ export interface TicketItem {
   id: string;
   entityId: string;
   reason: string;
-  status: "open" | "recovered" | "written_off" | "resolved" | "closed";
+  status: "open" | "recovered" | "written_off" | "resolved";
   assignedTo?: string | null;
   resolutionNotes?: string | null;
   resolvedAt?: string | null;
+  razorpayPaymentLinkId?: string | null;
+  paymentLinkUrl?: string | null;
   createdAt: string;
   updatedAt: string;
   customer?: {
@@ -300,10 +290,12 @@ export interface TicketDetailResponse {
     id: string;
     entityId: string;
     reason: string;
-    status: string;
+    status: "open" | "recovered" | "written_off" | "resolved" | string;
     assignedTo: string | null;
     resolutionNotes: string | null;
     resolvedAt: string | null;
+    razorpayPaymentLinkId?: string | null;
+    paymentLinkUrl?: string | null;
     createdAt: string;
     updatedAt: string;
     notes: TicketNoteItem[];
@@ -382,6 +374,17 @@ export interface CustomerLookupItem {
   phone?: string | null;
   riskTier?: string;
   dncFlag?: boolean;
+}
+
+export interface CustomerEntityLookupItem {
+  entityId: string;
+  entityType: string;
+  amount: number;
+  currency: string;
+  eventType?: string;
+  state?: string;
+  occurredAt?: string;
+  errorReason?: string | null;
 }
 
 

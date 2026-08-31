@@ -19,7 +19,7 @@ jest.mock("../src/integrations/razorpayIntegration", () => ({
     result: "success",
     integration: "RAZORPAY",
     razorpayPaymentLinkId: "plink_test_123",
-    paymentLinkShortUrl: "https://rzp.io/i/plink_test_123",
+    paymentLinkUrl: "https://rzp.io/i/plink_test_123",
   }),
 }));
 

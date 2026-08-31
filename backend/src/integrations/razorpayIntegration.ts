@@ -12,8 +12,12 @@ export interface RecoveryPaymentLinkParams {
   customerPhone?: string;
   description: string;
   notify?: boolean;
+  // Context identifiers — embedded into Razorpay payment link notes for deterministic webhook matching
   eventId?: string;
   actionType?: string;
+  entityId?: string;
+  promiseId?: string;
+  ticketId?: string;
 }
 
 /**
@@ -49,19 +53,26 @@ export async function retryPayment(orderId: string): Promise<ActionResult> {
   }
 }
 
+/**
+ * Creates a Razorpay payment link and embeds context identifiers in the `notes`
+ * field so the webhook handler can deterministically match any incoming payment
+ * back to its originating entity, event, promise, or ticket without guessing.
+ *
+ * Return field is `paymentLinkUrl` (canonical name across the whole system).
+ */
 export async function createRecoveryPaymentLink(
   params: RecoveryPaymentLinkParams,
 ): Promise<ActionResult> {
   try {
     const shouldNotify = params.notify ?? true;
-    
+
     // Idempotency: generate deterministic reference_id if event context is provided
     let reference_id: string | undefined = undefined;
     if (params.eventId && params.actionType) {
       const hash = createHash("sha256").update(`${params.eventId}:${params.actionType}`).digest("hex");
       reference_id = `rzp_${hash.slice(0, 32)}`;
     }
-    
+
     const paymentLink = await razorpay.paymentLink.create({
       amount: Math.round(params.amount * 100),
       currency: params.currency,
@@ -74,6 +85,13 @@ export async function createRecoveryPaymentLink(
       },
       notify: { sms: shouldNotify, email: shouldNotify },
       reminder_enable: shouldNotify,
+      // Embed context identifiers so the webhook handler can match deterministically
+      notes: {
+        ...(params.entityId ? { entity_id: params.entityId } : {}),
+        ...(params.eventId ? { event_id: params.eventId } : {}),
+        ...(params.promiseId ? { promise_id: params.promiseId } : {}),
+        ...(params.ticketId ? { ticket_id: params.ticketId } : {}),
+      },
     });
 
     return {
@@ -81,7 +99,7 @@ export async function createRecoveryPaymentLink(
       result: "success",
       integration: "RAZORPAY",
       razorpayPaymentLinkId: paymentLink.id,
-      paymentLinkShortUrl: paymentLink.short_url,
+      paymentLinkUrl: paymentLink.short_url, // canonical name — https://rzp.io/i/...
     };
   } catch (error: any) {
     const isRateLimit =
@@ -107,7 +125,7 @@ export async function createRecoveryPaymentLink(
         result: "success",
         integration: "RAZORPAY",
         razorpayPaymentLinkId: simId,
-        paymentLinkShortUrl: `https://rzp.io/i/${simId}`,
+        paymentLinkUrl: `https://rzp.io/i/${simId}`, // canonical name
         detail: `[SIMULATED] Payment link generated for ${params.customerName}.`,
       };
     }

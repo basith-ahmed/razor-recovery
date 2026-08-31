@@ -55,7 +55,7 @@ export async function processRazorpayPaymentWebhook(payload: Record<string, any>
   const notesPromiseId = (notes.promise_id || notes.promiseId) as string | undefined;
   const notesTicketId = (notes.ticket_id || notes.ticketId) as string | undefined;
 
-  // 1. Check if an Action record matches this payment link or event
+  // Step 1 — Match via Action record (razorpayPaymentLinkId, paymentId, or orderId)
   const conds: Prisma.ActionWhereInput[] = [];
   if (paymentLinkId) conds.push({ razorpayPaymentLinkId: paymentLinkId });
   if (paymentId) conds.push({ event: { razorpayPaymentId: paymentId } });
@@ -71,7 +71,27 @@ export async function processRazorpayPaymentWebhook(payload: Record<string, any>
 
   let event = action?.event;
 
-  // 2. Lookup matching revenue event if action relation didn't resolve it directly
+  // Step 2 — Match via Ticket.razorpayPaymentLinkId (indexed — O(1) lookup)
+  // This covers human escalation emails where agent sent a link tied to the ticket.
+  if (!event && (paymentLinkId || notesTicketId)) {
+    const matchedTicket = await prisma.ticket.findFirst({
+      where: {
+        OR: [
+          ...(paymentLinkId ? [{ razorpayPaymentLinkId: paymentLinkId }] : []),
+          ...(notesTicketId ? [{ id: notesTicketId }] : []),
+        ],
+        status: { not: "recovered" },
+      },
+    });
+    if (matchedTicket?.entityId) {
+      event = (await prisma.revenueEvent.findFirst({
+        where: { entityId: matchedTicket.entityId },
+        orderBy: { occurredAt: "desc" },
+      })) ?? undefined;
+    }
+  }
+
+  // Step 3 — Match via RevenueEvent directly, or resolve via PromiseToPay link
   if (!event && (paymentId || orderId || notesEventId || notesEntityId || paymentLinkId || notesPromiseId)) {
     const eventConds: Prisma.RevenueEventWhereInput[] = [];
     if (paymentId) eventConds.push({ razorpayPaymentId: paymentId });
@@ -106,6 +126,16 @@ export async function processRazorpayPaymentWebhook(payload: Record<string, any>
   }
 
   if (event) {
+    // Check if the entity is already RECOVERED
+    const currentWorkflow = await prisma.entityWorkflowState.findUnique({
+      where: { entityId: event.entityId },
+    });
+
+    if (currentWorkflow?.state === "RECOVERED") {
+      console.log(`[webhook] Entity ${event.entityId} is already RECOVERED; skipping duplicate settlement.`);
+      return { status: "already_recovered", entityId: event.entityId };
+    }
+
     const recoveryAuditEntry = await prisma.$transaction(async (tx) => {
       await tx.entityCauseState.deleteMany({
         where: { entityId: event.entityId },

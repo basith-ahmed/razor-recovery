@@ -54,8 +54,14 @@ async function main() {
       }
       process.exit(1);
     }
+
+    if (ticket.status === "recovered") {
+      console.log(`⚠️ Ticket ${ticket.id} (Entity: ${ticket.entityId}) is ALREADY marked RECOVERED.`);
+      console.log("No further payment capture required.");
+      process.exit(0);
+    }
   } else {
-    console.log("⚠️ No ticketId argument provided. Looking for the latest active ticket...");
+    console.log("Looking for an open escalation ticket...");
     ticket = await prisma.ticket.findFirst({
       where: { status: "open" },
       orderBy: { createdAt: "desc" },
@@ -65,20 +71,11 @@ async function main() {
     });
 
     if (!ticket) {
-      ticket = await prisma.ticket.findFirst({
-        orderBy: { createdAt: "desc" },
-        include: {
-          notes: { orderBy: { createdAt: "desc" }, take: 1 },
-        },
-      });
+      console.log("ℹ️ No open tickets found in the database. All existing tickets are already recovered.");
+      process.exit(0);
     }
 
-    if (!ticket) {
-      console.error("❌ No tickets exist in the database. Please create or escalate a ticket first.");
-      process.exit(1);
-    }
-
-    console.log(`ℹ️ Selected latest ticket: ${ticket.id} (status: ${ticket.status})`);
+    console.log(`ℹ️ Selected active open ticket: ${ticket.id} (status: ${ticket.status})`);
   }
 
   // Retrieve associated revenue event and customer
@@ -97,7 +94,7 @@ async function main() {
   const currency = event?.currency ?? "INR";
   const paymentId = `pay_sim_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
   const orderId = event?.razorpayOrderId ?? `order_sim_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
-  const paymentLinkId = event?.action?.razorpayPaymentLinkId ?? undefined;
+  const paymentLinkId = ticket.razorpayPaymentLinkId ?? event?.action?.razorpayPaymentLinkId ?? undefined;
 
   console.log("\n🎯 Target Ticket & Entity Details:");
   console.log(`   - Ticket ID:      ${ticket.id}`);

@@ -151,7 +151,10 @@ model Action {
   result                String
   integration           ActionIntegration
   razorpayPaymentLinkId String?
+  paymentLinkUrl        String?
   emailMessageId        String?
+
+  @@index([razorpayPaymentLinkId])
 }
 
 model AuditEntry {
@@ -241,21 +244,24 @@ model LedgerEntry {
 }
 
 model Ticket {
-  id              String       @id @default(uuid())
-  entityId        String
-  reason          String
-  status          String       @default("open") // "open" | "resolved" | "recovered" | "closed"
-  assignedTo      String?
-  resolutionNotes String?
-  resolvedAt      DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id                    String       @id @default(uuid())
+  entityId              String
+  reason                String
+  status                String       @default("open") // "open" | "resolved" | "recovered" | "written_off"
+  assignedTo            String?
+  resolutionNotes       String?
+  resolvedAt            DateTime?
+  razorpayPaymentLinkId String?
+  paymentLinkUrl        String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
-  notes           TicketNote[]
+  notes                 TicketNote[]
 
   @@index([entityId])
   @@index([status])
   @@index([createdAt])
+  @@index([razorpayPaymentLinkId])
 }
 
 model TicketNote {

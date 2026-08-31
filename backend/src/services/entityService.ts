@@ -23,9 +23,21 @@ export async function listEntities(
 
   const where: Prisma.RevenueEventWhereInput = {
     ...(window ? eventWindowFilter(window) : {}),
-    // Exclude synthetic promise-only events from polluting the recovery entities monitor
-    errorCode: { notIn: ["PROMISE_CREATED", "PROMISE_PAYMENT"] },
-    errorReason: { notIn: ["promise_to_pay", "promise_settlement"] },
+    // Exclude synthetic promise-only events from polluting the recovery entities monitor without dropping NULL errorCode/errorReason rows
+    AND: [
+      {
+        OR: [
+          { errorCode: null },
+          { errorCode: { notIn: ["PROMISE_CREATED", "PROMISE_PAYMENT"] } },
+        ],
+      },
+      {
+        OR: [
+          { errorReason: null },
+          { errorReason: { notIn: ["promise_to_pay", "promise_settlement"] } },
+        ],
+      },
+    ],
   };
 
   if (eventType && typeof eventType === "string" && Object.values(EventType).includes(eventType as EventType)) {
@@ -370,7 +382,7 @@ export async function escalateEntityToHuman(
   const reason =
     options.reason ||
     (latestEvent.customer?.dncFlag
-      ? "Manual operator escalation: customer is on DNC list and requires specialized human handling."
+      ? "Manual operator escalation, customer is on DNC list and requires specialized human handling."
       : "Manual operator escalation to human agent review.");
 
   // 1. Create / update ticket
