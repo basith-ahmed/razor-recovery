@@ -171,6 +171,15 @@ export async function fetchPromiseCustomers(): Promise<import("../types").Custom
   return response.data;
 }
 
+export async function fetchCustomerEntities(
+  customerId: string
+): Promise<import("../types").CustomerEntityLookupItem[]> {
+  const response = await apiClient.get<import("../types").CustomerEntityLookupItem[]>(
+    `/promises/customers/${customerId}/entities`
+  );
+  return response.data;
+}
+
 export async function getPromise(id: string): Promise<import("../types").PromiseToPayItem> {
   const response = await apiClient.get<import("../types").PromiseToPayItem>(`/promises/${id}`);
   return response.data;

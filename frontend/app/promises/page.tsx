@@ -21,7 +21,7 @@ import { CreatePromiseModal } from "../../components/CreatePromiseModal";
 import { PaginationControl } from "../../components/PaginationControl";
 import { PageHeader } from "../../components/PageHeader";
 import { Badge } from "../../components/Badge";
-import { Plus } from "lucide-react";
+import { Plus, Copy, Check } from "lucide-react";
 
 export default function PromisesPage() {
   const router = useRouter();
@@ -36,6 +36,13 @@ export default function PromisesPage() {
   const [limit, setLimit] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  function handleCopyLink(url: string, id: string) {
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -255,15 +262,27 @@ export default function PromisesPage() {
                     </td>
                     <td className="py-2.5 px-3 text-[11px]">
                       {p.paymentLinkUrl ? (
-                        <a
-                          href={p.paymentLinkUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-primary hover:underline truncate max-w-[160px] block"
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyLink(p.paymentLinkUrl!, p.id);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-[6px] border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary/40 transition-colors font-medium cursor-pointer"
+                          title={p.paymentLinkUrl}
                         >
-                          {p.paymentLinkUrl.replace("https://", "")}
-                        </a>
+                          {copiedId === p.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-accent-green" />
+                              <span className="text-accent-green font-semibold">Copied Link</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy Link</span>
+                            </>
+                          )}
+                        </button>
                       ) : (
                         <span className="text-ink-faint">—</span>
                       )}

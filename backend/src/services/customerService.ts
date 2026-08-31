@@ -66,5 +66,65 @@ export function calculateCustomerTenureDays(
   return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
+/**
+ * Lists all active, non-recovered payment failure entities (events)
+ * strictly associated with a specific customer for Promise-to-Pay creation.
+ */
+export async function listCustomerEntities(
+  customerId: string,
+): Promise<import("../domain/types").CustomerEntityLookupItem[]> {
+  if (!customerId) return [];
+
+  // 1. Fetch from RevenueEvent for this customer (grouped by entityId, latest event)
+  const events = await prisma.revenueEvent.findMany({
+    where: {
+      customerId,
+      AND: [
+        {
+          OR: [
+            { errorCode: null },
+            { errorCode: { notIn: ["PROMISE_CREATED", "PROMISE_PAYMENT"] } },
+          ],
+        },
+        {
+          OR: [
+            { errorReason: null },
+            { errorReason: { notIn: ["promise_to_pay", "promise_settlement"] } },
+          ],
+        },
+      ],
+    },
+    orderBy: { occurredAt: "desc" },
+  });
+
+  const workflows = await prisma.entityWorkflowState.findMany({
+    where: { customerId },
+  });
+  const workflowMap = new Map(workflows.map((w) => [w.entityId, w.state]));
+
+  const entityMap = new Map<string, import("../domain/types").CustomerEntityLookupItem>();
+
+  for (const e of events) {
+    if (!entityMap.has(e.entityId)) {
+      const currentState = workflowMap.get(e.entityId) ?? "DETECTED";
+      const s = currentState.toUpperCase();
+      if (s !== "RECOVERED" && s !== "WRITTEN_OFF") {
+        entityMap.set(e.entityId, {
+          entityId: e.entityId,
+          entityType: e.entityType,
+          amount: e.amount,
+          currency: e.currency,
+          eventType: e.eventType,
+          state: currentState,
+          occurredAt: e.occurredAt.toISOString(),
+          errorReason: e.errorReason,
+        });
+      }
+    }
+  }
+
+  return Array.from(entityMap.values());
+}
+
 
 

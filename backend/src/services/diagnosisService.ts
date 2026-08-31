@@ -62,7 +62,10 @@ const diagnosisSchema = {
   additionalProperties: false,
   required: ["cause_label", "confidence", "reasoning"],
   properties: {
-    cause_label: { type: "string" },
+    cause_label: {
+      type: "string",
+      enum: Array.from(CAUSE_LABELS),
+    },
     confidence: { type: "number" },
     reasoning: { type: "string" },
   },
@@ -87,13 +90,40 @@ function isCauseLabel(value: unknown): value is CauseLabel {
   return typeof value === "string" && CAUSE_LABELS.includes(value as CauseLabel);
 }
 
+const SYNONYM_MAP: Record<string, CauseLabel> = {
+  cart_abandoned: "price_friction",
+  checkout_abandoned: "price_friction",
+  abandoned_cart: "price_friction",
+  abandoned_checkout: "price_friction",
+  card_expired: "expired_card",
+  insufficient_fund: "insufficient_funds",
+  timeout: "gateway_timeout",
+  gateway_error: "gateway_timeout",
+  technical_error: "gateway_timeout",
+  dispute: "invoice_disputed",
+  disputed: "invoice_disputed",
+  overdue: "invoice_overdue",
+  reauth: "mandate_requires_reauthorization",
+  mandate_failed: "mandate_execution_failed_retryable",
+  none: "no_reason_signal",
+};
+
+function normalizeCauseLabel(value: unknown): CauseLabel | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim().toLowerCase();
+  if (isCauseLabel(trimmed)) return trimmed;
+  if (SYNONYM_MAP[trimmed]) return SYNONYM_MAP[trimmed];
+  return undefined;
+}
+
 function toResult(output: DiagnosisOutput): DiagnosisResult | undefined {
-  if (!isCauseLabel(output.cause_label)) {
+  const normalizedLabel = normalizeCauseLabel(output.cause_label);
+  if (!normalizedLabel) {
     return undefined;
   }
 
   return {
-    causeLabel: output.cause_label,
+    causeLabel: normalizedLabel,
     confidence:
       typeof output.confidence === "number" && Number.isFinite(output.confidence)
         ? Math.max(0, Math.min(1, output.confidence))

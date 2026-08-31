@@ -17,6 +17,7 @@ import {
 
 import { findCustomerById } from "./customerService";
 import { revenueEventExists } from "./revenueEventService";
+import { getOrCreatePaymentLink } from "./paymentLinkService";
 
 export { buildEmailTemplate };
 
@@ -35,7 +36,7 @@ export async function draftRecoveryEmail(
   event: EnrichedRevenueEvent,
   customerName: string,
   cause: string,
-  paymentUrl?: string,
+  paymentLinkUrl?: string,
 ): Promise<{ subject: string; html: string }> {
   return generateRecoveryEmail({
     customerName,
@@ -47,7 +48,7 @@ export async function draftRecoveryEmail(
     errorReason: event.errorReason,
     errorCode: event.errorCode,
     cause,
-    paymentUrl,
+    paymentLinkUrl,
   });
 }
 
@@ -112,37 +113,41 @@ export async function executeAction(
     }
   } else if (PAYMENT_LINK_ACTIONS.has(chosenAction)) {
     const customer = await findCustomerById(event.customerId);
-    actionResult = await razorpayIntegration.createRecoveryPaymentLink({
+    const link = await getOrCreatePaymentLink({
+      entityId: event.entityId,
+      eventId: event.id,
       amount: event.amount,
       currency: event.currency,
-      customerName: customer.name,
-      customerEmail: customer.email,
-      customerPhone: customer.phone ?? undefined,
+      customer: { name: customer.name, email: customer.email, phone: customer.phone },
       description: `Recovery payment for ${event.eventType} — ${event.entityId}`,
-      eventId: event.id,
       actionType: chosenAction,
     });
-    actionResult = { ...actionResult, actionType: chosenAction };
+    actionResult = {
+      actionType: chosenAction,
+      result: "success",
+      integration: "RAZORPAY",
+      razorpayPaymentLinkId: link.razorpayPaymentLinkId,
+      paymentLinkUrl: link.paymentLinkUrl,
+    };
   } else if (EMAIL_ACTIONS.has(chosenAction)) {
     const customer = await findCustomerById(event.customerId);
-    
-    let paymentUrl: string | undefined;
+
+    let paymentLinkUrl: string | undefined;
     let paymentLinkId: string | undefined;
 
     try {
-      const linkResult = await razorpayIntegration.createRecoveryPaymentLink({
+      const link = await getOrCreatePaymentLink({
+        entityId: event.entityId,
+        eventId: event.id,
         amount: event.amount,
         currency: event.currency,
-        customerName: customer.name,
-        customerEmail: customer.email,
-        customerPhone: customer.phone ?? undefined,
+        customer: { name: customer.name, email: customer.email, phone: customer.phone },
         description: `Recovery payment for ${event.eventType} — ${event.entityId}`,
         notify: false,
-        eventId: event.id,
         actionType: chosenAction,
       });
-      paymentUrl = linkResult.paymentLinkShortUrl;
-      paymentLinkId = linkResult.razorpayPaymentLinkId;
+      paymentLinkUrl = link.paymentLinkUrl;
+      paymentLinkId = link.razorpayPaymentLinkId;
     } catch (err) {
       logWarn("executor", err);
       console.warn("[executor] Proceeding without payment-link button in email.");
@@ -152,19 +157,19 @@ export async function executeAction(
       event,
       customer.name,
       event.errorReason ?? "payment issue",
-      paymentUrl
+      paymentLinkUrl,
     );
     actionResult = await emailIntegration.sendRecoveryEmail({
       to: customer.email,
       subject,
       html,
     });
-    
-    actionResult = { 
-      ...actionResult, 
+
+    actionResult = {
+      ...actionResult,
       actionType: chosenAction,
       razorpayPaymentLinkId: paymentLinkId,
-      paymentLinkShortUrl: paymentUrl
+      paymentLinkUrl,
     };
   } else if (chosenAction === "start_promise_to_pay_tracking") {
     const customer = await findCustomerById(event.customerId);
@@ -172,21 +177,9 @@ export async function executeAction(
     const promisedDateStr = rawPayload.promisedDate as string | undefined;
     const promisedDate = promisedDateStr ? new Date(promisedDateStr) : new Date(Date.now() + 7 * 86400 * 1000);
 
-    const linkResult = await razorpayIntegration.createRecoveryPaymentLink({
-      amount: event.amount,
-      currency: event.currency,
-      customerName: customer.name,
-      customerEmail: customer.email,
-      customerPhone: customer.phone ?? undefined,
-      description: `Promise-to-Pay for ${event.eventType} — ${event.entityId}`,
-      notify: false,
-      eventId: event.id,
-      actionType: chosenAction,
-    });
-
+    // Create PtP first (no link yet) so we have an id to embed in link notes
     const eventExists = await revenueEventExists(event.id);
-
-    await prisma.promiseToPay.create({
+    const ptp = await prisma.promiseToPay.create({
       data: {
         entityId: event.entityId,
         customerId: event.customerId,
@@ -195,9 +188,28 @@ export async function executeAction(
         currency: event.currency,
         promisedDate,
         status: "pending",
-        razorpayPaymentLinkId: linkResult.razorpayPaymentLinkId,
-        paymentLinkUrl: linkResult.paymentLinkShortUrl,
         notes: (rawPayload.notes as string) || `Promise-to-pay commitment registered for ₹${event.amount} due by ${promisedDate.toISOString().split("T")[0]}.`,
+      },
+    });
+
+    const link = await getOrCreatePaymentLink({
+      entityId: event.entityId,
+      eventId: event.id,
+      promiseId: ptp.id,
+      amount: event.amount,
+      currency: event.currency,
+      customer: { name: customer.name, email: customer.email, phone: customer.phone },
+      description: `Promise-to-Pay for ${event.eventType} — ${event.entityId}`,
+      notify: false,
+      actionType: chosenAction,
+    });
+
+    // Persist link back to the PtP record
+    await prisma.promiseToPay.update({
+      where: { id: ptp.id },
+      data: {
+        razorpayPaymentLinkId: link.razorpayPaymentLinkId,
+        paymentLinkUrl: link.paymentLinkUrl,
       },
     });
 
@@ -205,7 +217,7 @@ export async function executeAction(
       customerName: customer.name,
       amount: event.amount,
       promisedDate,
-      paymentUrl: linkResult.paymentLinkShortUrl,
+      paymentLinkUrl: link.paymentLinkUrl,
     });
 
     let emailMsgId: string | undefined;
@@ -227,8 +239,8 @@ export async function executeAction(
       actionType: chosenAction,
       result: "success",
       integration: "RAZORPAY",
-      razorpayPaymentLinkId: linkResult.razorpayPaymentLinkId,
-      paymentLinkShortUrl: linkResult.paymentLinkShortUrl,
+      razorpayPaymentLinkId: link.razorpayPaymentLinkId,
+      paymentLinkUrl: link.paymentLinkUrl,
       emailMessageId: emailMsgId,
       detail: `Promise-to-pay commitment registered for ₹${event.amount} due by ${formattedDate}. Payment link generated.`,
     };
@@ -255,9 +267,9 @@ export async function executeAction(
     );
   }
 
-  const eventExists = await revenueEventExists(event.id);
+  const eventExistsCheck = await revenueEventExists(event.id);
 
-  if (!eventExists) {
+  if (!eventExistsCheck) {
     console.warn(
       `[executor] Cannot persist Action for event ${event.id}: RevenueEvent does not exist in DB. Skipping.`,
     );
@@ -271,6 +283,7 @@ export async function executeAction(
       result: actionResult.result,
       integration: actionResult.integration,
       razorpayPaymentLinkId: actionResult.razorpayPaymentLinkId ?? null,
+      paymentLinkUrl: actionResult.paymentLinkUrl ?? null,
       emailMessageId: actionResult.emailMessageId ?? null,
     },
     create: {
@@ -279,6 +292,7 @@ export async function executeAction(
       result: actionResult.result,
       integration: actionResult.integration,
       razorpayPaymentLinkId: actionResult.razorpayPaymentLinkId ?? null,
+      paymentLinkUrl: actionResult.paymentLinkUrl ?? null,
       emailMessageId: actionResult.emailMessageId ?? null,
     },
   });

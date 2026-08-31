@@ -9,21 +9,21 @@ export interface EmailTemplateContext {
   errorCode?: string;
   cause?: string;
   actionType?: string;
-  paymentUrl?: string;
+  paymentLinkUrl?: string;
 }
 
 /**
  * Standard branded HTML email layout for all RazorRecovery communications.
  */
-export function buildEmailTemplate(paragraphs: string[], amount?: number, paymentUrl?: string): string {
+export function buildEmailTemplate(paragraphs: string[], amount?: number, paymentLinkUrl?: string): string {
   const contentHtml = paragraphs.map((p) => `<p style="margin-bottom: 16px; line-height: 1.5;">${p}</p>`).join("");
-  const buttonHtml = paymentUrl && amount !== undefined
+  const buttonHtml = paymentLinkUrl && amount !== undefined
     ? `<div style="text-align: center; margin: 32px 0;">
-         <a href="${paymentUrl}" style="background-color: #2563eb; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; display: inline-block;">Pay ₹${amount.toLocaleString("en-IN")} Now</a>
+         <a href="${paymentLinkUrl}" style="background-color: #2563eb; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; display: inline-block;">Pay ₹${amount.toLocaleString("en-IN")} Now</a>
        </div>`
-    : paymentUrl
+    : paymentLinkUrl
     ? `<div style="text-align: center; margin: 32px 0;">
-         <a href="${paymentUrl}" style="background-color: #2563eb; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; display: inline-block;">Complete Payment Now</a>
+         <a href="${paymentLinkUrl}" style="background-color: #2563eb; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; display: inline-block;">Complete Payment Now</a>
        </div>`
     : "";
 
@@ -210,7 +210,7 @@ export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; 
  */
 export function generateRecoveryEmail(ctx: EmailTemplateContext): { subject: string; html: string } {
   const { subject, paragraphs } = getEmailTemplate(ctx);
-  const html = buildEmailTemplate(paragraphs, ctx.amount, ctx.paymentUrl);
+  const html = buildEmailTemplate(paragraphs, ctx.amount, ctx.paymentLinkUrl);
   return { subject, html };
 }
 
@@ -218,7 +218,7 @@ export function buildPromiseConfirmationEmail(params: {
   customerName: string;
   amount: number;
   promisedDate: Date | string;
-  paymentUrl?: string;
+  paymentLinkUrl?: string;
 }): { subject: string; html: string } {
   const dateObj = params.promisedDate instanceof Date ? params.promisedDate : new Date(params.promisedDate);
   const formattedDate = isNaN(dateObj.getTime()) ? String(params.promisedDate) : dateObj.toLocaleDateString("en-IN", {
@@ -236,7 +236,7 @@ export function buildPromiseConfirmationEmail(params: {
       `Best regards,<br/>The RazorRecovery Team`,
     ],
     params.amount,
-    params.paymentUrl,
+    params.paymentLinkUrl,
   );
   return { subject, html };
 }
@@ -245,7 +245,7 @@ export function buildPromiseReminderEmail(params: {
   customerName: string;
   amount: number;
   promisedDate: Date | string;
-  paymentUrl?: string;
+  paymentLinkUrl?: string;
 }): { subject: string; html: string } {
   const dateObj = params.promisedDate instanceof Date ? params.promisedDate : new Date(params.promisedDate);
   const formattedDate = isNaN(dateObj.getTime()) ? String(params.promisedDate) : dateObj.toLocaleDateString("en-IN", {
@@ -263,7 +263,7 @@ export function buildPromiseReminderEmail(params: {
       `Best regards,<br/>The RazorRecovery Team`,
     ],
     params.amount,
-    params.paymentUrl,
+    params.paymentLinkUrl,
   );
   return { subject, html };
 }
@@ -275,10 +275,10 @@ export function buildTicketOutreachEmail(params: {
   customerName: string;
   message: string;
   amount?: number;
-  paymentUrl?: string;
+  paymentLinkUrl?: string;
 }): { subject: string; html: string } {
   const subject = `Regarding your account payment`;
   const paragraphs = params.message.split("\n").filter((p) => p.trim().length > 0);
-  const html = buildEmailTemplate(paragraphs, params.amount, params.paymentUrl);
+  const html = buildEmailTemplate(paragraphs, params.amount, params.paymentLinkUrl);
   return { subject, html };
 }

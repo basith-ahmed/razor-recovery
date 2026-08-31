@@ -16,7 +16,8 @@ jest.mock("../src/config/openai", () => ({ requestJson: jest.fn() }));
 jest.mock("../src/config/prisma", () => {
   const mockPrisma: Record<string, unknown> = {
     customer: { findUnique: jest.fn() },
-    action: { create: jest.fn(), upsert: jest.fn(), count: jest.fn() },
+    action: { create: jest.fn(), upsert: jest.fn(), count: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
+    promiseToPay: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: "mock-ptp-id" }), update: jest.fn().mockResolvedValue({ id: "mock-ptp-id" }) },
     auditEntry: { create: jest.fn(), findMany: jest.fn() },
     entityWorkflowState: { findUnique: jest.fn(), upsert: jest.fn() },
     entityCauseState: {

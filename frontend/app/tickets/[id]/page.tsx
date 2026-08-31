@@ -7,7 +7,7 @@ import { TicketDetailResponse } from "../../../types";
 import { formatCurrency, formatDateTime, formatCauseLabel } from "../../../lib/formatters";
 import { Badge } from "../../../components/Badge";
 import { TicketEmailModal } from "../../../components/TicketEmailModal";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Copy, Check } from "lucide-react";
 
 interface TicketDetailPageProps {
   params: Promise<{ id: string }>;
@@ -28,6 +28,13 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
+  const [copiedPaymentLink, setCopiedPaymentLink] = useState(false);
+
+  function handleCopyPaymentLink(url: string) {
+    navigator.clipboard.writeText(url);
+    setCopiedPaymentLink(true);
+    setTimeout(() => setCopiedPaymentLink(false), 2000);
+  }
   const [includePaymentLink, setIncludePaymentLink] = useState(true);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailStatusMsg, setEmailStatusMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -418,6 +425,29 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
                     <span className="text-ink-muted">Updated</span>
                     <span className="text-ink-muted">{formatDateTime(detail.ticket.updatedAt)}</span>
                   </div>
+                  {detail.ticket.paymentLinkUrl && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-ink-muted">Payment Link</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPaymentLink(detail.ticket.paymentLinkUrl!)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-active px-2 py-0.5 rounded border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer"
+                        title={detail.ticket.paymentLinkUrl}
+                      >
+                        {copiedPaymentLink ? (
+                          <>
+                            <Check className="w-3 h-3 text-accent-green" />
+                            <span className="text-accent-green">Copied Link</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Copy Link</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

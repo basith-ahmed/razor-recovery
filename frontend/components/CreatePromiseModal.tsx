@@ -1,7 +1,9 @@
-import React, { useState } from "react";
-import { CustomerLookupItem, CreatePromiseInput } from "../types";
+import React, { useState, useEffect } from "react";
+import { CustomerLookupItem, CustomerEntityLookupItem, CreatePromiseInput } from "../types";
 import { Modal } from "./Modal";
 import { CustomerSearchCombobox } from "./CustomerSearchCombobox";
+import { EntitySearchCombobox } from "./EntitySearchCombobox";
+import { fetchCustomerEntities } from "../lib/api";
 
 interface CreatePromiseModalProps {
   isOpen: boolean;
@@ -24,8 +26,69 @@ export function CreatePromiseModal({
     notes: "",
     sendEmail: true,
   });
+  const [customerEntities, setCustomerEntities] = useState<CustomerEntityLookupItem[]>([]);
+  const [loadingEntities, setLoadingEntities] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Load customer's associated entities whenever selected customer changes
+  useEffect(() => {
+    if (!formData.customerId) {
+      setCustomerEntities([]);
+      setFormData((prev) => ({ ...prev, entityId: "", amount: "" }));
+      return;
+    }
+
+    let ignore = false;
+    setLoadingEntities(true);
+    fetchCustomerEntities(formData.customerId)
+      .then((list) => {
+        if (!ignore) {
+          setCustomerEntities(list);
+          setLoadingEntities(false);
+          // If customer has exactly 1 entity, auto-select it and populate amount
+          if (list.length === 1) {
+            setFormData((prev) => ({
+              ...prev,
+              entityId: list[0].entityId,
+              amount: String(list[0].amount),
+            }));
+          }
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          console.error("Failed to load customer entities:", err);
+          setCustomerEntities([]);
+          setLoadingEntities(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [formData.customerId]);
+
+  function handleSelectEntity(entityIdVal: string) {
+    if (!entityIdVal) {
+      setFormData((prev) => ({ ...prev, entityId: "" }));
+      return;
+    }
+
+    const matched = customerEntities.find((e) => e.entityId === entityIdVal);
+    if (matched) {
+      setFormData((prev) => ({
+        ...prev,
+        entityId: matched.entityId,
+        amount: String(matched.amount),
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        entityId: entityIdVal,
+      }));
+    }
+  }
 
   function handlePresetDays(days: number) {
     const target = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -112,13 +175,13 @@ export function CreatePromiseModal({
           <label className="block text-xs font-semibold text-ink mb-1">
             Associated Entity / Reference ID (Optional)
           </label>
-          <input
-            type="text"
-            placeholder="e.g. inv_001, sub_002, cart_003"
-            value={formData.entityId}
-            onChange={(e) => setFormData({ ...formData, entityId: e.target.value })}
-            className="w-full text-xs border border-hairline-input rounded-[4px] px-3 py-2 text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
+          <EntitySearchCombobox
+            entities={customerEntities}
+            selectedEntityId={formData.entityId}
+            onSelectEntity={handleSelectEntity}
             disabled={submitting}
+            loading={loadingEntities}
+            hasCustomerSelected={Boolean(formData.customerId)}
           />
         </div>
 
@@ -134,7 +197,7 @@ export function CreatePromiseModal({
               placeholder="e.g. 5000"
               value={formData.amount}
               onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              className="w-full text-xs border border-hairline-input rounded-[4px] px-3 py-2 text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
+              className="w-full text-xs border border-hairline-input rounded-[4px] px-3 py-2 text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all font-medium"
               required
               disabled={submitting}
             />

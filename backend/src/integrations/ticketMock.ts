@@ -21,7 +21,7 @@ export async function escalateToHuman(
           notes: {
             create: {
               author: "System / Pipeline",
-              content: `Automated escalation triggered: ${reason}`,
+              content: `Escalation triggered: ${reason}`,
               type: "status_change",
             },
           },
