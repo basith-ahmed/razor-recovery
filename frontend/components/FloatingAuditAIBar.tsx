@@ -245,7 +245,7 @@ export function FloatingAuditAIBar({
       {/* Floating Bottom Bar (Seamless Pill Style) */}
       <form
         onSubmit={handleSubmit}
-        className="bg-white/55 backdrop-blur-[8px] border-2 border-hairline rounded-full p-1.5 pl-3 shadow-notion-elevated flex items-center gap-2.5 transition-all focus-within:border-primary/40 focus-within:shadow-md text-xs"
+        className="bg-white/80 backdrop-blur-[8px] border-2 border-hairline rounded-full p-1.5 pl-3 shadow-notion-elevated flex items-center gap-2.5 transition-all focus-within:border-primary/40 focus-within:shadow-md text-xs"
       >
 
         <input

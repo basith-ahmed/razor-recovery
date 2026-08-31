@@ -227,8 +227,12 @@ export interface PolicyResponse {
 export interface AuditVerifyResult {
   valid: boolean;
   entriesChecked: number;
+  totalEntries?: number;
   brokenAtEntryId?: string;
+  brokenAtEntityId?: string;
   brokenAtSequence?: number;
+  brokenReason?: "prev_hash_mismatch" | "content_hash_mismatch";
+  verifiedAt?: string;
 }
 
 export interface AuditQueryRequest {

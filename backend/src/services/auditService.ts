@@ -310,28 +310,53 @@ export async function recordFailureAuditEntry(
 export interface VerifyChainResult {
   valid: boolean;
   entriesChecked: number;
+  totalEntries: number;
   brokenAtEntryId?: string;
+  brokenAtEntityId?: string;
   brokenAtSequence?: number;
+  brokenReason?: "prev_hash_mismatch" | "content_hash_mismatch";
+  verifiedAt: string;
 }
 
 export async function verifyChain(
-  fromSequence = 1,
+  fromSequence?: number,
   toSequence?: number,
   batchSize = 500,
 ): Promise<VerifyChainResult> {
-  let cursor = fromSequence;
+  const totalEntries = await prisma.auditEntry.count();
+  const nowIso = new Date().toISOString();
+
+  if (totalEntries === 0) {
+    return {
+      valid: true,
+      entriesChecked: 0,
+      totalEntries: 0,
+      verifiedAt: nowIso,
+    };
+  }
+
+  // Find the lowest sequence number in the database
+  const firstAvailableRow = await prisma.auditEntry.findFirst({
+    orderBy: { sequenceNumber: "asc" },
+  });
+
+  const startSeq = fromSequence ?? firstAvailableRow?.sequenceNumber ?? 1;
+  let cursor = startSeq;
   let expectedPrevHash: string | null = null;
   let checked = 0;
 
-  if (fromSequence > 1) {
+  if (startSeq > (firstAvailableRow?.sequenceNumber ?? 1)) {
     const priorRow = await prisma.auditEntry.findFirst({
-      where: { sequenceNumber: { lt: fromSequence } },
+      where: { sequenceNumber: { lt: startSeq } },
       orderBy: { sequenceNumber: "desc" },
     });
-    expectedPrevHash = priorRow?.hash ?? GENESIS_HASH;
+    expectedPrevHash = priorRow?.hash ?? firstAvailableRow?.prevHash ?? GENESIS_HASH;
   } else {
-    expectedPrevHash = GENESIS_HASH;
+    // Starting from the beginning of available rows
+    expectedPrevHash = firstAvailableRow?.prevHash ?? GENESIS_HASH;
   }
+
+  let isFirstRow = true;
 
   while (true) {
     const rows = await prisma.auditEntry.findMany({
@@ -347,14 +372,36 @@ export async function verifyChain(
     if (rows.length === 0) break;
 
     for (const row of rows) {
-      if (row.prevHash !== expectedPrevHash) {
+      // If sequenceNumber === 1, prevHash MUST be GENESIS_HASH
+      if (row.sequenceNumber === 1 && row.prevHash !== GENESIS_HASH) {
         return {
           valid: false,
           entriesChecked: checked,
+          totalEntries,
           brokenAtEntryId: row.id,
+          brokenAtEntityId: row.entityId,
           brokenAtSequence: row.sequenceNumber,
+          brokenReason: "prev_hash_mismatch",
+          verifiedAt: nowIso,
         };
       }
+
+      // Check prevHash continuity
+      if (!isFirstRow && row.prevHash !== expectedPrevHash) {
+        return {
+          valid: false,
+          entriesChecked: checked,
+          totalEntries,
+          brokenAtEntryId: row.id,
+          brokenAtEntityId: row.entityId,
+          brokenAtSequence: row.sequenceNumber,
+          brokenReason: "prev_hash_mismatch",
+          verifiedAt: nowIso,
+        };
+      }
+
+      isFirstRow = false;
+
       const hashable: HashableEntry = {
         eventId: row.eventId,
         entityId: row.entityId,
@@ -369,20 +416,31 @@ export async function verifyChain(
             ? row.timestamp.toISOString()
             : new Date(row.timestamp).toISOString(),
       };
+
       const recomputed = computeEntryHash(row.prevHash, hashable);
       if (recomputed !== row.hash) {
         return {
           valid: false,
           entriesChecked: checked,
+          totalEntries,
           brokenAtEntryId: row.id,
+          brokenAtEntityId: row.entityId,
           brokenAtSequence: row.sequenceNumber,
+          brokenReason: "content_hash_mismatch",
+          verifiedAt: nowIso,
         };
       }
+
       expectedPrevHash = row.hash;
       checked++;
     }
     cursor = rows[rows.length - 1].sequenceNumber + 1;
   }
 
-  return { valid: true, entriesChecked: checked };
+  return {
+    valid: true,
+    entriesChecked: checked,
+    totalEntries,
+    verifiedAt: nowIso,
+  };
 }
