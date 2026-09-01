@@ -178,9 +178,13 @@ export async function decide(
       ? output.chosen_action
       : legalActions[0];
 
-  if (chosenAction !== output.chosen_action) {
+  if (typeof output.chosen_action !== "string") {
     console.error(
-      `[decision] LLM chose action "${output.chosen_action}" outside the legal set [${legalActions.join(", ")}]; using deterministic fallback.`,
+      `[decision] LLM returned unparseable output (excerpt: ${rawResponse.slice(0, 160)}); using deterministic fallback.`
+    );
+  } else if (chosenAction !== output.chosen_action) {
+    console.error(
+      `[decision] LLM chose action "${output.chosen_action}" outside the legal set [${legalActions.join(", ")}]; using deterministic fallback.`
     );
   }
 

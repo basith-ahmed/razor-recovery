@@ -50,7 +50,7 @@ describe("Integration Layer (Phase 4)", () => {
 
       expect(res.actionType).toBe("escalate_to_human");
       expect(res.result).toBe("success");
-      expect(res.integration).toBe("MOCK");
+      expect(res.integration).toBe("TICKET");
       expect(res.detail).toBeDefined();
 
       const ticket = await prisma.ticket.findUnique({

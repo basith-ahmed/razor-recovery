@@ -265,7 +265,8 @@ export async function processRazorpayPaymentWebhook(payload: Record<string, any>
     });
 
     if (matchingPromises.length > 0) {
-      await prisma.$transaction(async (tx) => {
+      const settlements = await prisma.$transaction(async (tx) => {
+        const settled = [];
         for (const p of matchingPromises) {
           await tx.promiseToPay.update({
             where: { id: p.id },
@@ -312,6 +313,10 @@ export async function processRazorpayPaymentWebhook(payload: Record<string, any>
             referenceId: paymentId || paymentLinkId || p.id,
           });
 
+          await tx.entityCauseState.deleteMany({
+            where: { entityId: p.entityId },
+          });
+
           await tx.entityWorkflowState.upsert({
             where: { entityId: p.entityId },
             create: {
@@ -325,9 +330,37 @@ export async function processRazorpayPaymentWebhook(payload: Record<string, any>
               attemptCount: 0,
             },
           });
+
+          await redis.set(`razorrecovery:recovered:${p.entityId}`, "true", "EX", 86400 * 30);
+
+          const settlementEntry = await writeChainedAuditEntry(tx, {
+            eventId,
+            entityId: p.entityId,
+            actor: "razorpay_webhook",
+            inputSnapshot: payload,
+            diagnosisSnapshot: undefined,
+            decisionSnapshot: undefined,
+            actionSnapshot: {
+              actionType: "webhook_capture",
+              result: "success",
+              integration: "RAZORPAY",
+              detail: `Promised payment settled via Razorpay webhook (promise ${p.id}).`,
+              paymentId: paymentId || paymentLinkId || p.id,
+            },
+            outcome: "recovered",
+            timestamp: new Date(),
+          });
+          settled.push({ entry: settlementEntry, eventId, entityId: p.entityId });
         }
+        return settled;
       });
 
+      for (const settlement of settlements) {
+        await announceAuditEntry(settlement.entry, {
+          eventId: settlement.eventId,
+          entityId: settlement.entityId,
+        });
+      }
       await emitLiveUpdate(matchingPromises[0].entityId);
       console.log(`[webhookService] Settled ${matchingPromises.length} standalone promise(s) to 'kept'.`);
       return { status: "settled_promises", count: matchingPromises.length };

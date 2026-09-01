@@ -407,12 +407,12 @@ export async function escalateEntityToHuman(
       eventId: latestEvent.id,
       actionType: "escalate_to_human",
       result: "success",
-      integration: "MOCK",
+      integration: "TICKET",
     },
     update: {
       actionType: "escalate_to_human",
       result: "success",
-      integration: "MOCK",
+      integration: "TICKET",
     },
   });
 

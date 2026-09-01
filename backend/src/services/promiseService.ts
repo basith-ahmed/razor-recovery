@@ -289,6 +289,7 @@ export async function createPromise(input: CreatePromiseInput): Promise<Formatte
           actionSnapshot: {
             actionType: "promise_to_pay_created",
             result: "success",
+            integration: "PROMISE",
             detail: `Entity converted to Promise-to-Pay for ₹${numericAmount.toLocaleString("en-IN")} due by ${dueDate.toISOString().split("T")[0]}. Automated outreach in cooldown until promise date.`,
           },
           outcome: "pending",

@@ -40,6 +40,8 @@ jest.mock("../src/config/prisma", () => ({
     $transaction: jest.fn(async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx)),
     entityWorkflowState: { upsert: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
     action: { findFirst: jest.fn().mockResolvedValue(null) },
+    promiseToPay: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
+    ticket: { findFirst: jest.fn().mockResolvedValue(null) },
     revenueEvent: {
       findFirst: jest.fn().mockResolvedValue({
         id: "event-1",
@@ -121,16 +123,90 @@ describe("Razorpay Webhook", () => {
     await handleRazorpayWebhook(req as Request, res as Response);
     expect(res.status).toHaveBeenCalledWith(200);
 
-    expect(mockTx.entityWorkflowState.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { entityId: "entity-123" },
-        update: expect.objectContaining({
-          state: "RECOVERED",
-          attemptCount: 0,
-          lastContactedAt: null,
-          cooldownUntil: null,
+      expect(mockTx.entityWorkflowState.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { entityId: "entity-123" },
+          update: expect.objectContaining({
+            state: "RECOVERED",
+            attemptCount: 0,
+            lastContactedAt: null,
+            cooldownUntil: null,
+          }),
         }),
-      }),
-    );
+      );
+    });
+
+    it("settles a standalone promised payment with a chained audit entry", async () => {
+      (prisma.revenueEvent.findFirst as jest.Mock).mockResolvedValueOnce(null);
+      (prisma.promiseToPay.findMany as jest.Mock).mockResolvedValueOnce([
+        {
+          id: "ptp-standalone-1",
+          entityId: "entity-ptp-9",
+          customerId: "cust-1",
+          eventId: "event-1",
+          promisedAmount: 750,
+          currency: "INR",
+          createdAt: new Date(),
+        },
+      ]);
+
+      const bodyObj = {
+        event: "payment.captured",
+        payload: {
+          payment: {
+            entity: {
+              id: "pay_ptp_webhook_1",
+              payment_link_id: "plink_ptp_standalone",
+            },
+          },
+        },
+      };
+      const rawBody = JSON.stringify(bodyObj);
+      const validSignature = crypto
+        .createHmac("sha256", env.RAZORPAY_WEBHOOK_SECRET)
+        .update(rawBody)
+        .digest("hex");
+
+      const req: Partial<Request> = {
+        headers: { "x-razorpay-signature": validSignature },
+        body: bodyObj,
+        ...({ rawBody } as object),
+      };
+
+      await handleRazorpayWebhook(req as Request, res as Response);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "ok", processed: true, count: 1 })
+      );
+      expect(mockTx.promiseToPay.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "ptp-standalone-1" },
+          data: { status: "kept" },
+        })
+      );
+      expect(mockTx.entityCauseState.deleteMany).toHaveBeenCalledWith({
+        where: { entityId: "entity-ptp-9" },
+      });
+      expect(mockTx.ledgerEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: "RECOVERED", amount: 750 }),
+        })
+      );
+      expect(mockTx.auditEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            eventId: "event-1",
+            entityId: "entity-ptp-9",
+            actor: "razorpay_webhook",
+            outcome: "recovered",
+            actionSnapshot: expect.objectContaining({
+              actionType: "webhook_capture",
+              integration: "RAZORPAY",
+            }),
+          }),
+        })
+      );
+      const { publish } = require("../src/kafka/producer") as { publish: jest.Mock };
+      expect(publish).toHaveBeenCalled();
+    });
   });
-});

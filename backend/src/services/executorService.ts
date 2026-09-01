@@ -24,9 +24,6 @@ export { buildEmailTemplate };
 const EMAIL_ACTIONS = new Set([
   "send_reminder_email",
   "send_soft_chase_email",
-  "send_dunning_email_1",
-  "send_dunning_email_2",
-  "send_dunning_email_3",
   "send_winback_offer",
 ]);
 
@@ -61,7 +58,7 @@ export async function executeAction(
     actionResult = {
       actionType: "none",
       result: "skipped",
-      integration: "MOCK",
+      integration: "NONE",
     };
   } else if (EMAIL_ACTIONS.has(chosenAction)) {
     const customer = await findCustomerById(event.customerId);
@@ -172,7 +169,7 @@ export async function executeAction(
     actionResult = {
       actionType: chosenAction,
       result: "success",
-      integration: "RAZORPAY",
+      integration: "PROMISE",
       razorpayPaymentLinkId: link.razorpayPaymentLinkId,
       paymentLinkUrl: link.paymentLinkUrl,
       emailMessageId: emailMsgId,

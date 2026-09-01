@@ -76,7 +76,26 @@ async function chat(
   if (typeof content !== "string") {
     throw new Error("LLM returned no text content.");
   }
-  return content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  const cleaned = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  if (useJsonSchema) {
+    // Structured outputs were requested: a non-JSON payload means the endpoint
+    // ignored the schema. Treat it as a failed attempt so the retry loop can
+    // recover instead of handing garbage to the caller's parser.
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      throw new Error(
+        `LLM returned non-JSON content despite schema (excerpt: ${cleaned.slice(0, 120)})`
+      );
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(
+        `LLM returned a non-object payload despite schema (excerpt: ${cleaned.slice(0, 120)})`
+      );
+    }
+  }
+  return cleaned;
 }
 
 /**

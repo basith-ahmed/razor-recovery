@@ -59,7 +59,7 @@ export interface DecisionResult {
 export interface ActionResult {
   actionType: string;
   result: "success" | "failed" | "skipped" | "scheduled" | "cancelled";
-  integration: "RAZORPAY" | "EMAIL" | "MOCK";
+  integration: "RAZORPAY" | "EMAIL" | "TICKET" | "PROMISE" | "NONE";
   razorpayPaymentLinkId?: string;
   paymentLinkUrl?: string; // https://rzp.io/i/... — canonical name, previously paymentLinkShortUrl
   paymentId?: string;

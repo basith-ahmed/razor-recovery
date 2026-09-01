@@ -263,7 +263,7 @@ describe("executorService", () => {
 
       expect(mockedPrisma.ticket.create).toHaveBeenCalledTimes(1);
       expect(result.result).toBe("success");
-      expect(result.integration).toBe("MOCK");
+      expect(result.integration).toBe("TICKET");
       expect(result.actionType).toBe("escalate_to_human");
     });
 
@@ -274,7 +274,7 @@ describe("executorService", () => {
       );
 
       expect(result.result).toBe("skipped");
-      expect(result.integration).toBe("MOCK");
+      expect(result.integration).toBe("NONE");
       expect(result.actionType).toBe("none");
     });
 
@@ -355,7 +355,7 @@ describe("auditService", () => {
     const action: ActionResult = {
       actionType: "none",
       result: "skipped",
-      integration: "MOCK",
+      integration: "NONE",
     };
 
     await recordAuditEntry({ event, diagnosis, decision, action });
@@ -402,7 +402,7 @@ describe("auditService", () => {
     const action: ActionResult = {
       actionType: "none",
       result: "skipped",
-      integration: "MOCK",
+      integration: "NONE",
     };
 
     await recordAuditEntry({ event, diagnosis, decision, action });
@@ -490,7 +490,7 @@ describe("auditService", () => {
     const action: ActionResult = {
       actionType: "escalate_to_human",
       result: "success",
-      integration: "MOCK",
+      integration: "TICKET",
       detail: "ticket-1",
     };
 
@@ -602,7 +602,7 @@ describe("per-cause attempt/cooldown scoping", () => {
     const action: ActionResult = {
       actionType: "none",
       result: "skipped",
-      integration: "MOCK",
+      integration: "NONE",
     };
 
     await recordAuditEntry({ event, diagnosis, decision, action });
@@ -649,7 +649,7 @@ describe("metricsService", () => {
           amount: 3000,
           occurredAt: oneHourAgo,
           diagnosis: { causeLabel: "invoice_disputed" },
-          action: { integration: "MOCK", actionType: "escalate_to_human", result: "success", executedAt: now },
+          action: { integration: "TICKET", actionType: "escalate_to_human", result: "success", executedAt: now },
           auditEntries: [{ outcome: "escalated", timestamp: now }],
         },
         // Event 3: DNC-skipped
@@ -658,7 +658,7 @@ describe("metricsService", () => {
           amount: 2000,
           occurredAt: oneHourAgo,
           diagnosis: { causeLabel: "dnc" },
-          action: { integration: "MOCK", actionType: "none", result: "skipped", executedAt: now },
+          action: { integration: "NONE", actionType: "none", result: "skipped", executedAt: now },
           auditEntries: [{ outcome: "skipped", timestamp: now }],
         },
       ];

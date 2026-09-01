@@ -46,9 +46,6 @@ function toStateMachineOutcome(
   switch (action.actionType) {
     case "send_reminder_email":
     case "send_soft_chase_email":
-    case "send_dunning_email_1":
-    case "send_dunning_email_2":
-    case "send_dunning_email_3":
       return "email_sent";
     case "escalate_to_human":
       return "escalation_triggered";

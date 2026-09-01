@@ -42,7 +42,7 @@ export async function escalateToHuman(
     return {
       actionType: "escalate_to_human",
       result: "success",
-      integration: "MOCK",
+      integration: "TICKET",
       detail: ticket.id,
     };
   } catch (error: unknown) {

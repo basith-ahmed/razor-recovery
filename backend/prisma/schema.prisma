@@ -40,6 +40,9 @@ enum ActionIntegration {
   RAZORPAY
   EMAIL
   MOCK
+  TICKET
+  PROMISE
+  NONE
 }
 
 model Customer {

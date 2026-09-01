@@ -1,6 +1,6 @@
 import { redis } from "../config/redis";
 
-const REDIS_PREFIX = "razorrecovery";
+export const REDIS_PREFIX = "razorrecovery";
 const DEFAULT_DEDUP_TTL = 3600; // 1 hour
 const DEFAULT_RECOVERED_TTL = 86400 * 30; // 30 days
 
