@@ -10,6 +10,7 @@ export interface EmailTemplateContext {
   cause?: string;
   actionType?: string;
   paymentLinkUrl?: string;
+  winbackDiscountPercent?: number;
 }
 
 /**
@@ -96,6 +97,22 @@ export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; 
         `Hi ${ctx.customerName},`,
         `Your payment of ${formattedAmount} for ${entityRef} encountered a temporary bank network timeout during processing.`,
         `We have verified that your transaction is safe. Please use the secure link below to complete your payment.`,
+        `Best regards,<br/>The RazorRecovery Team`,
+      ],
+    };
+  }
+
+  // Winback retention offer (subscription customers judged high-value by the decision LLM)
+  if (ctx.actionType === "send_winback_offer") {
+    const discount = ctx.winbackDiscountPercent ?? 20;
+    const discountedAmount = Math.round(ctx.amount * (1 - discount / 100));
+    return {
+      subject: `We'd love to keep you — ${discount}% off ${entityRef}`,
+      paragraphs: [
+        `Hi ${ctx.customerName},`,
+        `We noticed your subscription auto-debit for ${entityRef} (${formattedAmount}) needs re-authorization, and we'd hate to lose you.`,
+        `As a valued customer, we're offering you an exclusive ${discount}% discount on your upcoming period — bringing it down to ₹${discountedAmount.toLocaleString("en-IN")} — if you re-authorize now.`,
+        `Click the button below to re-authorize your mandate and claim your discount before your subscription is interrupted.`,
         `Best regards,<br/>The RazorRecovery Team`,
       ],
     };

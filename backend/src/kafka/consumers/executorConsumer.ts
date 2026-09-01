@@ -51,7 +51,7 @@ export async function startExecutorConsumer(): Promise<void> {
           return;
         }
 
-        const action: ActionResult = await executeAction(decision, event);
+        const action: ActionResult = await executeAction(decision, event, diagnosis.causeLabel);
 
         await publish(TOPICS.ACTIONS, event.id, {
           event,

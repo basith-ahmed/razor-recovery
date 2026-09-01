@@ -18,6 +18,7 @@ import {
 import { findCustomerById } from "./customerService";
 import { revenueEventExists } from "./revenueEventService";
 import { getOrCreatePaymentLink } from "./paymentLinkService";
+import { getRuleForCause } from "../domain/policy";
 
 export { buildEmailTemplate };
 
@@ -32,6 +33,7 @@ export async function draftRecoveryEmail(
   customerName: string,
   cause: string,
   paymentLinkUrl?: string,
+  winbackDiscountPercent?: number,
 ): Promise<{ subject: string; html: string }> {
   return generateRecoveryEmail({
     customerName,
@@ -44,12 +46,14 @@ export async function draftRecoveryEmail(
     errorCode: event.errorCode,
     cause,
     paymentLinkUrl,
+    winbackDiscountPercent,
   });
 }
 
 export async function executeAction(
   decision: DecisionResult,
   event: EnrichedRevenueEvent,
+  causeLabel?: string,
 ): Promise<ActionResult> {
   const { chosenAction } = decision;
   let actionResult: ActionResult;
@@ -89,6 +93,7 @@ export async function executeAction(
       customer.name,
       event.errorReason ?? "payment issue",
       paymentLinkUrl,
+      causeLabel ? getRuleForCause(causeLabel)?.winback?.discountPercent : undefined,
     );
     actionResult = await emailIntegration.sendRecoveryEmail({
       to: customer.email,

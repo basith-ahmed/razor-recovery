@@ -34,12 +34,12 @@ describe("policy.ts", () => {
 
   it("loadPolicy returns the v2 revenue-leakage policy", () => {
     const policy = loadPolicy();
-    expect(policy.version).toBe("2.2.0");
+    expect(policy.version).toBe("2.3.0");
     expect(policy.rules).toHaveLength(5);
   });
 
   it("getPolicyVersion returns the version string", () => {
-    expect(getPolicyVersion()).toBe("2.2.0");
+    expect(getPolicyVersion()).toBe("2.3.0");
   });
 
   it("getRuleForCause returns the correct rule", () => {
@@ -50,13 +50,14 @@ describe("policy.ts", () => {
     expect(rule!.escalateAboveAmount).toBe(10000);
   });
 
-  it("mandate rule carries the same value-escalation threshold as carts", () => {
+  it("mandate rule offers the winback retention flow instead of value escalation", () => {
     const rule = getRuleForCause("mandate_requires_reauthorization");
     expect(rule).toBeDefined();
     expect(rule!.actions).toEqual(
-      expect.arrayContaining(["send_reminder_email", "pause_subscription", "escalate_to_human"])
+      expect.arrayContaining(["send_reminder_email", "send_winback_offer", "pause_subscription", "escalate_to_human"])
     );
-    expect(rule!.escalateAboveAmount).toBe(10000);
+    expect(rule!.winback).toEqual({ discountPercent: 20 });
+    expect(rule!.escalateAboveAmount).toBeUndefined();
     expect(rule!.stopping.hardStopDays).toBe(30);
   });
 
@@ -228,6 +229,7 @@ describe("filterLegalActions", () => {
       );
       expect(result).toEqual([
         "send_reminder_email",
+        "send_winback_offer",
         "pause_subscription",
         "escalate_to_human",
       ]);

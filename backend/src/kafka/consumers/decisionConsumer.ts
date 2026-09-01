@@ -9,7 +9,7 @@ import {
   EnrichedRevenueEvent,
 } from "../../domain/types";
 import { FilterContext } from "../../domain/stoppingRules";
-import { cooldownTtlSeconds } from "../../domain/policy";
+import { cooldownTtlSeconds, getRuleForCause } from "../../domain/policy";
 import { publish } from "../producer";
 import { TOPICS } from "../topics";
 import { recordFailureAuditEntry } from "../../services/auditService";
@@ -159,12 +159,26 @@ export async function startDecisionConsumer(): Promise<void> {
 
         const priorFailures = await countCustomerPriorFailures(event.customerId, event.id);
 
+        // Winback context: only fetched when the cause offers a winback, so the
+        // LLM can see whether a winback was already tried for this entity.
+        const recentActions = getRuleForCause(diagnosis.causeLabel)?.winback
+          ? (
+              await prisma.action.findMany({
+                where: { event: { entityId: event.entityId } },
+                orderBy: { executedAt: "desc" },
+                take: 5,
+                select: { actionType: true },
+              })
+            ).map((a) => a.actionType)
+          : undefined;
+
         const decision: DecisionResult = await decide(diagnosis, filterCtx, {
           attemptCount,
           customerLtv: customer?.lifetimeValue ?? 0,
           priorFailures,
           daysSinceLastContact,
           dueScheduledRetry: isDueScheduledRetry,
+          recentActions,
         }, {
           entityType: event.entityType,
           amount: event.amount,

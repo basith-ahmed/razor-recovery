@@ -108,6 +108,34 @@ describe("decisionService — scheduled retry commitment", () => {
     expect(decision.chosenAction).toBe("send_reminder_email");
   });
 
+  it("surfaces the winback offer, discount, and recent actions to the LLM for subscription causes", async () => {
+    mockedRequestJson.mockResolvedValueOnce(
+      JSON.stringify({
+        chosen_action: "send_winback_offer",
+        reasoning: "LTV ₹500,000 dwarfs the ₹14,999 subscription — retain with the 20% winback offer.",
+      }),
+    );
+    const decision = await decide(
+      { causeLabel: "mandate_requires_reauthorization", confidence: 1, method: "RULE" },
+      { ...ctx, causeLabel: "mandate_requires_reauthorization" },
+      {
+        attemptCount: 0,
+        customerLtv: 500000,
+        priorFailures: 0,
+        daysSinceLastContact: 0,
+        recentActions: [],
+      },
+      { entityType: "SUBSCRIPTION", amount: 14999 },
+    );
+
+    expect(decision.chosenAction).toBe("send_winback_offer");
+    expect(requestJson).toHaveBeenCalled();
+    const payload = mockedRequestJson.mock.calls[0][0].input as string;
+    expect(payload).toContain("winback_offer");
+    expect(payload).toContain("20%");
+    expect(payload).toContain("recentActions");
+  });
+
   it("falls back to escalate_to_human when the LLM fails on high-value exposure", async () => {
     mockedRequestJson.mockRejectedValueOnce(new Error("rate limited"));
     const decision = await decide(

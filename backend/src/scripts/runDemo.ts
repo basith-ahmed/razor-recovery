@@ -314,11 +314,11 @@ const steps: Array<{ title: string; run: () => Promise<StepResult | void> }> = [
           buildSubscriptionEnvelope(c, { ref: REFS.subLow, amount: 1499, mandateStatus: "cancelled" })
       );
       summary.push(`9    ${r.line}`);
-      nextHint("push a high-value mandate cancellation (₹14,999 ≥ ₹10,000) → negotiate via human");
+      nextHint("push a high-value mandate cancellation (₹14,999) → LLM weighs LTV: winback offer (20% off) or escalate");
     },
   },
   {
-    title: "Step 10 — High-value mandate cancelled (₹14,999 ≥ ₹10,000 → negotiate)",
+    title: "Step 10 — High-value mandate cancelled (LLM weighs LTV → winback/escalate)",
     run: async () => {
       const r = await runEventStep(
         "Step 10 — High-value mandate cancelled",

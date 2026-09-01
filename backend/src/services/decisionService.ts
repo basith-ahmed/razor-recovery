@@ -92,6 +92,8 @@ export async function decide(
     priorFailures: number;
     daysSinceLastContact: number;
     dueScheduledRetry?: boolean;
+    /** Most recent action types executed for this entity, newest first. */
+    recentActions?: string[];
   },
   retrievalContext?: DecisionRetrievalContext,
 ): Promise<DecisionResult> {
@@ -153,7 +155,11 @@ export async function decide(
   const policyDirective = aboveThreshold && retrievalContext
     ? `\n\npolicy_directive: Exposure ₹${retrievalContext.amount.toLocaleString("en-IN")} meets the policy escalation threshold ₹${escalateThreshold!.toLocaleString("en-IN")}. Default expectation: escalate_to_human. You may keep this entity in the automated flow (choose a different legal action) only if entity_context and similar_past_cases clearly justify it — e.g. high customer LTV, spotless recovery history, prior promises kept. If you deviate from the default, state the justification explicitly in reasoning.`
     : "";
-  const payload = `${JSON.stringify({ diagnosis, legal_actions: legalActions, entity_context: entityContext })}\n\n${similarCasesPrompt(cases)}${policyDirective}`;
+  const winbackOffer = rule?.winback;
+  const winbackDirective = winbackOffer && retrievalContext
+    ? `\n\nwinback_offer: A one-time winback offer email (send_winback_offer) with a ${winbackOffer.discountPercent}% discount is available. Decide by comparing the subscription price ₹${retrievalContext.amount.toLocaleString("en-IN")} against entity_context.customerLtv and the customer's history: for a high-value customer on a first contact, prefer send_winback_offer to retain them at the discounted price. If entity_context.recentActions shows send_winback_offer was already sent for this arc and the customer still has not paid, do not repeat it — prefer escalate_to_human.`
+    : "";
+  const payload = `${JSON.stringify({ diagnosis, legal_actions: legalActions, entity_context: entityContext })}\n\n${similarCasesPrompt(cases)}${policyDirective}${winbackDirective}`;
   let rawResponse = "";
   try {
     rawResponse = await requestDecision(payload);
