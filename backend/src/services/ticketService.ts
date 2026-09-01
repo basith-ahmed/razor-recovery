@@ -13,6 +13,8 @@ import { writeLedgerEntry } from "./ledgerService";
 import { getOrCreatePaymentLink } from "./paymentLinkService";
 import { sendRecoveryEmail } from "../integrations/emailIntegration";
 import { buildTicketOutreachEmail } from "../domain/emailTemplates";
+import { writeChainedAuditEntry } from "./auditService";
+import { emitLiveUpdate } from "../api/websocket";
 import { parsePagination, paginatedResponse } from "../utils/pagination";
 
 export {
@@ -367,7 +369,7 @@ export async function resolveTicket(
 
   const now = new Date();
 
-  return await prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     const updatedTicket = await tx.ticket.update({
       where: { id: ticketId },
       data: {
@@ -439,8 +441,51 @@ export async function resolveTicket(
         currency: latestEvent.currency,
         referenceId: `human_written_off_${ticketId}`,
       });
+
+      // The entity-level effect of both statuses is a write-off (ledger +
+      // workflow above); the ticket-level status is preserved in the snapshots.
+      await writeChainedAuditEntry(tx, {
+        eventId: latestEvent.id,
+        entityId: ticket.entityId,
+        actor: `agent:${params.agentName || "Human Agent"}`,
+        inputSnapshot: {
+          id: latestEvent.id,
+          entityType: latestEvent.entityType,
+          entityId: latestEvent.entityId,
+          customerId: latestEvent.customerId,
+          eventType: latestEvent.eventType,
+          amount: latestEvent.amount,
+          currency: latestEvent.currency,
+          errorReason: latestEvent.errorReason,
+          occurredAt: latestEvent.occurredAt.toISOString(),
+        },
+        decisionSnapshot: {
+          chosenAction: params.status,
+          reasoning:
+            params.resolutionNotes ||
+            `Ticket ${ticketId} resolved as ${params.status} by human agent.`,
+          ticketId,
+          agent: params.agentName || "Human Agent",
+        },
+        actionSnapshot: {
+          actionType: "write_off",
+          result: "success",
+          integration: "MANUAL",
+          ticketId,
+          detail: `Ticket ${ticketId} resolved with status "${params.status}"; entity written off.`,
+        },
+        outcome: "written_off",
+      });
     }
 
     return updatedTicket;
   });
+
+  try {
+    await emitLiveUpdate(latestEvent?.id);
+  } catch (err) {
+    console.error("[ticketService] Failed to emit live update on ticket resolution:", err);
+  }
+
+  return updated;
 }

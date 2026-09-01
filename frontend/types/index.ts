@@ -4,6 +4,7 @@ export interface MetricsSummary {
   window: MetricsWindow;
   amountAtRisk: number;
   amountRecovered: number;
+  amountWrittenOff: number;
   recoveryRate: number;
   eventsProcessed: number;
   funnel: { stage: string; count: number }[];

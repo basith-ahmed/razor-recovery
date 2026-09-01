@@ -110,6 +110,7 @@ export async function computeLiveMetricsUncached(
   // Aggregate distinct entity amounts to guarantee zero double counting
   const distinctAtRisk = new Map<string, number>();
   const distinctRecovered = new Map<string, number>();
+  const distinctWrittenOff = new Map<string, number>();
   let reversedSum = 0;
 
   if (allLedgerEntries && allLedgerEntries.length > 0) {
@@ -121,6 +122,10 @@ export async function computeLiveMetricsUncached(
       } else if (entry.type === "RECOVERED") {
         if (!distinctRecovered.has(entry.entityId)) {
           distinctRecovered.set(entry.entityId, entry.amount);
+        }
+      } else if (entry.type === "WRITTEN_OFF") {
+        if (!distinctWrittenOff.has(entry.entityId)) {
+          distinctWrittenOff.set(entry.entityId, entry.amount);
         }
       } else if (entry.type === "REVERSED") {
         reversedSum += entry.amount;
@@ -140,9 +145,11 @@ export async function computeLiveMetricsUncached(
 
   const atRiskSum = Array.from(distinctAtRisk.values()).reduce((a, b) => a + b, 0);
   const recoveredSum = Array.from(distinctRecovered.values()).reduce((a, b) => a + b, 0);
+  const writtenOffSum = Array.from(distinctWrittenOff.values()).reduce((a, b) => a + b, 0);
 
   amountAtRisk = atRiskSum;
   amountRecovered = Math.max(0, recoveredSum - reversedSum);
+  const amountWrittenOff = Number(writtenOffSum.toFixed(2));
 
   const recoveredEntityIds = new Set<string>(
     recoveredLedgerEntries.map((l) => l.entityId),
@@ -295,6 +302,7 @@ export async function computeLiveMetricsUncached(
     window,
     amountAtRisk: totalAtRiskRounded,
     amountRecovered: totalRecoveredRounded,
+    amountWrittenOff,
     recoveryRate,
     eventsProcessed,
     funnel,

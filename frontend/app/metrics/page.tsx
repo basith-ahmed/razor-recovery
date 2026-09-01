@@ -60,6 +60,7 @@ export default function MetricsPage() {
     csv += `Overview,Window,${metrics.window}\n`;
     csv += `Overview,Amount At Risk,${metrics.amountAtRisk}\n`;
     csv += `Overview,Amount Recovered,${metrics.amountRecovered}\n`;
+    csv += `Overview,Amount Written Off,${metrics.amountWrittenOff}\n`;
     csv += `Overview,Recovery Rate %,${metrics.recoveryRate}\n`;
     csv += `Overview,Events Processed,${metrics.eventsProcessed}\n\n`;
 
@@ -121,7 +122,7 @@ export default function MetricsPage() {
         <div className="space-y-5">
 
           {/* Row 1: Key summary stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
               <span className="text-xs text-ink-muted block mb-1 font-medium">Median Time to Recovery</span>
               <span className="text-2xl font-bold text-accent-green tracking-heading-3">
@@ -140,6 +141,12 @@ export default function MetricsPage() {
               <span className="text-xs text-ink-muted block mb-1 font-medium">Overall Recovery Rate</span>
               <span className="text-2xl font-bold text-accent-orange tracking-heading-3">
                 {metrics ? (metrics.recoveryRate * 100).toFixed(1) : "0.0"}%
+              </span>
+            </div>
+            <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+              <span className="text-xs text-ink-muted block mb-1 font-medium">Amount Written Off</span>
+              <span className="text-2xl font-bold text-ink tracking-heading-3">
+                ₹{(metrics?.amountWrittenOff ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
           </div>

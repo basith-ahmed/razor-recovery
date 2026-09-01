@@ -9,11 +9,12 @@ interface HeroMetricsProps {
 export function HeroMetrics({ metrics }: HeroMetricsProps) {
   const amountAtRisk = metrics?.amountAtRisk ?? 0;
   const amountRecovered = metrics?.amountRecovered ?? 0;
+  const amountWrittenOff = metrics?.amountWrittenOff ?? 0;
   const recoveryRate = (metrics?.recoveryRate ?? 0) * 100;
   const eventsProcessed = metrics?.eventsProcessed ?? 0;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
       <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
         <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-eyebrow mb-1.5">Amount At Risk</p>
         <div className="text-2xl font-bold text-accent-orange tracking-heading-3">
@@ -28,6 +29,14 @@ export function HeroMetrics({ metrics }: HeroMetricsProps) {
           ₹{amountRecovered.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </div>
         <p className="text-xs text-ink-muted mt-1.5">Successfully rescued funds</p>
+      </div>
+
+      <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">
+        <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-eyebrow mb-1.5">Amount Written Off</p>
+        <div className="text-2xl font-bold text-ink tracking-heading-3">
+          ₹{amountWrittenOff.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </div>
+        <p className="text-xs text-ink-muted mt-1.5">Unrecoverable losses declared</p>
       </div>
 
       <div className="bg-white border border-hairline rounded-[12px] p-5 shadow-notion-soft">

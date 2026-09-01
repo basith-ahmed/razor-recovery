@@ -175,4 +175,61 @@ describe("Human Escalation Tickets System", () => {
     expect(ledger).toBeDefined();
     expect(ledger?.amount).toBe(8500);
   });
+
+  it("7. resolveTicket with status 'written_off' writes WRITTEN_OFF ledger and a chained audit entry", async () => {
+    // Test 6 already resolved the first ticket as recovered, so a new open
+    // ticket is created here for the write-off scenario.
+    const actionResult = await escalateToHuman(
+      testEntityId,
+      "Customer unreachable after repeated outreach — write off exposure",
+    );
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: actionResult.detail },
+    });
+    expect(ticket).toBeDefined();
+    expect(ticket?.status).toBe("open");
+
+    const updated = await resolveTicket(ticket!.id, {
+      status: "written_off",
+      resolutionNotes: "No viable recovery path; exposure declared as loss.",
+      agentName: "Agent Smith",
+    });
+
+    expect(updated.status).toBe("written_off");
+    expect(updated.resolvedAt).toBeDefined();
+
+    // Verify EntityWorkflowState is WRITTEN_OFF
+    const workflow = await prisma.entityWorkflowState.findUnique({
+      where: { entityId: testEntityId },
+    });
+    expect(workflow?.state).toBe("WRITTEN_OFF");
+
+    // Verify LedgerEntry was written
+    const ledger = await prisma.ledgerEntry.findFirst({
+      where: { entityId: testEntityId, type: "WRITTEN_OFF" },
+    });
+    expect(ledger).toBeDefined();
+
+    // Verify a hash-chained audit entry was recorded for the entity
+    const auditEntries = await prisma.auditEntry.findMany({
+      where: { entityId: testEntityId, outcome: "written_off" },
+      orderBy: { sequenceNumber: "desc" },
+    });
+    expect(auditEntries.length).toBeGreaterThanOrEqual(1);
+
+    const entry = auditEntries[0];
+    expect(entry.actor).toBe("agent:Agent Smith");
+    expect(entry.eventId).toBeDefined();
+
+    const decision = entry.decisionSnapshot as Record<string, unknown> | null;
+    expect(decision?.chosenAction).toBe("written_off");
+    expect(decision?.reasoning).toContain("No viable recovery path");
+
+    const action = entry.actionSnapshot as Record<string, unknown> | null;
+    expect(action?.actionType).toBe("write_off");
+    expect(action?.result).toBe("success");
+
+    const chainHead = await prisma.auditChainHead.findUnique({ where: { id: 1 } });
+    expect(chainHead?.hash).toBe(entry.hash);
+  });
 });

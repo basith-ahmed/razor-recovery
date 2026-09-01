@@ -90,6 +90,7 @@ export interface MetricsSummary {
   window: Window;
   amountAtRisk: number;
   amountRecovered: number;
+  amountWrittenOff: number;
   recoveryRate: number;
   eventsProcessed: number;
   funnel: FunnelStage[];
