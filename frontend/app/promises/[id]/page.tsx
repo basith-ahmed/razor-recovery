@@ -8,6 +8,7 @@ import { formatCurrency, formatDateTime, formatDate } from "../../../lib/formatt
 import { Badge } from "../../../components/Badge";
 import { CountdownTimer } from "../../../components/CountdownTimer";
 import { PageHeader } from "../../../components/PageHeader";
+import { FloatingAuditAIBar } from "../../../components/FloatingAuditAIBar";
 import { ArrowRight, Copy, Check } from "lucide-react";
 
 interface PromiseDetailPageProps {
@@ -341,6 +342,22 @@ export default function PromiseDetailPage({ params }: PromiseDetailPageProps) {
           </div>
         </div>
       ) : null}
+
+      {promise && (
+        <FloatingAuditAIBar
+          key={promise.entityId}
+          entityId={promise.entityId}
+          scope="promises"
+          title="Promise Commitment Copilot"
+          sampleQuestions={[
+            "What is the status and history of this payment commitment?",
+            "When was the payment link created and has the customer opened it?",
+            "What happens when this promise reaches its grace period?",
+            "Has a reminder email been scheduled for this customer?",
+            "What was the previous transaction failure reason for this customer?",
+          ]}
+        />
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getEntityAudit, escalateEntity } from "../../../lib/api";
 import { AuditEntry, EntityAuditResponse, EntityEventItem } from "../../../types";
 import { AuditTimeline } from "../../../components/AuditTimeline";
+import { FloatingAuditAIBar } from "../../../components/FloatingAuditAIBar";
 import { useLiveStream } from "../../../lib/socket";
 import { formatCurrency, formatDateTime, formatDate } from "../../../lib/formatters";
 import { Badge } from "../../../components/Badge";
@@ -331,6 +332,19 @@ export default function EntityDetailPage({ params }: EntityDetailPageProps) {
           </div>
         </div>
       )}
+
+      <FloatingAuditAIBar
+        key={actualEntityId}
+        entityId={actualEntityId}
+        title="Entity Audit Copilot"
+        sampleQuestions={[
+          "Why was this customer escalated?",
+          "What was the diagnosed cause for this event?",
+          "What actions were attempted before the final outcome?",
+          "How was the recovery policy and cooldown determined?",
+          "Why did the autonomous dunning rule trigger?",
+        ]}
+      />
     </div>
   );
 }

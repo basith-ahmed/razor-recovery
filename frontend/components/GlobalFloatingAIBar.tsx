@@ -12,57 +12,12 @@ interface RouteAIConfig {
 }
 
 function getRouteAIConfig(pathname: string): RouteAIConfig | null {
-  // 1. Entity detail page: /entities/[id]
-  const entityMatch = pathname.match(/^\/entities\/([^/]+)$/);
-  if (entityMatch && entityMatch[1]) {
-    return {
-      title: "Entity Audit Copilot",
-      entityId: entityMatch[1],
-      sampleQuestions: [
-        "Why was this customer escalated?",
-        "What was the diagnosed cause for this event?",
-        "What actions were attempted before the final outcome?",
-        "How was the recovery policy and cooldown determined?",
-        "Why did the autonomous dunning rule trigger?",
-      ],
-    };
-  }
+  // Detail pages (/entities/[id], /promises/[id], /tickets/[id]) render their
+  // own FloatingAuditAIBar with the resolved entity ID — the URL parameter on
+  // those routes is a ticket/promise/event ID, not an entity ID, and must not
+  // be sent to the audit query API as an entity ID.
 
-  // 2. Promise detail page: /promises/[id]
-  const promiseMatch = pathname.match(/^\/promises\/([^/]+)$/);
-  if (promiseMatch && promiseMatch[1]) {
-    return {
-      title: "Promise Commitment Copilot",
-      entityId: promiseMatch[1],
-      scope: "promises",
-      sampleQuestions: [
-        "What is the status and history of this payment commitment?",
-        "When was the payment link created and has the customer opened it?",
-        "What happens when this promise reaches its grace period?",
-        "Has a reminder email been scheduled for this customer?",
-        "What was the previous transaction failure reason for this customer?",
-      ],
-    };
-  }
-
-  // 3. Ticket detail page: /tickets/[id]
-  const ticketMatch = pathname.match(/^\/tickets\/([^/]+)$/);
-  if (ticketMatch && ticketMatch[1]) {
-    return {
-      title: "Escalation Case Copilot",
-      entityId: ticketMatch[1],
-      scope: "escalations",
-      sampleQuestions: [
-        "What were the automated actions attempted before escalation?",
-        "What is the diagnosed cause and policy reasoning for this case?",
-        "What are the internal notes logged by previous agents?",
-        "How can I send a custom recovery payment link to this customer?",
-        "What is the risk score and lifetime value of this customer?",
-      ],
-    };
-  }
-
-  // 4. Entities list page: /entities
+  // 1. Entities list page: /entities
   if (pathname === "/entities") {
     return {
       title: "Entities AI Assistant",
@@ -77,7 +32,7 @@ function getRouteAIConfig(pathname: string): RouteAIConfig | null {
     };
   }
 
-  // 5. Promises list page: /promises
+  // 2. Promises list page: /promises
   if (pathname === "/promises") {
     return {
       title: "Promises AI Assistant",
@@ -92,7 +47,7 @@ function getRouteAIConfig(pathname: string): RouteAIConfig | null {
     };
   }
 
-  // 6. Escalations list page: /tickets
+  // 3. Escalations list page: /tickets
   if (pathname === "/tickets") {
     return {
       title: "Escalations AI Assistant",
@@ -107,7 +62,7 @@ function getRouteAIConfig(pathname: string): RouteAIConfig | null {
     };
   }
 
-  // 7. Metrics page: /metrics
+  // 4. Metrics page: /metrics
   if (pathname === "/metrics") {
     return {
       title: "Metrics AI Assistant",
@@ -122,7 +77,7 @@ function getRouteAIConfig(pathname: string): RouteAIConfig | null {
     };
   }
 
-  // 8. Policy page: /policy
+  // 5. Policy page: /policy
   if (pathname === "/policy") {
     return {
       title: "Policy & Compliance Assistant",
@@ -137,7 +92,7 @@ function getRouteAIConfig(pathname: string): RouteAIConfig | null {
     };
   }
 
-  // 9. Overview page: /
+  // 6. Overview page: /
   if (pathname === "/") {
     return {
       title: "Overview AI Copilot",

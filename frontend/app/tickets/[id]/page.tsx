@@ -7,6 +7,7 @@ import { TicketDetailResponse } from "../../../types";
 import { formatCurrency, formatDateTime, formatCauseLabel } from "../../../lib/formatters";
 import { Badge } from "../../../components/Badge";
 import { TicketEmailModal } from "../../../components/TicketEmailModal";
+import { FloatingAuditAIBar } from "../../../components/FloatingAuditAIBar";
 import { ArrowRight, Copy, Check } from "lucide-react";
 
 interface TicketDetailPageProps {
@@ -471,6 +472,22 @@ export default function TicketDetailPage({ params }: TicketDetailPageProps) {
           onSubmit={handleSendEmail}
           sending={sendingEmail}
           statusMsg={emailStatusMsg}
+        />
+      )}
+
+      {detail && (
+        <FloatingAuditAIBar
+          key={detail.ticket.entityId}
+          entityId={detail.ticket.entityId}
+          scope="escalations"
+          title="Escalation Case Copilot"
+          sampleQuestions={[
+            "What were the automated actions attempted before escalation?",
+            "What is the diagnosed cause and policy reasoning for this case?",
+            "What are the internal notes logged by previous agents?",
+            "How can I send a custom recovery payment link to this customer?",
+            "What is the risk score and lifetime value of this customer?",
+          ]}
         />
       )}
     </div>

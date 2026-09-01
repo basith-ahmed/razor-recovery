@@ -114,7 +114,7 @@ import { computeLiveMetrics, recoveryFunnel } from "../src/services/metricsServi
 import { injectFailure } from "../src/simulator/injectFailure";
 import { computeRiskScore } from "../src/domain/riskScoring";
 import { diagnose } from "../src/services/diagnosisService";
-import { filterLegalActions } from "../src/domain/stoppingRules";
+import { filterLegalActions, FilterContext } from "../src/domain/stoppingRules";
 import { decide } from "../src/services/decisionService";
 
 // ── Typed mocks ────────────────────────────────────────────────────────────────
@@ -858,12 +858,13 @@ describe("Definition of Done — Full Pipeline", () => {
     expect(diagnosisResult.causeLabel).toBeDefined();
 
     // 4. filterLegalActions + decide (Phase 2/5)
-    const filterCtx = {
+    const filterCtx: FilterContext = {
       causeLabel: diagnosisResult.causeLabel,
-      dncFlag: false,
-      disputeFlag: false,
+      customerId: rawEvent.customerId,
+      isDnc: false,
+      isDisputed: false,
       attemptCount: 0,
-      cooldownActive: false,
+      isInCooldown: false,
     };
     const legalActions = filterLegalActions(filterCtx);
     expect(legalActions.length).toBeGreaterThan(0);

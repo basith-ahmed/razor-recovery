@@ -10,6 +10,7 @@ import {
   _resetCache,
 } from "../src/domain/policy";
 import {
+  evaluateLegalActions,
   filterLegalActions,
   FilterContext,
 } from "../src/domain/stoppingRules";
@@ -359,5 +360,74 @@ describe("filterLegalActions", () => {
       );
       expect(result).toEqual([]);
     });
+  });
+});
+
+describe("evaluateLegalActions", () => {
+  beforeEach(() => {
+    _resetCache();
+  });
+
+  it("reports the blocking rule for global overrides", () => {
+    expect(evaluateLegalActions(makeCtx({ isRecovered: true })).blockedBy).toBe("recovered");
+    expect(evaluateLegalActions(makeCtx({ isEscalated: true })).blockedBy).toBe("escalated");
+    expect(evaluateLegalActions(makeCtx({ isDnc: true })).blockedBy).toBe("dnc");
+    expect(evaluateLegalActions(makeCtx({ hasActivePromise: true })).blockedBy).toBe("active_promise");
+    expect(evaluateLegalActions(makeCtx({ isInCooldown: true })).blockedBy).toBe("cooldown");
+    expect(evaluateLegalActions(makeCtx({ isDisputed: true })).blockedBy).toBe("disputed");
+    expect(
+      evaluateLegalActions(makeCtx({ causeLabel: "promise_broken" })).blockedBy
+    ).toBe("promise_broken");
+    expect(
+      evaluateLegalActions(makeCtx({ causeLabel: "totally_unknown" })).blockedBy
+    ).toBe("unknown_cause");
+  });
+
+  it("reports the escalated_to_human restriction alongside its trigger", () => {
+    const disputed = evaluateLegalActions(makeCtx({ isDisputed: true }));
+    expect(disputed.actions).toEqual(["escalate_to_human"]);
+    expect(disputed.blockedBy).toBe("disputed");
+
+    const broken = evaluateLegalActions(makeCtx({ causeLabel: "promise_broken" }));
+    expect(broken.actions).toEqual(["escalate_to_human"]);
+    expect(broken.blockedBy).toBe("promise_broken");
+  });
+
+  it("reports which stopping condition fired", () => {
+    const maxed = evaluateLegalActions(
+      makeCtx({ causeLabel: "expired_card", attemptCount: 3 })
+    );
+    expect(maxed.actions).toEqual(["escalate_to_human"]);
+    expect(maxed.blockedBy).toBe("max_attempts");
+
+    const hardStopped = evaluateLegalActions(
+      makeCtx({ causeLabel: "mandate_requires_reauthorization", daysOverdue: 30 })
+    );
+    expect(hardStopped.actions).toEqual(["escalate_to_human"]);
+    expect(hardStopped.blockedBy).toBe("hard_stop");
+
+    const timedOut = evaluateLegalActions(
+      makeCtx({ causeLabel: "no_reason_signal", hoursSinceLastContact: 48 })
+    );
+    expect(timedOut.actions).toEqual([]);
+    expect(timedOut.blockedBy).toBe("no_response");
+  });
+
+  it("omits blockedBy when the cause's default action list applies", () => {
+    const result = evaluateLegalActions(makeCtx());
+    expect(result.actions).toEqual(["send_reminder_email", "escalate_to_human"]);
+    expect(result.blockedBy).toBeUndefined();
+  });
+
+  it("filterLegalActions stays equivalent to evaluateLegalActions().actions", () => {
+    for (const ctx of [
+      makeCtx(),
+      makeCtx({ isDnc: true }),
+      makeCtx({ isInCooldown: true }),
+      makeCtx({ causeLabel: "gateway_timeout", attemptCount: 2 }),
+      makeCtx({ causeLabel: "totally_unknown" }),
+    ]) {
+      expect(filterLegalActions(ctx)).toEqual(evaluateLegalActions(ctx).actions);
+    }
   });
 });

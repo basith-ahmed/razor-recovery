@@ -1,9 +1,31 @@
 import { requestJson } from "../config/openai";
 import { logError } from "../config/logger";
 import { getPolicyVersion } from "../domain/policy";
-import { FilterContext, filterLegalActions } from "../domain/stoppingRules";
+import {
+  BlockReason,
+  evaluateLegalActions,
+  FilterContext,
+} from "../domain/stoppingRules";
 import { DecisionResult, DiagnosisResult, DomainError } from "../domain/types";
 import { findSimilarCases, SimilarCase } from "./retrievalService";
+
+/**
+ * Human-readable message per blocking rule, persisted to the Decision table
+ * for the audit trail.
+ */
+const BLOCK_REASON_MESSAGES: Record<BlockReason, string> = {
+  recovered: "Blocked by policy (Entity payment already RECOVERED)",
+  escalated: "Blocked by policy (Entity is actively escalated to human agent)",
+  dnc: "Blocked by policy (Customer is DNC)",
+  disputed: "Blocked by policy (Invoice is disputed)",
+  promise_broken: "Blocked by policy (Promise-to-Pay commitment was broken)",
+  active_promise: "Blocked by policy (Active Promise-to-Pay commitment pending)",
+  cooldown: "Blocked by policy (In active cooldown window)",
+  max_attempts: "Blocked by policy (Max retry attempts reached for this cause)",
+  hard_stop: "Blocked by policy (Hard stop age limit reached)",
+  no_response: "Blocked by policy (No response within policy window)",
+  unknown_cause: "Blocked by policy (No policy rule for this cause)",
+};
 
 export const DECISION_PROMPT = `You are RazorRecovery's decision service. Choose exactly one action from legal_actions. Never propose an action outside legal_actions and do not change policy. Return JSON only with chosen_action and reasoning.`;
 
@@ -73,19 +95,11 @@ export async function decide(
   },
   retrievalContext?: DecisionRetrievalContext,
 ): Promise<DecisionResult> {
-  const legalActions = filterLegalActions(filterCtx);
+  const { actions: legalActions, blockedBy } = evaluateLegalActions(filterCtx);
   const policyVersion = getPolicyVersion();
 
   if (legalActions.length === 0) {
-    let reason = "Blocked by policy";
-    if (filterCtx.isRecovered) reason = "Blocked by policy (Entity payment already RECOVERED)";
-    else if (filterCtx.isEscalated) reason = "Blocked by policy (Entity is actively escalated to human agent)";
-    else if (filterCtx.isDnc || filterCtx.causeLabel === "dnc") reason = "Blocked by policy (Customer is DNC)";
-    else if (filterCtx.isDisputed || filterCtx.causeLabel === "invoice_disputed") reason = "Blocked by policy (Invoice is disputed)";
-    else if (filterCtx.hasActivePromise) reason = "Blocked by policy (Active Promise-to-Pay commitment pending)";
-    else if (filterCtx.isInCooldown) reason = "Blocked by policy (In active cooldown window)";
-    else reason = "Blocked by policy (Stopping condition reached)";
-    
+    const reason = blockedBy ? BLOCK_REASON_MESSAGES[blockedBy] : "Blocked by policy";
     return { legalActions, chosenAction: "none", reasoning: reason, policyVersion };
   }
 

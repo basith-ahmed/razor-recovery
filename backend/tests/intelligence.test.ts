@@ -239,3 +239,47 @@ describe("decide", () => {
     expect(result.chosenAction).toBe("send_reminder_email");
   });
 });
+
+describe("decide — policy block reasons", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedFindSimilarCases.mockResolvedValue([]);
+  });
+
+  it("maps every policy block to its audit reasoning without calling OpenAI", async () => {
+    const cases: Array<[Partial<FilterContext>, string, string]> = [
+      [{ isRecovered: true }, "invoice_overdue", "Entity payment already RECOVERED"],
+      [{ isEscalated: true }, "invoice_overdue", "Entity is actively escalated to human agent"],
+      [{ isDnc: true }, "invoice_overdue", "Customer is DNC"],
+      [{ hasActivePromise: true }, "invoice_overdue", "Active Promise-to-Pay commitment pending"],
+      [{ isInCooldown: true }, "expired_card", "In active cooldown window"],
+      [{ hoursSinceLastContact: 49 }, "no_reason_signal", "No response within policy window"],
+    ];
+
+    for (const [overrides, causeLabel, expectedReasoning] of cases) {
+      const decision = await decide(
+        { causeLabel, confidence: 1, method: "RULE" as const },
+        filterContext({ causeLabel, ...overrides }),
+        entityContext,
+      );
+
+      expect(decision.chosenAction).toBe("none");
+      expect(decision.legalActions).toEqual([]);
+      expect(decision.reasoning).toBe(`Blocked by policy (${expectedReasoning})`);
+    }
+
+    expect(mockedRequestJson).not.toHaveBeenCalled();
+  });
+
+  it("reports an unknown cause explicitly instead of a generic block reason", async () => {
+    const decision = await decide(
+      { causeLabel: "unknown", confidence: 0, method: "LLM" },
+      filterContext({ causeLabel: "unknown" }),
+      entityContext,
+    );
+
+    expect(decision.chosenAction).toBe("none");
+    expect(decision.reasoning).toBe("Blocked by policy (No policy rule for this cause)");
+    expect(mockedRequestJson).not.toHaveBeenCalled();
+  });
+});
