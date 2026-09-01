@@ -1023,11 +1023,11 @@ The entire action space is bound to this declarative rule catalog:
 
 ```json
 {
-  "version": "2.1.0",
+  "version": "2.2.0",
   "rules": [
     {
       "cause": "cart_abandoned",
-      "actions": ["send_reminder_email", "send_payment_link", "escalate_to_human"],
+      "actions": ["send_reminder_email", "escalate_to_human"],
       "escalateAboveAmount": 10000,
       "stopping": { "maxAttempts": 2, "windowDays": 7, "onMaxAction": "escalate_to_human" }
     },
@@ -1057,8 +1057,13 @@ The entire action space is bound to this declarative rule catalog:
 ```
 
 `escalateAboveAmount` is the value-based escalation knob: exposure at or above the
-threshold skips the standard contact cadence and goes straight to human review
-(e.g. a high-value abandoned cart escalates on its first event).
+threshold is surfaced to the decision LLM as a `policy_directive` — escalate to
+human review **by default**, but the model may keep the entity in the automated
+flow when `entity_context` (customer LTV, failure history) and the retrieved
+`similar_past_cases` clearly justify it. Any such deviation is stated in the
+decision reasoning and logged server-side. If the LLM is unavailable or returns
+invalid output on a high-value entity, the deterministic fallback escalates
+(safe default), never a soft action.
 
 ---
 
@@ -1130,7 +1135,7 @@ Allowed cause labels:
 
 The decision engine chooses an action strictly within the pre-filtered legal actions, augmented by historical similar-case retrieval:
 1. **Zero Legal Actions**: Short-circuit immediately. Return `{ chosenAction: "none", legalActions: [], reasoning: "Blocked by policy (...)", policyVersion }`. No LLM call is made.
-2. **Value-Based Escalation Trigger**: If the cause's policy rule defines `escalateAboveAmount` and the exposure amount meets or exceeds the threshold while escalation is a legal action, short-circuit to `escalate_to_human` (high-value carts skip the standard contact cadence). No LLM call is made.
+2. **Value-Based Escalation Directive**: If the cause's policy rule defines `escalateAboveAmount` and the exposure amount meets or exceeds the threshold while escalation is a legal action, a `policy_directive` is appended to the LLM prompt: escalate **by default**, deviate only with explicit justification grounded in customer LTV / history. On LLM failure or invalid output for a high-value entity, the deterministic fallback is `escalate_to_human`.
 3. **Follow-Up Scheduled Retry**: If `entityContext.dueScheduledRetry === true`, short-circuit and choose the first legal action directly.
 4. **Exactly One Legal Action**: Short-circuit immediately. When a policy restriction (dispute, broken promise, max attempts) determined the single action, the reasoning carries that block reason (e.g. `"Blocked by policy (Invoice is disputed)"`); otherwise `"Only legal action available: ..."`. No LLM call is made.
 5. **Multiple Legal Actions (2+)**: 
@@ -1389,9 +1394,9 @@ Base URL: `http://localhost:4000`
         "stage": "EXECUTED",
         "causeLabel": "invoice_overdue",
         "diagnosisMethod": "RULE",
-        "actionType": "send_payment_link",
+        "actionType": "send_reminder_email",
         "actionResult": "success",
-        "actionIntegration": "RAZORPAY",
+        "actionIntegration": "EMAIL",
         "razorpayPaymentId": "pay_sim_123",
         "razorpayOrderId": "order_sim_456",
         "lastContactedAt": "2026-08-27T12:00:05.000Z",
@@ -1432,8 +1437,8 @@ Base URL: `http://localhost:4000`
         "outcome": "pending",
         "inputSnapshot": { "id": "...", "amount": 5400, "riskScore": 0.675 },
         "diagnosisSnapshot": { "causeLabel": "invoice_overdue", "confidence": 1, "method": "RULE" },
-        "decisionSnapshot": { "chosenAction": "send_payment_link", "legalActions": ["retry_payment", "send_payment_link"], "reasoning": "..." },
-        "actionSnapshot": { "actionType": "send_payment_link", "result": "success", "integration": "RAZORPAY", "paymentLinkShortUrl": "https://rzp.io/l/xyz" },
+        "decisionSnapshot": { "chosenAction": "send_reminder_email", "legalActions": ["send_reminder_email", "escalate_to_human"], "reasoning": "..." },
+        "actionSnapshot": { "actionType": "send_reminder_email", "result": "success", "integration": "EMAIL", "paymentLinkShortUrl": "https://rzp.io/l/xyz" },
         "timestamp": "2026-08-27T12:00:06.000Z",
         "sequenceNumber": 1,
         "prevHash": "d7c09e32ebdfa4ba13e9ef94a91b828552fe899d08ccd52969f4882651343b5d",

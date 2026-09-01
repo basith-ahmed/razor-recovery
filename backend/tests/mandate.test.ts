@@ -295,7 +295,7 @@ describe("Execution: pause_subscription on Subscription", () => {
       {
         chosenAction: "pause_subscription",
         legalActions: ["send_reminder_email", "pause_subscription", "escalate_to_human"],
-        policyVersion: "2.1.0",
+        policyVersion: "2.2.0",
         reasoning: "Pause subscription during mandate cancellation win-back window",
       },
       event,

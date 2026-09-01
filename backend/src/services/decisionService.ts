@@ -103,23 +103,16 @@ export async function decide(
     return { legalActions, chosenAction: "none", reasoning: reason, policyVersion };
   }
 
-  // Value-based escalation trigger from policy: high-value exposure skips the
-  // standard contact cadence and goes straight to human review.
+  // Value-aware AI decision
   const rule = getRuleForCause(diagnosis.causeLabel);
   const escalateThreshold = rule?.escalateAboveAmount;
-  if (
+  const aboveThreshold =
     escalateThreshold !== undefined &&
-    retrievalContext &&
+    retrievalContext !== undefined &&
     retrievalContext.amount >= escalateThreshold &&
-    legalActions.includes("escalate_to_human")
-  ) {
-    return {
-      legalActions,
-      chosenAction: "escalate_to_human",
-      reasoning: `High-value exposure ₹${retrievalContext.amount.toLocaleString("en-IN")} meets the policy escalation threshold ₹${escalateThreshold.toLocaleString("en-IN")} — immediate human review.`,
-      policyVersion,
-    };
-  }
+    legalActions.includes("escalate_to_human");
+  const highValueFallback = () =>
+    `LLM unavailable; policy escalation threshold ₹${(escalateThreshold ?? 0).toLocaleString("en-IN")} applies by default — deferring high-value exposure to human review.`;
 
   if (entityContext.dueScheduledRetry && legalActions.length > 0) {
     return {
@@ -157,7 +150,10 @@ export async function decide(
       console.error("[decision] Historical-case retrieval failed; continuing without RAG context:", error);
     }
   }
-  const payload = `${JSON.stringify({ diagnosis, legal_actions: legalActions, entity_context: entityContext })}\n\n${similarCasesPrompt(cases)}`;
+  const policyDirective = aboveThreshold && retrievalContext
+    ? `\n\npolicy_directive: Exposure ₹${retrievalContext.amount.toLocaleString("en-IN")} meets the policy escalation threshold ₹${escalateThreshold!.toLocaleString("en-IN")}. Default expectation: escalate_to_human. You may keep this entity in the automated flow (choose a different legal action) only if entity_context and similar_past_cases clearly justify it — e.g. high customer LTV, spotless recovery history, prior promises kept. If you deviate from the default, state the justification explicitly in reasoning.`
+    : "";
+  const payload = `${JSON.stringify({ diagnosis, legal_actions: legalActions, entity_context: entityContext })}\n\n${similarCasesPrompt(cases)}${policyDirective}`;
   let rawResponse = "";
   try {
     rawResponse = await requestDecision(payload);
@@ -166,32 +162,48 @@ export async function decide(
     console.error("[decision] LLM decision request failed; using deterministic fallback.");
     return {
       legalActions,
-      chosenAction: legalActions[0],
-      reasoning: "LLM rate limited or unavailable; selected first legal action.",
+      chosenAction: aboveThreshold ? "escalate_to_human" : legalActions[0],
+      reasoning: aboveThreshold
+        ? highValueFallback()
+        : "LLM rate limited or unavailable; selected first legal action.",
       policyVersion,
     };
   }
 
   const output = parseDecision(rawResponse);
-  const chosenAction =
-    typeof output.chosen_action === "string" && legalActions.includes(output.chosen_action)
-      ? output.chosen_action
-      : legalActions[0];
+  const validModelChoice =
+    typeof output.chosen_action === "string" && legalActions.includes(output.chosen_action);
+  const chosenAction = validModelChoice
+    ? (output.chosen_action as string)
+    : aboveThreshold
+    ? "escalate_to_human"
+    : legalActions[0];
 
   if (typeof output.chosen_action !== "string") {
     console.error(
       `[decision] LLM returned unparseable output (excerpt: ${rawResponse.slice(0, 160)}); using deterministic fallback.`
     );
-  } else if (chosenAction !== output.chosen_action) {
+  } else if (!validModelChoice) {
     console.error(
       `[decision] LLM chose action "${output.chosen_action}" outside the legal set [${legalActions.join(", ")}]; using deterministic fallback.`
+    );
+  }
+
+  if (aboveThreshold && validModelChoice && chosenAction !== "escalate_to_human") {
+    console.error(
+      `[decision] Model kept high-value exposure ₹${retrievalContext!.amount.toLocaleString("en-IN")} (threshold ₹${escalateThreshold!.toLocaleString("en-IN")}) in the automated flow — deviation recorded: "${typeof output.reasoning === "string" ? output.reasoning.slice(0, 200) : "no reasoning"}"`
     );
   }
 
   return {
     legalActions,
     chosenAction,
-    reasoning: typeof output.reasoning === "string" ? output.reasoning : "Invalid model output; selected first legal action.",
+    reasoning:
+      typeof output.reasoning === "string"
+        ? output.reasoning
+        : aboveThreshold
+        ? highValueFallback()
+        : "Invalid model output; selected first legal action.",
     policyVersion,
   };
 }

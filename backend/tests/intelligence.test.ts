@@ -63,7 +63,10 @@ describe("decisionService — scheduled retry commitment", () => {
     expect(requestJson).toHaveBeenCalled();
   });
 
-  it("escalates immediately when exposure meets the policy threshold", async () => {
+  it("surfaces the escalation threshold to the LLM as a policy directive", async () => {
+    mockedRequestJson.mockResolvedValueOnce(
+      JSON.stringify({ chosen_action: "escalate_to_human", reasoning: "High-value cart, no countervailing history." }),
+    );
     const decision = await decide(
       { causeLabel: "cart_abandoned", confidence: 1, method: "RULE" },
       { ...ctx, causeLabel: "cart_abandoned" },
@@ -77,8 +80,50 @@ describe("decisionService — scheduled retry commitment", () => {
     );
 
     expect(decision.chosenAction).toBe("escalate_to_human");
-    expect(decision.reasoning).toContain("policy escalation threshold");
-    expect(requestJson).not.toHaveBeenCalled();
+    expect(requestJson).toHaveBeenCalled();
+    const payload = mockedRequestJson.mock.calls[0][0].input as string;
+    expect(payload).toContain("policy_directive");
+    expect(payload).toContain("10,000");
+  });
+
+  it("accepts a justified model deviation from the escalation default", async () => {
+    mockedRequestJson.mockResolvedValueOnce(
+      JSON.stringify({
+        chosen_action: "send_reminder_email",
+        reasoning: "High LTV customer with spotless history; reminder with payment link is appropriate.",
+      }),
+    );
+    const decision = await decide(
+      { causeLabel: "cart_abandoned", confidence: 1, method: "RULE" },
+      { ...ctx, causeLabel: "cart_abandoned" },
+      {
+        attemptCount: 0,
+        customerLtv: 25000,
+        priorFailures: 0,
+        daysSinceLastContact: 0,
+      },
+      { entityType: "CART", amount: 18400 },
+    );
+
+    expect(decision.chosenAction).toBe("send_reminder_email");
+  });
+
+  it("falls back to escalate_to_human when the LLM fails on high-value exposure", async () => {
+    mockedRequestJson.mockRejectedValueOnce(new Error("rate limited"));
+    const decision = await decide(
+      { causeLabel: "cart_abandoned", confidence: 1, method: "RULE" },
+      { ...ctx, causeLabel: "cart_abandoned" },
+      {
+        attemptCount: 0,
+        customerLtv: 25000,
+        priorFailures: 1,
+        daysSinceLastContact: 0,
+      },
+      { entityType: "CART", amount: 18400 },
+    );
+
+    expect(decision.chosenAction).toBe("escalate_to_human");
+    expect(decision.reasoning).toMatch(/policy escalation threshold/i);
   });
 
   it("does not apply the value threshold below the policy limit", async () => {

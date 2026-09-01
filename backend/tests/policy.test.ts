@@ -34,12 +34,12 @@ describe("policy.ts", () => {
 
   it("loadPolicy returns the v2 revenue-leakage policy", () => {
     const policy = loadPolicy();
-    expect(policy.version).toBe("2.1.0");
+    expect(policy.version).toBe("2.2.0");
     expect(policy.rules).toHaveLength(5);
   });
 
   it("getPolicyVersion returns the version string", () => {
-    expect(getPolicyVersion()).toBe("2.1.0");
+    expect(getPolicyVersion()).toBe("2.2.0");
   });
 
   it("getRuleForCause returns the correct rule", () => {
@@ -173,13 +173,12 @@ describe("filterLegalActions", () => {
   // --- Per-rule tests ---
 
   describe("cart_abandoned", () => {
-    it("returns reminder, payment link, and escalation when under maxAttempts", () => {
+    it("returns reminder and escalation when under maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({ causeLabel: "cart_abandoned", attemptCount: 0 })
       );
       expect(result).toEqual([
         "send_reminder_email",
-        "send_payment_link",
         "escalate_to_human",
       ]);
     });
@@ -347,7 +346,6 @@ describe("evaluateLegalActions", () => {
     const result = evaluateLegalActions(makeCtx({ causeLabel: "cart_abandoned" }));
     expect(result.actions).toEqual([
       "send_reminder_email",
-      "send_payment_link",
       "escalate_to_human",
     ]);
     expect(result.blockedBy).toBeUndefined();

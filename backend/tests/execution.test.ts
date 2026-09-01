@@ -156,7 +156,7 @@ function makeDecision(overrides: Partial<DecisionResult> = {}): DecisionResult {
     legalActions: ["send_reminder_email", "send_soft_chase_email", "escalate_to_human"],
     chosenAction: "send_reminder_email",
     reasoning: "Invoice is freshly overdue; a friendly reminder is the safest first action.",
-    policyVersion: "2.1.0",
+    policyVersion: "2.2.0",
     ...overrides,
   };
 }
