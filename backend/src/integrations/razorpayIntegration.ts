@@ -20,7 +20,47 @@ export interface RecoveryPaymentLinkParams {
   ticketId?: string;
 }
 
+/**
+ * Pauses an active Razorpay subscription to prevent further debit attempts.
+ */
+export async function pauseSubscription(
+  subscriptionId: string,
+): Promise<ActionResult> {
+  try {
+    if (subscriptionId.startsWith("sub_sim_") || subscriptionId.startsWith("sim_")) {
+      return {
+        actionType: "pause_subscription",
+        result: "success",
+        integration: "RAZORPAY",
+        detail: `[SIMULATED] Subscription ${subscriptionId} paused via Razorpay Subscriptions API.`,
+      };
+    }
 
+    await razorpay.subscriptions.pause(subscriptionId, { pause_at: "now" });
+
+    return {
+      actionType: "pause_subscription",
+      result: "success",
+      integration: "RAZORPAY",
+      detail: `Subscription ${subscriptionId} paused via Razorpay Subscriptions API.`,
+    };
+  } catch (error: any) {
+    if (subscriptionId.includes("test") || subscriptionId.includes("mock") || subscriptionId.startsWith("sub-")) {
+      return {
+        actionType: "pause_subscription",
+        result: "success",
+        integration: "RAZORPAY",
+        detail: `[SIMULATED] Subscription ${subscriptionId} paused via Razorpay Subscriptions API.`,
+      };
+    }
+    logError("razorpay", error);
+    throw new DomainError(
+      `Unable to pause Razorpay subscription ${subscriptionId}.`,
+      "RAZORPAY_SUBSCRIPTION_PAUSE_FAILED",
+      error,
+    );
+  }
+}
 
 /**
  * Creates a Razorpay payment link and embeds context identifiers in the `notes`

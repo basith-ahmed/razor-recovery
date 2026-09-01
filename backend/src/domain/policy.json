@@ -14,7 +14,7 @@
     {
       "cause": "gateway_timeout",
       "actions": ["send_reminder_email", "escalate_to_human"],
-      "stopping": { "maxAttempts": 2, "windowHours": 1, "onMaxAction": "hard_decline" }
+      "stopping": { "maxAttempts": 2, "windowHours": 1, "onMaxAction": "escalate_to_human" }
     },
     {
       "cause": "price_friction",
@@ -28,7 +28,7 @@
     },
     {
       "cause": "mandate_execution_failed_retryable",
-      "actions": ["send_reminder_email", "escalate_to_human"],
+      "actions": ["send_reminder_email", "pause_subscription", "escalate_to_human"],
       "stopping": {
         "maxAttempts": 3,
         "windowDays": 7,
@@ -37,7 +37,7 @@
     },
     {
       "cause": "mandate_requires_reauthorization",
-      "actions": ["send_reminder_email", "escalate_to_human"],
+      "actions": ["send_reminder_email", "pause_subscription", "escalate_to_human"],
       "stopping": {
         "hardStopDays": 30,
         "onHardStopAction": "escalate_to_human"

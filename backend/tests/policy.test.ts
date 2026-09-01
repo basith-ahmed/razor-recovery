@@ -189,11 +189,11 @@ describe("filterLegalActions", () => {
       ]);
     });
 
-    it("returns hard_decline at maxAttempts", () => {
+    it("returns escalate_to_human at maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({ causeLabel: "gateway_timeout", attemptCount: 2 })
       );
-      expect(result).toEqual(["hard_decline"]);
+      expect(result).toEqual(["escalate_to_human"]);
     });
   });
 
@@ -236,7 +236,7 @@ describe("filterLegalActions", () => {
   });
 
   describe("mandate_execution_failed_retryable", () => {
-    it("returns send_reminder_email and escalate_to_human when under maxAttempts", () => {
+    it("returns send_reminder_email, pause_subscription, and escalate_to_human when under maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({
           causeLabel: "mandate_execution_failed_retryable",
@@ -245,6 +245,7 @@ describe("filterLegalActions", () => {
       );
       expect(result).toEqual([
         "send_reminder_email",
+        "pause_subscription",
         "escalate_to_human",
       ]);
     });
@@ -261,7 +262,7 @@ describe("filterLegalActions", () => {
   });
 
   describe("mandate_requires_reauthorization", () => {
-    it("returns send_reminder_email and escalate_to_human without retries when under hardStopDays", () => {
+    it("returns send_reminder_email, pause_subscription, and escalate_to_human without retries when under hardStopDays", () => {
       const result = filterLegalActions(
         makeCtx({
           causeLabel: "mandate_requires_reauthorization",
@@ -270,6 +271,7 @@ describe("filterLegalActions", () => {
       );
       expect(result).toEqual([
         "send_reminder_email",
+        "pause_subscription",
         "escalate_to_human",
       ]);
     });

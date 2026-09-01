@@ -21,12 +21,6 @@ function deriveOutcome(action: ActionResult): string {
   if (action.result === "skipped") return "skipped";
   if (action.result === "failed") return "failed";
   if (action.actionType === "escalate_to_human") return "escalated";
-  if (
-    action.actionType === "hard_decline" ||
-    action.actionType === "auto_cancel"
-  ) {
-    return "written_off";
-  }
   return "pending";
 }
 
@@ -56,10 +50,6 @@ function toStateMachineOutcome(
       return "email_sent";
     case "escalate_to_human":
       return "escalation_triggered";
-    case "hard_decline":
-      return "hard_decline";
-    case "auto_cancel":
-      return "auto_cancel";
     case "pause_subscription":
       return "subscription_paused";
     case "send_winback_offer":

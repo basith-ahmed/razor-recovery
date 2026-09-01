@@ -183,17 +183,14 @@ export async function executeAction(
       event.entityId,
       decision.reasoning,
     );
-  } else if (
-    chosenAction === "pause_subscription" ||
-    chosenAction === "auto_cancel" ||
-    chosenAction === "hard_decline"
-  ) {
-    actionResult = {
-      actionType: chosenAction,
-      result: "success",
-      integration: "MOCK",
-      detail: `Executed ${chosenAction} for entity ${event.entityId}.`,
-    };
+  } else if (chosenAction === "pause_subscription") {
+    const rawPayload = (event.rawPayload || {}) as Record<string, unknown>;
+    const subId =
+      (rawPayload.subscription_id as string) ||
+      (rawPayload.razorpay_subscription_id as string) ||
+      event.entityId;
+
+    actionResult = await razorpayIntegration.pauseSubscription(subId);
   } else {
     throw new DomainError(
       `Unrecognized action "${chosenAction}" — no integration mapping exists.`,

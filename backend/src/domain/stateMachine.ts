@@ -128,10 +128,6 @@ function outcomeToState(outcome: string): WorkflowState {
       return "RETRYING";
     case "escalation_triggered":
       return "ESCALATED";
-    case "hard_decline":
-      return "WRITTEN_OFF";
-    case "auto_cancel":
-      return "WRITTEN_OFF";
     case "written_off":
       return "WRITTEN_OFF";
     case "dnc_skip":
@@ -174,7 +170,7 @@ export function deriveEventState(
 ): WorkflowState {
   if (!outcome) return "DETECTED";
   if (outcome === "recovered" || outcome === "payment_confirmed") return "RECOVERED";
-  if (outcome === "written_off" || outcome === "hard_decline" || outcome === "auto_cancel") return "WRITTEN_OFF";
+  if (outcome === "written_off") return "WRITTEN_OFF";
   if (outcome === "reversed") return "RECOVERED"; // or REVERSED represented in workflow as terminal
   if (outcome === "escalated" || (actionType && ESCALATE_ACTION_TYPES.has(actionType))) return "ESCALATED";
   if (actionType && COOLDOWN_ACTION_TYPES.has(actionType)) return "COOLING_DOWN";

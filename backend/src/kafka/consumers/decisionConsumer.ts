@@ -162,9 +162,7 @@ export async function startDecisionConsumer(): Promise<void> {
 
         if (
           decision.chosenAction !== "none" &&
-          decision.chosenAction !== "escalate_to_human" &&
-          decision.chosenAction !== "auto_cancel" &&
-          decision.chosenAction !== "hard_decline"
+          decision.chosenAction !== "escalate_to_human"
         ) {
           const ttlSec = cooldownTtlSeconds(diagnosis.causeLabel);
           await setEntityCooldown(event.entityId, ttlSec);

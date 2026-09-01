@@ -131,12 +131,12 @@ describe("stateMachine", () => {
       expect(nextState("CONTACTED", "escalation_triggered")).toBe("ESCALATED");
     });
 
-    it("hard_decline from RETRYING → WRITTEN_OFF", () => {
-      expect(nextState("RETRYING", "hard_decline")).toBe("WRITTEN_OFF");
+    it("written_off from RETRYING → WRITTEN_OFF", () => {
+      expect(nextState("RETRYING", "written_off")).toBe("WRITTEN_OFF");
     });
 
-    it("hard_decline from DETECTED → WRITTEN_OFF", () => {
-      expect(nextState("DETECTED", "hard_decline")).toBe("WRITTEN_OFF");
+    it("written_off from DETECTED → WRITTEN_OFF", () => {
+      expect(nextState("DETECTED", "written_off")).toBe("WRITTEN_OFF");
     });
 
     it("subscription_paused from DETECTED → COOLING_DOWN", () => {
@@ -159,10 +159,6 @@ describe("stateMachine", () => {
 
     it("payment_confirmed from CONTACTED → RECOVERED", () => {
       expect(nextState("CONTACTED", "payment_confirmed")).toBe("RECOVERED");
-    });
-
-    it("auto_cancel from RETRYING → WRITTEN_OFF", () => {
-      expect(nextState("RETRYING", "auto_cancel")).toBe("WRITTEN_OFF");
     });
 
     it("subscription_paused from CONTACTED → COOLING_DOWN", () => {

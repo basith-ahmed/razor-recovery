@@ -202,8 +202,8 @@ describe("decide", () => {
       entityContext,
     );
 
-    expect(result.legalActions).toEqual(["hard_decline"]);
-    expect(result.chosenAction).toBe("hard_decline");
+    expect(result.legalActions).toEqual(["escalate_to_human"]);
+    expect(result.chosenAction).toBe("escalate_to_human");
     expect(mockedRequestJson).not.toHaveBeenCalled();
   });
 

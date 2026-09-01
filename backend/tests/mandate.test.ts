@@ -14,6 +14,14 @@ jest.mock("../src/config/mailer", () => ({
   mailer: { sendMail: jest.fn().mockResolvedValue({ messageId: "mock-msg-123" }) },
 }));
 
+jest.mock("../src/config/razorpay", () => ({
+  razorpay: {
+    subscriptions: {
+      pause: jest.fn().mockResolvedValue({ id: "sub-12345", status: "paused" }),
+    },
+  },
+}));
+
 jest.mock("../src/config/prisma", () => ({
   prisma: {
     customer: {
@@ -244,12 +252,13 @@ describe("diagnose() — SUBSCRIPTION_FAILED mandate routing", () => {
 describe("Policy: mandate_execution_failed_retryable", () => {
   beforeEach(() => _resetCache());
 
-  it("Test 7: attemptCount=1 — returns send_reminder_email and escalate_to_human", () => {
+  it("Test 7: attemptCount=1 — returns send_reminder_email, pause_subscription, and escalate_to_human", () => {
     const actions = filterLegalActions(makeCtx({
       causeLabel: "mandate_execution_failed_retryable",
       attemptCount: 1,
     }));
     expect(actions).toContain("send_reminder_email");
+    expect(actions).toContain("pause_subscription");
     expect(actions).toContain("escalate_to_human");
   });
 
@@ -265,12 +274,13 @@ describe("Policy: mandate_execution_failed_retryable", () => {
 describe("Policy: mandate_requires_reauthorization", () => {
   beforeEach(() => _resetCache());
 
-  it("Test 9: attemptCount=0 — returns send_reminder_email and escalate_to_human, NO gateway retries", () => {
+  it("Test 9: attemptCount=0 — returns send_reminder_email, pause_subscription, and escalate_to_human, NO gateway retries", () => {
     const actions = filterLegalActions(makeCtx({
       causeLabel: "mandate_requires_reauthorization",
       attemptCount: 0,
     }));
     expect(actions).toContain("send_reminder_email");
+    expect(actions).toContain("pause_subscription");
     expect(actions).toContain("escalate_to_human");
   });
 
@@ -288,8 +298,8 @@ describe("Policy: mandate_requires_reauthorization", () => {
 
 import { executeAction } from "../src/services/executorService";
 
-describe("Execution: send_reminder_email on Subscription", () => {
-  it("Test 11: successfully sends reminder email for SUBSCRIPTION entity", async () => {
+describe("Execution: pause_subscription on Subscription", () => {
+  it("Test 11: successfully pauses subscription for SUBSCRIPTION entity", async () => {
     const event = makeSubscriptionEvent({
       entityType: "SUBSCRIPTION",
       entityId: "sub-12345",
@@ -299,16 +309,16 @@ describe("Execution: send_reminder_email on Subscription", () => {
 
     const result = await executeAction(
       {
-        chosenAction: "send_reminder_email",
-        legalActions: ["send_reminder_email", "escalate_to_human"],
+        chosenAction: "pause_subscription",
+        legalActions: ["send_reminder_email", "pause_subscription", "escalate_to_human"],
         policyVersion: "1.0.0",
-        reasoning: "Send reminder email with reauthorization link",
+        reasoning: "Pause subscription during mandate failure cooldown",
       },
       event,
     );
 
-    expect(result.actionType).toBe("send_reminder_email");
+    expect(result.actionType).toBe("pause_subscription");
     expect(result.result).toBe("success");
-    expect(result.integration).toBe("EMAIL");
+    expect(result.integration).toBe("RAZORPAY");
   });
 });

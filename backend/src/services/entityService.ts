@@ -72,7 +72,7 @@ export async function listEntities(
     if (targetState === "RECOVERED") {
       where.auditEntries = { some: { outcome: { in: ["recovered", "payment_confirmed"] } } };
     } else if (targetState === "WRITTEN_OFF") {
-      where.auditEntries = { some: { outcome: { in: ["written_off", "hard_decline", "auto_cancel"] } } };
+      where.auditEntries = { some: { outcome: "written_off" } };
     } else if (targetState === "RETRYING") {
       where.auditEntries = { some: { outcome: "pending" } };
       where.action = { actionType: "retry_payment_delayed" };
