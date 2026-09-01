@@ -57,8 +57,14 @@ function getEntityRef(ctx: EmailTemplateContext): string {
 
 /**
  * Pre-compiled, parameterized email templates for all failure and dunning causes.
+ * `ctaAmount` overrides the amount shown on the payment button when the offer
+ * itself changes what the customer pays (e.g. winback discount).
  */
-export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; paragraphs: string[] } {
+export function getEmailTemplate(ctx: EmailTemplateContext): {
+  subject: string;
+  paragraphs: string[];
+  ctaAmount?: number;
+} {
   const entityRef = getEntityRef(ctx);
   const formattedAmount = `₹${ctx.amount.toLocaleString("en-IN")}`;
   const key = (ctx.cause || ctx.errorReason || ctx.eventType || ctx.actionType || "").toLowerCase();
@@ -108,6 +114,7 @@ export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; 
     const discountedAmount = Math.round(ctx.amount * (1 - discount / 100));
     return {
       subject: `We'd love to keep you — ${discount}% off ${entityRef}`,
+      ctaAmount: discountedAmount,
       paragraphs: [
         `Hi ${ctx.customerName},`,
         `We noticed your subscription auto-debit for ${entityRef} (${formattedAmount}) needs re-authorization, and we'd hate to lose you.`,
@@ -210,8 +217,8 @@ export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; 
  * Generates recovery email using pre-generated templates with dynamic variable interpolation.
  */
 export function generateRecoveryEmail(ctx: EmailTemplateContext): { subject: string; html: string } {
-  const { subject, paragraphs } = getEmailTemplate(ctx);
-  const html = buildEmailTemplate(paragraphs, ctx.amount, ctx.paymentLinkUrl);
+  const { subject, paragraphs, ctaAmount } = getEmailTemplate(ctx);
+  const html = buildEmailTemplate(paragraphs, ctaAmount ?? ctx.amount, ctx.paymentLinkUrl);
   return { subject, html };
 }
 

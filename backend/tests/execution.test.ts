@@ -242,7 +242,7 @@ describe("executorService", () => {
       expect(result.subject).toContain("20% off");
       expect(result.html).toContain("Meera Nair");
       expect(result.html).toContain("20% discount");
-      expect(result.html).toContain("11,999");
+      expect(result.html).toContain("Pay ₹11,999 Now");
       expect(result.html).toContain("https://rzp.io/i/plink_winback");
     });
   });
