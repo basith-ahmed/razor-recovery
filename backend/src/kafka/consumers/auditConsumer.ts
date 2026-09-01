@@ -2,16 +2,14 @@ import { Prisma } from "@prisma/client";
 import { kafka } from "../../config/kafka";
 import { prisma } from "../../config/prisma";
 import { logError } from "../../config/logger";
-import { recordAuditEntry, recordFailureAuditEntry } from "../../services/auditService";
+import { recordAuditEntry, recordFailureAuditEntry, announceAuditEntry } from "../../services/auditService";
 import {
   ActionResult,
   DecisionResult,
   DiagnosisResult,
   EnrichedRevenueEvent,
 } from "../../domain/types";
-import { publish } from "../producer";
 import { TOPICS } from "../topics";
-import { emitLiveUpdate } from "../../api/websocket";
 import { checkAndSetDedup } from "../../utils/redisUtils";
 import { revenueEventExists } from "../../services/revenueEventService";
 
@@ -59,11 +57,12 @@ export async function startAuditConsumer(): Promise<void> {
 
         const auditEntry = await recordAuditEntry({ event, diagnosis, decision, action });
 
-        await emitLiveUpdate(event.id);
-
-        await publish(TOPICS.AUDIT, event.id, { ...payload, auditEntryId: auditEntry.id });
+        await announceAuditEntry(auditEntry, {
+          eventId: event.id,
+          entityId: event.entityId,
+        });
         console.log(
-          `[audit] Event ${event.id} → audit entry recorded, published to AUDIT`,
+          `[audit] Event ${event.id} → audit entry recorded, announced to AUDIT`,
         );
       } catch (error) {
         logError("audit", error);

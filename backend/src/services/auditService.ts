@@ -1,7 +1,9 @@
-import { Prisma } from "@prisma/client";
+import { AuditEntry, Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
 import { logError } from "../config/logger";
+import { publish } from "../kafka/producer";
+import { TOPICS } from "../kafka/topics";
 import { getRuleForCause } from "../domain/policy";
 import { isTerminal, nextState, WorkflowState } from "../domain/stateMachine";
 import {
@@ -290,6 +292,42 @@ export async function recordFailureAuditEntry(
 
   const { emitLiveUpdate } = require("../api/websocket");
   await emitLiveUpdate(event.id);
+}
+
+/**
+ * After-commit fan-out for an audit entry already persisted by the caller:
+ * publishes it to the AUDIT topic (the embedding consumer indexes terminal
+ * outcomes) and emits a live UI update. Call this AFTER the caller's
+ * transaction has committed — never inside a transaction. Safe to call with
+ * no entry (e.g. a resolution that produced no audit entry) — it still emits
+ * the live update so the UI reflects the state change.
+ */
+export async function announceAuditEntry(
+  auditEntry: AuditEntry | undefined,
+  ctx: { eventId?: string; entityId?: string },
+): Promise<void> {
+  if (auditEntry && ctx.eventId) {
+    try {
+      await publish(TOPICS.AUDIT, ctx.eventId, {
+        auditEntryId: auditEntry.id,
+        event: { id: ctx.eventId, entityId: ctx.entityId },
+      });
+    } catch (publishError) {
+      console.error(
+        "[auditService] Failed to publish audit entry for embedding:",
+        publishError,
+      );
+    }
+  }
+
+  if (ctx.eventId) {
+    const { emitLiveUpdate } = require("../api/websocket");
+    try {
+      await emitLiveUpdate(ctx.eventId);
+    } catch (err) {
+      console.error("[auditService] Failed to emit live update:", err);
+    }
+  }
 }
 
 export interface VerifyChainResult {

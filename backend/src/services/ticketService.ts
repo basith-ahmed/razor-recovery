@@ -1,6 +1,7 @@
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
 import { logError } from "../config/logger";
+import { AuditEntry } from "@prisma/client";
 import {
   DomainError,
   ListTicketsParams,
@@ -13,8 +14,7 @@ import { writeLedgerEntry } from "./ledgerService";
 import { getOrCreatePaymentLink } from "./paymentLinkService";
 import { sendRecoveryEmail } from "../integrations/emailIntegration";
 import { buildTicketOutreachEmail } from "../domain/emailTemplates";
-import { writeChainedAuditEntry } from "./auditService";
-import { emitLiveUpdate } from "../api/websocket";
+import { writeChainedAuditEntry, announceAuditEntry } from "./auditService";
 import { parsePagination, paginatedResponse } from "../utils/pagination";
 
 export {
@@ -368,6 +368,7 @@ export async function resolveTicket(
   });
 
   const now = new Date();
+  let resolutionAuditEntry: AuditEntry | undefined;
 
   const updated = await prisma.$transaction(async (tx) => {
     const updatedTicket = await tx.ticket.update({
@@ -420,6 +421,40 @@ export async function resolveTicket(
       });
 
       await redis.set(`razorrecovery:recovered:${ticket.entityId}`, "true", "EX", 86400 * 30);
+
+      resolutionAuditEntry = await writeChainedAuditEntry(tx, {
+        eventId: latestEvent.id,
+        entityId: ticket.entityId,
+        actor: `agent:${params.agentName || "Human Agent"}`,
+        inputSnapshot: {
+          id: latestEvent.id,
+          entityType: latestEvent.entityType,
+          entityId: latestEvent.entityId,
+          customerId: latestEvent.customerId,
+          eventType: latestEvent.eventType,
+          amount: latestEvent.amount,
+          currency: latestEvent.currency,
+          errorReason: latestEvent.errorReason,
+          occurredAt: latestEvent.occurredAt.toISOString(),
+        },
+        decisionSnapshot: {
+          chosenAction: "recovered",
+          reasoning:
+            params.resolutionNotes ||
+            `Ticket ${ticketId} marked recovered by human agent.`,
+          ticketId,
+          agent: params.agentName || "Human Agent",
+          recoveredAmount: amount,
+        },
+        actionSnapshot: {
+          actionType: "manual_recovery",
+          result: "success",
+          integration: "MANUAL",
+          ticketId,
+          detail: `Ticket ${ticketId} resolved as recovered; ₹${amount} credited to the recovery ledger.`,
+        },
+        outcome: "recovered",
+      });
     } else if ((params.status === "written_off" || params.status === "resolved") && latestEvent) {
       await tx.entityWorkflowState.upsert({
         where: { entityId: ticket.entityId },
@@ -444,7 +479,7 @@ export async function resolveTicket(
 
       // The entity-level effect of both statuses is a write-off (ledger +
       // workflow above); the ticket-level status is preserved in the snapshots.
-      await writeChainedAuditEntry(tx, {
+      resolutionAuditEntry = await writeChainedAuditEntry(tx, {
         eventId: latestEvent.id,
         entityId: ticket.entityId,
         actor: `agent:${params.agentName || "Human Agent"}`,
@@ -481,11 +516,10 @@ export async function resolveTicket(
     return updatedTicket;
   });
 
-  try {
-    await emitLiveUpdate(latestEvent?.id);
-  } catch (err) {
-    console.error("[ticketService] Failed to emit live update on ticket resolution:", err);
-  }
+  await announceAuditEntry(resolutionAuditEntry, {
+    eventId: latestEvent?.id,
+    entityId: ticket.entityId,
+  });
 
   return updated;
 }

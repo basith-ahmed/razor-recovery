@@ -4,9 +4,7 @@ import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
 import { env } from "../config/env";
 import { writeLedgerEntry } from "./ledgerService";
-import { writeChainedAuditEntry } from "./auditService";
-import { publish } from "../kafka/producer";
-import { TOPICS } from "../kafka/topics";
+import { writeChainedAuditEntry, announceAuditEntry } from "./auditService";
 import { emitLiveUpdate } from "../api/websocket";
 import { DomainError } from "../domain/types";
 
@@ -246,16 +244,10 @@ export async function processRazorpayPaymentWebhook(payload: Record<string, any>
       return auditEntry;
     });
 
-    try {
-      await publish(TOPICS.AUDIT, event.id, {
-        auditEntryId: recoveryAuditEntry.id,
-        event: { id: event.id, entityId: event.entityId },
-      });
-    } catch (publishError) {
-      console.error("[webhookService] Failed to publish recovery for embedding:", publishError);
-    }
-
-    await emitLiveUpdate(event.id);
+    await announceAuditEntry(recoveryAuditEntry, {
+      eventId: event.id,
+      entityId: event.entityId,
+    });
     console.log(`[webhookService] Entity ${event.entityId} marked RECOVERED via payment webhook.`);
     return { status: "recovered", entityId: event.entityId };
   } else {

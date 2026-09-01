@@ -8,6 +8,8 @@ import {
   resolveTicket,
 } from "../src/services/ticketService";
 import { escalateToHuman } from "../src/integrations/ticketMock";
+import { publish } from "../src/kafka/producer";
+import { TOPICS } from "../src/kafka/topics";
 
 jest.mock("../src/integrations/emailIntegration", () => ({
   sendRecoveryEmail: jest.fn().mockResolvedValue({ messageId: "msg-mock-123" }),
@@ -21,6 +23,14 @@ jest.mock("../src/integrations/razorpayIntegration", () => ({
     razorpayPaymentLinkId: "plink_test_123",
     paymentLinkUrl: "https://rzp.io/i/plink_test_123",
   }),
+}));
+
+jest.mock("../src/kafka/producer", () => ({
+  publish: jest.fn(),
+}));
+
+jest.mock("../src/api/websocket", () => ({
+  emitLiveUpdate: jest.fn(),
 }));
 
 describe("Human Escalation Tickets System", () => {
@@ -174,6 +184,35 @@ describe("Human Escalation Tickets System", () => {
     });
     expect(ledger).toBeDefined();
     expect(ledger?.amount).toBe(8500);
+
+    // Verify the human recovery produced a chained audit entry
+    const auditEntries = await prisma.auditEntry.findMany({
+      where: { entityId: testEntityId, outcome: "recovered" },
+      orderBy: { sequenceNumber: "desc" },
+    });
+    expect(auditEntries.length).toBeGreaterThanOrEqual(1);
+
+    const entry = auditEntries[0];
+    expect(entry.actor).toBe("agent:Agent Smith");
+    expect(entry.eventId).toBeDefined();
+
+    const decision = entry.decisionSnapshot as Record<string, unknown> | null;
+    expect(decision?.chosenAction).toBe("recovered");
+    expect(decision?.reasoning).toContain("Customer completed payment");
+    expect(decision?.recoveredAmount).toBe(8500);
+
+    const action = entry.actionSnapshot as Record<string, unknown> | null;
+    expect(action?.actionType).toBe("manual_recovery");
+    expect(action?.result).toBe("success");
+
+    const chainHead = await prisma.auditChainHead.findUnique({ where: { id: 1 } });
+    expect(chainHead?.hash).toBe(entry.hash);
+
+    // Entry was announced for embedding + live update
+    expect(publish).toHaveBeenCalledWith(TOPICS.AUDIT, entry.eventId, {
+      auditEntryId: entry.id,
+      event: { id: entry.eventId, entityId: testEntityId },
+    });
   });
 
   it("7. resolveTicket with status 'written_off' writes WRITTEN_OFF ledger and a chained audit entry", async () => {
@@ -231,5 +270,11 @@ describe("Human Escalation Tickets System", () => {
 
     const chainHead = await prisma.auditChainHead.findUnique({ where: { id: 1 } });
     expect(chainHead?.hash).toBe(entry.hash);
+
+    // Entry was announced for embedding + live update
+    expect(publish).toHaveBeenCalledWith(TOPICS.AUDIT, entry.eventId, {
+      auditEntryId: entry.id,
+      event: { id: entry.eventId, entityId: testEntityId },
+    });
   });
 });
