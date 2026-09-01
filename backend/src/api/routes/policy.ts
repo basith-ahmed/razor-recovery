@@ -4,7 +4,7 @@ import { handleRouteError } from "../../utils/apiResponse";
 
 export const policyRouter = Router();
 
-// GET /policy — live policy.json, DNC list from Redis/DB, and compliance log
+// GET /policy — return the live policy config, DNC entries, and compliance data.
 policyRouter.get("/", async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string, 10);

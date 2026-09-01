@@ -21,8 +21,6 @@ import { getOrCreatePaymentLink } from "./paymentLinkService";
 
 export { buildEmailTemplate };
 
-const RETRY_ACTIONS = new Set(["retry_payment_immediate"]);
-const PAYMENT_LINK_ACTIONS = new Set(["send_payment_link"]);
 const EMAIL_ACTIONS = new Set([
   "send_reminder_email",
   "send_soft_chase_email",
@@ -64,70 +62,6 @@ export async function executeAction(
       actionType: "none",
       result: "skipped",
       integration: "MOCK",
-    };
-  } else if (chosenAction === "retry_payment_delayed") {
-    const hasIdentifier =
-      event.entityType === "SUBSCRIPTION"
-        ? Boolean(
-            event.entityId ||
-              (event.rawPayload as Record<string, unknown>)?.subscription_id ||
-              (event.rawPayload as Record<string, unknown>)?.razorpay_subscription_id,
-          )
-        : Boolean(event.razorpayOrderId);
-
-    if (!hasIdentifier) {
-      throw new DomainError(
-        `Cannot schedule retry: event ${event.id} has no ${event.entityType === "SUBSCRIPTION" ? "subscription identifier" : "razorpayOrderId"}.`,
-        "MISSING_ORDER_ID",
-      );
-    }
-    actionResult = {
-      actionType: chosenAction,
-      result: "scheduled",
-      integration: "RAZORPAY",
-      detail: "Retry deferred; will execute when the cause cooldown window lapses.",
-    };
-  } else if (RETRY_ACTIONS.has(chosenAction)) {
-    if (event.entityType === "SUBSCRIPTION") {
-      const subId =
-        ((event.rawPayload as Record<string, unknown>)?.razorpay_subscription_id as string) ||
-        ((event.rawPayload as Record<string, unknown>)?.subscription_id as string) ||
-        event.entityId;
-      actionResult = {
-        actionType: chosenAction,
-        result: "success",
-        integration: "RAZORPAY",
-        detail: `Subscription ${subId} queued for retry re-presentation via Razorpay.`,
-      };
-    } else {
-      if (!event.razorpayOrderId) {
-        throw new DomainError(
-          `Cannot retry payment: event ${event.id} has no razorpayOrderId.`,
-          "MISSING_ORDER_ID",
-        );
-      }
-      actionResult = await razorpayIntegration.retryPayment(
-        event.razorpayOrderId,
-      );
-      actionResult = { ...actionResult, actionType: chosenAction };
-    }
-  } else if (PAYMENT_LINK_ACTIONS.has(chosenAction)) {
-    const customer = await findCustomerById(event.customerId);
-    const link = await getOrCreatePaymentLink({
-      entityId: event.entityId,
-      eventId: event.id,
-      amount: event.amount,
-      currency: event.currency,
-      customer: { name: customer.name, email: customer.email, phone: customer.phone },
-      description: `Recovery payment for ${event.eventType} — ${event.entityId}`,
-      actionType: chosenAction,
-    });
-    actionResult = {
-      actionType: chosenAction,
-      result: "success",
-      integration: "RAZORPAY",
-      razorpayPaymentLinkId: link.razorpayPaymentLinkId,
-      paymentLinkUrl: link.paymentLinkUrl,
     };
   } else if (EMAIL_ACTIONS.has(chosenAction)) {
     const customer = await findCustomerById(event.customerId);

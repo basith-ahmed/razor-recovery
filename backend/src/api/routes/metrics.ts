@@ -8,7 +8,7 @@ import { handleRouteError } from "../../utils/apiResponse";
 
 export const metricsRouter = Router();
 
-// GET /metrics/summary?window=1h|24h|7d|all
+// GET /metrics/summary — return the latest operational totals for the selected window.
 metricsRouter.get("/summary", async (req: Request, res: Response) => {
   try {
     const window = parseWindow(req.query.window);
@@ -19,7 +19,7 @@ metricsRouter.get("/summary", async (req: Request, res: Response) => {
   }
 });
 
-// GET /metrics/trend?window=&bucket=hour|day
+// GET /metrics/trend — return time-series data grouped by hour or day.
 metricsRouter.get("/trend", async (req: Request, res: Response) => {
   try {
     const window = parseWindow(req.query.window);

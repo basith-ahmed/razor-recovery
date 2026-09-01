@@ -1,5 +1,5 @@
 import { sendRecoveryEmail } from "../src/integrations/emailIntegration";
-import { createRecoveryPaymentLink, retryPayment } from "../src/integrations/razorpayIntegration";
+import { createRecoveryPaymentLink } from "../src/integrations/razorpayIntegration";
 import { escalateToHuman } from "../src/integrations/ticketMock";
 import { prisma } from "../src/config/prisma";
 import { mailer } from "../src/config/mailer";
@@ -134,26 +134,6 @@ describe("Integration Layer (Phase 4)", () => {
           description: "Fail test",
         })
       ).rejects.toThrow(DomainError);
-    });
-
-    it("fetches order status for retryPayment", async () => {
-      const mockOrder = { id: "order_test_999" };
-      jest.spyOn(razorpay.orders, "fetch").mockResolvedValueOnce(mockOrder as any);
-
-      const res = await retryPayment("order_test_999");
-
-      expect(res).toEqual({
-        actionType: "retry_payment_immediate",
-        result: "success",
-        integration: "RAZORPAY",
-        detail: "Order order_test_999 is ready for a customer retry via Razorpay Checkout.",
-      });
-    });
-
-    it("throws DomainError when retryPayment fails", async () => {
-      jest.spyOn(razorpay.orders, "fetch").mockRejectedValueOnce(new Error("Order not found"));
-
-      await expect(retryPayment("non_existent_order")).rejects.toThrow(DomainError);
     });
   });
 });

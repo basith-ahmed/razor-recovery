@@ -10,6 +10,38 @@
  *  6. LLM fallthrough for ambiguous SUBSCRIPTION_FAILED with no state signals
  */
 
+jest.mock("../src/config/mailer", () => ({
+  mailer: { sendMail: jest.fn().mockResolvedValue({ messageId: "mock-msg-123" }) },
+}));
+
+jest.mock("../src/config/prisma", () => ({
+  prisma: {
+    customer: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: "cust-1",
+        name: "Test Customer",
+        email: "test@example.com",
+        phone: "+919876543210",
+        dncFlag: false,
+      }),
+    },
+    action: {
+      create: jest.fn().mockResolvedValue({ id: "action-1" }),
+      upsert: jest.fn().mockResolvedValue({ id: "action-1" }),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    promiseToPay: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    ticket: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    revenueEvent: {
+      findUnique: jest.fn().mockResolvedValue({ id: "mock-event-id" }),
+    },
+  },
+}));
+
 import {
   CAUSE_MAP,
   PAYMENT_CAUSE_MAP,
@@ -212,14 +244,13 @@ describe("diagnose() — SUBSCRIPTION_FAILED mandate routing", () => {
 describe("Policy: mandate_execution_failed_retryable", () => {
   beforeEach(() => _resetCache());
 
-  it("Test 7: attemptCount=1 — returns retry_payment_delayed and send_reminder_email", () => {
+  it("Test 7: attemptCount=1 — returns send_reminder_email and escalate_to_human", () => {
     const actions = filterLegalActions(makeCtx({
       causeLabel: "mandate_execution_failed_retryable",
       attemptCount: 1,
     }));
-    expect(actions).toContain("retry_payment_delayed");
     expect(actions).toContain("send_reminder_email");
-    expect(actions).not.toContain("retry_payment_immediate");
+    expect(actions).toContain("escalate_to_human");
   });
 
   it("Test 8: attemptCount=3 (onMaxAction) — returns only send_reminder_email", () => {
@@ -241,9 +272,6 @@ describe("Policy: mandate_requires_reauthorization", () => {
     }));
     expect(actions).toContain("send_reminder_email");
     expect(actions).toContain("escalate_to_human");
-    // Hard gate: gateway retries are strictly prohibited for halted/revoked mandates
-    expect(actions).not.toContain("retry_payment_immediate");
-    expect(actions).not.toContain("retry_payment_delayed");
   });
 
   it("Test 10: daysOverdue=30 (hardStopDays) — returns only escalate_to_human", () => {
@@ -253,8 +281,6 @@ describe("Policy: mandate_requires_reauthorization", () => {
       daysOverdue: 30,
     }));
     expect(actions).toEqual(["escalate_to_human"]);
-    expect(actions).not.toContain("retry_payment_immediate");
-    expect(actions).not.toContain("retry_payment_delayed");
   });
 });
 
@@ -262,8 +288,8 @@ describe("Policy: mandate_requires_reauthorization", () => {
 
 import { executeAction } from "../src/services/executorService";
 
-describe("Execution: retry_payment_delayed on Subscription", () => {
-  it("Test 11: successfully schedules retry for SUBSCRIPTION entity without razorpayOrderId", async () => {
+describe("Execution: send_reminder_email on Subscription", () => {
+  it("Test 11: successfully sends reminder email for SUBSCRIPTION entity", async () => {
     const event = makeSubscriptionEvent({
       entityType: "SUBSCRIPTION",
       entityId: "sub-12345",
@@ -273,16 +299,16 @@ describe("Execution: retry_payment_delayed on Subscription", () => {
 
     const result = await executeAction(
       {
-        chosenAction: "retry_payment_delayed",
-        legalActions: ["retry_payment_delayed", "send_reminder_email"],
+        chosenAction: "send_reminder_email",
+        legalActions: ["send_reminder_email", "escalate_to_human"],
         policyVersion: "1.0.0",
-        reasoning: "Schedule deferred retry",
+        reasoning: "Send reminder email with reauthorization link",
       },
       event,
     );
 
-    expect(result.actionType).toBe("retry_payment_delayed");
-    expect(result.result).toBe("scheduled");
-    expect(result.integration).toBe("RAZORPAY");
+    expect(result.actionType).toBe("send_reminder_email");
+    expect(result.result).toBe("success");
+    expect(result.integration).toBe("EMAIL");
   });
 });

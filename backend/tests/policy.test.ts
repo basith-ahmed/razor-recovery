@@ -45,7 +45,7 @@ describe("policy.ts", () => {
     const rule = getRuleForCause("expired_card");
     expect(rule).toBeDefined();
     expect(rule!.cause).toBe("expired_card");
-    expect(rule!.actions).toContain("retry_payment_immediate");
+    expect(rule!.actions).toContain("send_reminder_email");
   });
 
   it("getRuleForCause returns undefined for unknown cause", () => {
@@ -139,7 +139,6 @@ describe("filterLegalActions", () => {
         makeCtx({ causeLabel: "expired_card", attemptCount: 0 })
       );
       expect(result).toEqual([
-        "retry_payment_immediate",
         "send_reminder_email",
         "escalate_to_human",
       ]);
@@ -150,7 +149,6 @@ describe("filterLegalActions", () => {
         makeCtx({ causeLabel: "expired_card", attemptCount: 3 })
       );
       expect(result).toEqual(["escalate_to_human"]);
-      expect(result).not.toContain("retry_payment_immediate");
     });
 
     it("returns [] when in cooldown", () => {
@@ -167,7 +165,6 @@ describe("filterLegalActions", () => {
         makeCtx({ causeLabel: "insufficient_funds", attemptCount: 1 })
       );
       expect(result).toEqual([
-        "retry_payment_immediate",
         "send_reminder_email",
         "escalate_to_human",
       ]);
@@ -182,13 +179,13 @@ describe("filterLegalActions", () => {
   });
 
   describe("gateway_timeout", () => {
-    it("returns retry actions when under maxAttempts", () => {
+    it("returns email and escalation actions when under maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({ causeLabel: "gateway_timeout", attemptCount: 0 })
       );
       expect(result).toEqual([
-        "retry_payment_immediate",
-        "retry_payment_delayed",
+        "send_reminder_email",
+        "escalate_to_human",
       ]);
     });
 
@@ -239,7 +236,7 @@ describe("filterLegalActions", () => {
   });
 
   describe("mandate_execution_failed_retryable", () => {
-    it("returns retry_payment_delayed and send_reminder_email when under maxAttempts", () => {
+    it("returns send_reminder_email and escalate_to_human when under maxAttempts", () => {
       const result = filterLegalActions(
         makeCtx({
           causeLabel: "mandate_execution_failed_retryable",
@@ -247,8 +244,8 @@ describe("filterLegalActions", () => {
         })
       );
       expect(result).toEqual([
-        "retry_payment_delayed",
         "send_reminder_email",
+        "escalate_to_human",
       ]);
     });
 

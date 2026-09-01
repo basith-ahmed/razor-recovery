@@ -48,17 +48,12 @@ function toStateMachineOutcome(
   }
 
   switch (action.actionType) {
-    case "retry_payment_immediate":
-    case "retry_payment_delayed":
-      return "retry_initiated";
     case "send_reminder_email":
     case "send_soft_chase_email":
     case "send_dunning_email_1":
     case "send_dunning_email_2":
     case "send_dunning_email_3":
       return "email_sent";
-    case "send_payment_link":
-      return "payment_link_sent";
     case "escalate_to_human":
       return "escalation_triggered";
     case "hard_decline":

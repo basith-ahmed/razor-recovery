@@ -4,7 +4,7 @@ import { handleRouteError } from "../../utils/apiResponse";
 
 export const queryRouter = Router();
 
-// POST /query — natural-language audit query with citation grounding
+// POST /query — answer a natural-language audit question using grounded evidence.
 queryRouter.post("/", async (req: Request, res: Response) => {
   try {
     const { question, entityId, scope } = req.body;

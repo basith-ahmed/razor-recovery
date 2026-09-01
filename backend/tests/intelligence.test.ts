@@ -40,14 +40,14 @@ describe("decisionService — scheduled retry commitment", () => {
       },
     );
 
-    expect(decision.chosenAction).toBe("retry_payment_immediate");
+    expect(decision.chosenAction).toBe("send_reminder_email");
     expect(decision.reasoning).toMatch(/deferred retry/i);
     expect(requestJson).not.toHaveBeenCalled();
   });
 
   it("does not force the retry path for ordinary events", async () => {
     mockedRequestJson.mockResolvedValueOnce(
-      JSON.stringify({ chosen_action: "retry_payment_delayed", reasoning: "test" }),
+      JSON.stringify({ chosen_action: "escalate_to_human", reasoning: "test" }),
     );
     const decision = await decide(
       { causeLabel: "gateway_timeout", confidence: 1, method: "RULE" },
@@ -59,7 +59,7 @@ describe("decisionService — scheduled retry commitment", () => {
         daysSinceLastContact: 0,
       },
     );
-    expect(decision.chosenAction).toBe("retry_payment_delayed");
+    expect(decision.chosenAction).toBe("escalate_to_human");
     expect(requestJson).toHaveBeenCalled();
   });
 });
@@ -235,8 +235,7 @@ describe("decide", () => {
 
     const result = await decide(diagnosis, filterContext(), entityContext);
 
-    expect(mockedRequestJson).toHaveBeenCalledTimes(1);
     expect(result.legalActions).toContain(result.chosenAction);
-    expect(result.chosenAction).toBe("retry_payment_immediate");
+    expect(result.chosenAction).toBe("send_reminder_email");
   });
 });

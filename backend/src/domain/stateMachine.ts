@@ -161,7 +161,6 @@ export function getAllowedTransitions(): Record<
   return { ...ALLOWED_TRANSITIONS };
 }
 
-const RETRY_ACTION_TYPES = new Set(["retry_payment_immediate", "retry_payment_delayed"]);
 const ESCALATE_ACTION_TYPES = new Set(["escalate_to_human"]);
 const COOLDOWN_ACTION_TYPES = new Set(["pause_subscription"]);
 
@@ -178,7 +177,6 @@ export function deriveEventState(
   if (outcome === "written_off" || outcome === "hard_decline" || outcome === "auto_cancel") return "WRITTEN_OFF";
   if (outcome === "reversed") return "RECOVERED"; // or REVERSED represented in workflow as terminal
   if (outcome === "escalated" || (actionType && ESCALATE_ACTION_TYPES.has(actionType))) return "ESCALATED";
-  if (actionType && RETRY_ACTION_TYPES.has(actionType)) return "RETRYING";
   if (actionType && COOLDOWN_ACTION_TYPES.has(actionType)) return "COOLING_DOWN";
   if (outcome === "pending") return "CONTACTED";
   if (outcome === "skipped") {

@@ -88,19 +88,14 @@ export async function decide(
     return { legalActions, chosenAction: "none", reasoning: reason, policyVersion };
   }
 
-  if (entityContext.dueScheduledRetry) {
-    const immediateRetry = legalActions.find(
-      (a) => a === "retry_payment_immediate",
-    );
-    if (immediateRetry) {
-      return {
-        legalActions,
-        chosenAction: immediateRetry,
-        reasoning:
-          "A deferred retry was scheduled for this cause and its cooldown window has lapsed; executing the retry now.",
-        policyVersion,
-      };
-    }
+  if (entityContext.dueScheduledRetry && legalActions.length > 0) {
+    return {
+      legalActions,
+      chosenAction: legalActions[0],
+      reasoning:
+        "A deferred retry cooldown window has lapsed; executing follow-up recovery action now.",
+      policyVersion,
+    };
   }
 
   if (legalActions.length === 1) {

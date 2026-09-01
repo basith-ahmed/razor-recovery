@@ -75,13 +75,9 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 async function main() {
-  // Shared producer: connected once at process startup, reused everywhere
   await connectProducer();
 
   // Start all five pipeline consumers once, at process boot, and run them
-  // for the lifetime of the process — completely decoupled from whether any
-  // stream injection is in flight. This is what makes it a real continuous
-  // pipeline rather than a batch job with steps.
   await Promise.all([
     startDetectionConsumer(),
     startDiagnosisConsumer(),

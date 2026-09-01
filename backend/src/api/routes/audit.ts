@@ -4,7 +4,7 @@ import { handleRouteError } from "../../utils/apiResponse";
 
 export const auditRouter = Router();
 
-// GET /audit/verify?fromSequence=&toSequence=
+// GET /audit/verify — validate the audit chain for a sequence range.
 auditRouter.get("/verify", async (req: Request, res: Response) => {
   try {
     const fromSequence = req.query.fromSequence

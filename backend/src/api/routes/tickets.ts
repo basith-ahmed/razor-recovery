@@ -12,7 +12,7 @@ import { parsePagination } from "../../utils/pagination";
 
 export const ticketsRouter = Router();
 
-// GET /tickets/stats — summary counts & financial totals for tickets dashboard
+// GET /tickets/stats — return ticket totals and recovery KPIs for the dashboard.
 ticketsRouter.get("/stats", async (_req, res) => {
   try {
     const stats = await getTicketStats();
@@ -22,7 +22,7 @@ ticketsRouter.get("/stats", async (_req, res) => {
   }
 });
 
-// GET /tickets — list tickets with filters & pagination
+// GET /tickets — list tickets with optional filters and pagination.
 ticketsRouter.get("/", async (req, res) => {
   try {
     const { status, search } = req.query;
@@ -39,7 +39,7 @@ ticketsRouter.get("/", async (req, res) => {
   }
 });
 
-// GET /tickets/:id — get ticket details, notes, and audit history
+// GET /tickets/:id — fetch one ticket with notes and audit history.
 ticketsRouter.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -50,7 +50,7 @@ ticketsRouter.get("/:id", async (req, res) => {
   }
 });
 
-// POST /tickets/:id/notes — add internal note
+// POST /tickets/:id/notes — add an internal note to the ticket.
 ticketsRouter.post("/:id/notes", async (req, res) => {
   try {
     const { id } = req.params;
@@ -67,7 +67,7 @@ ticketsRouter.post("/:id/notes", async (req, res) => {
   }
 });
 
-// POST /tickets/:id/send-email — dispatch direct email to customer
+// POST /tickets/:id/send-email — send a direct customer email from the ticket.
 ticketsRouter.post("/:id/send-email", async (req, res) => {
   try {
     const { id } = req.params;
@@ -90,7 +90,7 @@ ticketsRouter.post("/:id/send-email", async (req, res) => {
   }
 });
 
-// POST /tickets/:id/resolve — resolve or recover ticket
+// POST /tickets/:id/resolve — update the ticket outcome and resolution status.
 ticketsRouter.post("/:id/resolve", async (req, res) => {
   try {
     const { id } = req.params;

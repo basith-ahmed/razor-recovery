@@ -13,7 +13,7 @@ import { handleRouteError } from "../../utils/apiResponse";
 
 export const promisesRouter = Router();
 
-// GET /promises/stats
+// GET /promises/stats — return promise totals and pending recovery KPIs.
 promisesRouter.get("/stats", async (_req: Request, res: Response) => {
   try {
     const stats = await getPromiseStats();
@@ -23,7 +23,7 @@ promisesRouter.get("/stats", async (_req: Request, res: Response) => {
   }
 });
 
-// GET /promises/customers
+// GET /promises/customers — list customer quick-search rows for promise creation.
 promisesRouter.get("/customers", async (_req: Request, res: Response) => {
   try {
     const customers = await listLookupCustomers();
@@ -33,7 +33,7 @@ promisesRouter.get("/customers", async (_req: Request, res: Response) => {
   }
 });
 
-// GET /promises/customers/:customerId/entities
+// GET /promises/customers/:customerId/entities — fetch entities linked to a customer.
 promisesRouter.get("/customers/:customerId/entities", async (req: Request, res: Response) => {
   try {
     const customerId = String(req.params.customerId);
@@ -44,7 +44,7 @@ promisesRouter.get("/customers/:customerId/entities", async (req: Request, res: 
   }
 });
 
-// GET /promises/:id
+// GET /promises/:id — fetch one promise-to-pay record by id.
 promisesRouter.get("/:id", async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -55,7 +55,7 @@ promisesRouter.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-// GET /promises
+// GET /promises — list promise records with optional filters and pagination.
 promisesRouter.get("/", async (req: Request, res: Response) => {
   try {
     const { status, customerId, entityId, search } = req.query;
@@ -76,7 +76,7 @@ promisesRouter.get("/", async (req: Request, res: Response) => {
   }
 });
 
-// POST /promises
+// POST /promises — create a new promise-to-pay agreement.
 promisesRouter.post("/", async (req: Request, res: Response) => {
   try {
     const promise = await createPromise(req.body);
@@ -86,7 +86,7 @@ promisesRouter.post("/", async (req: Request, res: Response) => {
   }
 });
 
-// POST /promises/:id/send-reminder
+// POST /promises/:id/send-reminder — send the reminder email for an active promise.
 promisesRouter.post("/:id/send-reminder", async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -100,7 +100,7 @@ promisesRouter.post("/:id/send-reminder", async (req: Request, res: Response) =>
   }
 });
 
-// PATCH /promises/:id
+// PATCH /promises/:id — update a promise record after a customer interaction.
 promisesRouter.patch("/:id", async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);

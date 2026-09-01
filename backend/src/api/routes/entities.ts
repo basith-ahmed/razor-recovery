@@ -6,7 +6,7 @@ import { listEntities, getEntityAuditDetails, escalateEntityToHuman } from "../.
 
 export const entitiesRouter = Router();
 
-// GET /entities?state=&cause=&eventType=&minAmount=&maxAmount=&search=&sort=&window=&page=&limit=
+// GET /entities — list entities with filters, sorting, and pagination.
 entitiesRouter.get("/", async (req: Request, res: Response) => {
   try {
     const { state, cause, eventType, minAmount, maxAmount, search, sort } = req.query;
@@ -33,7 +33,7 @@ entitiesRouter.get("/", async (req: Request, res: Response) => {
   }
 });
 
-// GET /entities/:id/audit — full ordered audit entries and event history for an entity or event
+// GET /entities/:id/audit — return the full audit trail for one entity or event.
 entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
   try {
     const targetId = String(req.params.id);
@@ -44,7 +44,7 @@ entitiesRouter.get("/:id/audit", async (req: Request, res: Response) => {
   }
 });
 
-// POST /entities/:id/escalate — manually move an entity (e.g. DNC customer) to human escalations
+// POST /entities/:id/escalate — move the entity into human review with a reason.
 entitiesRouter.post("/:id/escalate", async (req: Request, res: Response) => {
   try {
     const targetId = String(req.params.id);

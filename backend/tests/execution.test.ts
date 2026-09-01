@@ -158,9 +158,9 @@ function makeDiagnosis(overrides: Partial<DiagnosisResult> = {}): DiagnosisResul
 
 function makeDecision(overrides: Partial<DecisionResult> = {}): DecisionResult {
   return {
-    legalActions: ["retry_payment_immediate", "send_payment_link"],
-    chosenAction: "retry_payment_immediate",
-    reasoning: "Customer has an expired card; retry is the safest first action.",
+    legalActions: ["send_reminder_email", "escalate_to_human"],
+    chosenAction: "send_reminder_email",
+    reasoning: "Customer has an expired card; reminder is the safest first action.",
     policyVersion: "1.0.0",
     ...overrides,
   };
@@ -187,9 +187,9 @@ describe("executorService", () => {
     (mockedPrisma.action.create as jest.Mock).mockResolvedValue({
       id: "action-1",
       eventId: "event-1",
-      actionType: "retry_payment_immediate",
+      actionType: "send_reminder_email",
       result: "success",
-      integration: "RAZORPAY",
+      integration: "EMAIL",
     });
   });
 
@@ -236,42 +236,6 @@ describe("executorService", () => {
   });
 
   describe("executeAction", () => {
-    it("routes retry_payment to razorpayIntegration.retryPayment", async () => {
-      mockedRazorpay.orders.fetch.mockResolvedValueOnce({
-        id: "order_sim_xyz",
-        status: "created",
-      });
-
-      const result = await executeAction(
-        makeDecision({ chosenAction: "retry_payment_immediate" }),
-        makeEvent(),
-      );
-
-      expect(mockedRazorpay.orders.fetch).toHaveBeenCalledWith("order_sim_xyz");
-      expect(result.result).toBe("success");
-      expect(result.integration).toBe("RAZORPAY");
-      expect(result.actionType).toBe("retry_payment_immediate");
-      expect(mockedPrisma.action.upsert).toHaveBeenCalledTimes(1);
-    });
-
-    it("routes send_payment_link to razorpayIntegration.createRecoveryPaymentLink", async () => {
-      (mockedPrisma.customer.findUnique as jest.Mock).mockResolvedValueOnce(mockCustomer);
-      mockedRazorpay.paymentLink.create.mockResolvedValueOnce({
-        id: "plink_abc",
-        short_url: "https://rzp.io/abc",
-      });
-
-      const result = await executeAction(
-        makeDecision({ chosenAction: "send_payment_link" }),
-        makeEvent(),
-      );
-
-      expect(mockedRazorpay.paymentLink.create).toHaveBeenCalledTimes(1);
-      expect(result.result).toBe("success");
-      expect(result.integration).toBe("RAZORPAY");
-      expect(result.actionType).toBe("send_payment_link");
-    });
-
     it("routes email actions through draftRecoveryEmail + sendRecoveryEmail", async () => {
       (mockedPrisma.customer.findUnique as jest.Mock).mockResolvedValueOnce(mockCustomer);
       mockedMailer.sendMail.mockResolvedValueOnce({ messageId: "msg-123" });
@@ -327,27 +291,6 @@ describe("executorService", () => {
         ),
       ).rejects.toThrow("Unrecognized action");
     });
-
-    it("schedules retry_payment_delayed without calling Razorpay", async () => {
-      const result = await executeAction(
-        makeDecision({ chosenAction: "retry_payment_delayed" }),
-        makeEvent(),
-      );
-
-      expect(mockedRazorpay.orders.fetch).not.toHaveBeenCalled();
-      expect(result.result).toBe("scheduled");
-      expect(result.actionType).toBe("retry_payment_delayed");
-      expect(mockedPrisma.action.upsert).toHaveBeenCalledTimes(1);
-    });
-
-    it("throws DomainError when retry has no razorpayOrderId", async () => {
-      await expect(
-        executeAction(
-          makeDecision({ chosenAction: "retry_payment_immediate" }),
-          makeEvent({ razorpayOrderId: undefined }),
-        ),
-      ).rejects.toThrow("no razorpayOrderId");
-    });
   });
 });
 
@@ -372,9 +315,9 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis();
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment_immediate",
+      actionType: "send_reminder_email",
       result: "success",
-      integration: "RAZORPAY",
+      integration: "EMAIL",
     };
 
     await recordAuditEntry({ event, diagnosis, decision, action });
@@ -387,23 +330,23 @@ describe("auditService", () => {
     expect(createCall.data.outcome).toBe("pending");
   });
 
-  it("transitions EntityWorkflowState off DETECTED for a retry action", async () => {
+  it("transitions EntityWorkflowState off DETECTED for an email action", async () => {
     const event = makeEvent();
     const diagnosis = makeDiagnosis();
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment_immediate",
+      actionType: "send_reminder_email",
       result: "success",
-      integration: "RAZORPAY",
+      integration: "EMAIL",
     };
 
     await recordAuditEntry({ event, diagnosis, decision, action });
 
     expect(mockedPrisma.entityWorkflowState.upsert).toHaveBeenCalledTimes(1);
     const upsertCall = (mockedPrisma.entityWorkflowState.upsert as jest.Mock).mock.calls[0][0];
-    // retry_initiated from DETECTED → RETRYING
-    expect(upsertCall.create.state).toBe("RETRYING");
-    expect(upsertCall.update.state).toBe("RETRYING");
+    // email_sent from DETECTED → CONTACTED
+    expect(upsertCall.create.state).toBe("CONTACTED");
+    expect(upsertCall.update.state).toBe("CONTACTED");
   });
 
   it("transitions to DO_NOT_CONTACT for a DNC-skipped event", async () => {
@@ -433,9 +376,9 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis({ causeLabel: "gateway_timeout" });
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment_immediate",
+      actionType: "send_reminder_email",
       result: "success",
-      integration: "RAZORPAY",
+      integration: "EMAIL",
     };
 
     await recordAuditEntry({ event, diagnosis, decision, action });
@@ -493,17 +436,17 @@ describe("auditService", () => {
     const diagnosis = makeDiagnosis({ causeLabel: "insufficient_funds" });
     const decision = makeDecision();
     const action: ActionResult = {
-      actionType: "retry_payment_immediate",
+      actionType: "send_reminder_email",
       result: "success",
-      integration: "RAZORPAY",
+      integration: "EMAIL",
     };
 
     await recordAuditEntry({ event, diagnosis, decision, action });
 
     const upsertCall = (mockedPrisma.entityWorkflowState.upsert as jest.Mock).mock
       .calls[0][0];
-    // retry_initiated computed from the fresh DETECTED arc → RETRYING
-    expect(upsertCall.update.state).toBe("RETRYING");
+    // email_sent computed from the fresh DETECTED arc → CONTACTED
+    expect(upsertCall.update.state).toBe("CONTACTED");
 
     // The new arc's first successful contact opens a fresh per-cause budget
     const causeUpsertCall = (mockedPrisma.entityCauseState.upsert as jest.Mock).mock
@@ -548,31 +491,6 @@ describe("auditService", () => {
     expect(mockedPrisma.entityCauseState.deleteMany).toHaveBeenCalledWith({
       where: { entityId: "entity-1" },
     });
-  });
-
-  it("starts the cooldown clock but consumes no budget for a scheduled retry", async () => {
-    const event = makeEvent();
-    const diagnosis = makeDiagnosis({ causeLabel: "gateway_timeout" });
-    const decision = makeDecision({ chosenAction: "retry_payment_delayed" });
-    const action: ActionResult = {
-      actionType: "retry_payment_delayed",
-      result: "scheduled",
-      integration: "RAZORPAY",
-    };
-
-    await recordAuditEntry({ event, diagnosis, decision, action });
-
-    expect(mockedPrisma.entityCauseState.upsert).toHaveBeenCalledTimes(1);
-    const upsertCall = (mockedPrisma.entityCauseState.upsert as jest.Mock).mock
-      .calls[0][0];
-    // Cooldown starts (that window is what the scheduler fires on)…
-    expect(upsertCall.create.cooldownUntil).toBeInstanceOf(Date);
-    expect(upsertCall.update.cooldownUntil).toBeInstanceOf(Date);
-    // …but no attempt is consumed and no customer touch is recorded yet
-    expect(upsertCall.create.attemptCount).toBe(0);
-    expect(upsertCall.update.attemptCount).toBeUndefined();
-    expect(upsertCall.create.lastContactedAt).toBeUndefined();
-    expect(upsertCall.update.lastContactedAt).toBeUndefined();
   });
 
   it("derives outcome 'escalated' for escalate_to_human action", async () => {
@@ -646,7 +564,6 @@ describe("per-cause attempt/cooldown scoping", () => {
     // Full action list for insufficient_funds — NOT escalation-only, because
     // this cause's attemptCount is 0 regardless of gateway_timeout's 2.
     expect(legalActions).toEqual([
-      "retry_payment_immediate",
       "send_reminder_email",
       "escalate_to_human",
     ]);
@@ -926,7 +843,7 @@ describe("Definition of Done — Full Pipeline", () => {
 
     // Mock Gemini LLM requestJson
     mockedRequestJson.mockResolvedValue(
-      JSON.stringify({ chosen_action: "retry_payment_immediate", reasoning: "Retry payment recommended by policy." }),
+      JSON.stringify({ chosen_action: "send_reminder_email", reasoning: "Send reminder email recommended by policy." }),
     );
 
     // Mock Mailer
@@ -1078,11 +995,11 @@ describe("Definition of Done — DNC Compliance", () => {
       const entityId = "entity-multi-cause-1";
       const event1 = makeEvent({ entityId, eventType: "PAYMENT_FAILED" });
       const diag1 = makeDiagnosis({ causeLabel: "insufficient_funds" });
-      const dec1 = makeDecision({ chosenAction: "send_payment_link" });
+      const dec1 = makeDecision({ chosenAction: "send_reminder_email" });
       const action1: ActionResult = {
-        actionType: "send_payment_link",
+        actionType: "send_reminder_email",
         result: "success",
-        integration: "RAZORPAY",
+        integration: "EMAIL",
       };
 
       // 1st Attempt: insufficient_funds

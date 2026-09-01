@@ -75,7 +75,7 @@ export async function listEntities(
       where.auditEntries = { some: { outcome: { in: ["written_off", "hard_decline", "auto_cancel"] } } };
     } else if (targetState === "RETRYING") {
       where.auditEntries = { some: { outcome: "pending" } };
-      where.action = { actionType: { in: ["retry_payment_immediate", "retry_payment_delayed"] } };
+      where.action = { actionType: "retry_payment_delayed" };
     } else if (targetState === "ESCALATED") {
       where.OR = [
         { auditEntries: { some: { outcome: "escalated" } } },
@@ -86,7 +86,7 @@ export async function listEntities(
       where.action = { actionType: "pause_subscription" };
     } else if (targetState === "CONTACTED") {
       where.auditEntries = { some: { outcome: "pending" } };
-      where.action = { actionType: { notIn: ["retry_payment_immediate", "retry_payment_delayed", "escalate_to_human", "pause_subscription"] } };
+      where.action = { actionType: { notIn: ["escalate_to_human", "pause_subscription"] } };
     } else if (targetState === "DO_NOT_CONTACT") {
       where.auditEntries = { some: { outcome: "skipped" } };
       where.action = { actionType: "none" };

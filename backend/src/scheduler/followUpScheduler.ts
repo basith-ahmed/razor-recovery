@@ -175,7 +175,7 @@ async function scanAndPublish(): Promise<void> {
   );
 
   const pendingScheduled = await prisma.action.findMany({
-    where: { result: "scheduled", actionType: "retry_payment_delayed" },
+    where: { result: "scheduled" },
     select: {
       event: { select: { entityId: true, diagnosis: { select: { causeLabel: true } } } },
     },
@@ -248,7 +248,7 @@ export function decideScheduledRetries(
 
 async function dispatchDueScheduledRetries(now: Date): Promise<void> {
   const scheduled = await prisma.action.findMany({
-    where: { result: "scheduled", actionType: "retry_payment_delayed" },
+    where: { result: "scheduled" },
     include: {
       event: {
         select: {
