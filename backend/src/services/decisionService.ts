@@ -157,7 +157,7 @@ export async function decide(
     : "";
   const winbackOffer = rule?.winback;
   const winbackDirective = winbackOffer && retrievalContext
-    ? `\n\nwinback_offer: A one-time winback offer email (send_winback_offer) with a ${winbackOffer.discountPercent}% discount is available. Decide by comparing the subscription price ₹${retrievalContext.amount.toLocaleString("en-IN")} against entity_context.customerLtv and the customer's history: for a high-value customer on a first contact, prefer send_winback_offer to retain them at the discounted price. If entity_context.recentActions shows send_winback_offer was already sent for this arc and the customer still has not paid, do not repeat it — prefer escalate_to_human.`
+    ? `\n\nwinback_offer: A one-time winback offer email (send_winback_offer) with a ${winbackOffer.discountPercent}% discount is available. Decide by comparing the subscription price ₹${retrievalContext.amount.toLocaleString("en-IN")} against entity_context.customerLtv and the customer's history: for a high-value customer on a first contact, prefer escalate_to_human to retain them, for a low-value customer, offer them a winback at first at the discounted price. If entity_context.recentActions shows send_winback_offer was already sent for this arc and the customer still has not paid, do not repeat it — prefer escalate_to_human.`
     : "";
   const payload = `${JSON.stringify({ diagnosis, legal_actions: legalActions, entity_context: entityContext })}\n\n${similarCasesPrompt(cases)}${policyDirective}${winbackDirective}`;
   let rawResponse = "";
