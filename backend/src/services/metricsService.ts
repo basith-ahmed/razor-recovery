@@ -272,7 +272,7 @@ export async function computeLiveMetricsUncached(
       );
       if (reasoning.toLowerCase().includes("cooldown")) {
         cooldownStopped++;
-      } else {
+      } else if (reasoning.includes("DNC")) {
         dncBlocked++;
       }
     }

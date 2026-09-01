@@ -1,13 +1,14 @@
 /**
- * Tests for Mandate Retry Sequencer (Phase: Mandate Retry Sequencer & Re-Authorization Loop)
+ * Tests for the revenue-leakage diagnosis + mandate policy.
  *
  * Covers:
- *  1. Diagnosis rule-based routing for SUBSCRIPTION_FAILED events
- *  2. Policy stopping rules for mandate_execution_failed_retryable
- *  3. Policy stopping rules for mandate_requires_reauthorization
- *  4. Hard gate: gateway retries are never returned for mandate_requires_reauthorization
- *  5. Card-decline subscription failure falls through to card-decline cause correctly
- *  6. LLM fallthrough for ambiguous SUBSCRIPTION_FAILED with no state signals
+ *  1. New cause taxonomy (CAUSE_LABELS) — gateway-era causes are gone
+ *  2. Rule-based routing for SUBSCRIPTION_MANDATE_CANCELLED events
+ *  3. Rule-based routing for INVOICE_OVERDUE (plain + disputed)
+ *  4. Rule-based routing for CHECKOUT_ABANDONED
+ *  5. Promise-broken marker routing
+ *  6. Policy stopping rules for mandate_requires_reauthorization (hard stop)
+ *  7. Pause-subscription execution on SUBSCRIPTION entities
  */
 
 jest.mock("../src/config/mailer", () => ({
@@ -51,10 +52,8 @@ jest.mock("../src/config/prisma", () => ({
 }));
 
 import {
-  CAUSE_MAP,
-  PAYMENT_CAUSE_MAP,
-  MANDATE_CAUSE_MAP,
   CAUSE_LABELS,
+  REAUTH_REQUIRED_MANDATE_STATUSES,
   diagnose,
 } from "../src/services/diagnosisService";
 import { filterLegalActions, FilterContext } from "../src/domain/stoppingRules";
@@ -65,7 +64,7 @@ import { EnrichedRevenueEvent } from "../src/domain/types";
 
 function makeCtx(overrides: Partial<FilterContext> = {}): FilterContext {
   return {
-    causeLabel: "expired_card",
+    causeLabel: "invoice_overdue",
     customerId: "cust-1",
     isDnc: false,
     isDisputed: false,
@@ -75,16 +74,16 @@ function makeCtx(overrides: Partial<FilterContext> = {}): FilterContext {
   };
 }
 
-function makeSubscriptionEvent(
+function makeEvent(
   overrides: Partial<EnrichedRevenueEvent> = {},
 ): EnrichedRevenueEvent {
   return {
-    id: "ev-mandate-1",
-    entityType: "SUBSCRIPTION",
-    entityId: "sub-1",
+    id: "ev-1",
+    entityType: "INVOICE",
+    entityId: "inv-1",
     customerId: "cust-1",
-    eventType: "SUBSCRIPTION_FAILED",
-    amount: 999,
+    eventType: "INVOICE_OVERDUE",
+    amount: 48000,
     currency: "INR",
     occurredAt: new Date().toISOString(),
     rawPayload: {},
@@ -96,51 +95,36 @@ function makeSubscriptionEvent(
 
 // ── Cause Label Tests ─────────────────────────────────────────────────────────
 
-describe("CAUSE_LABELS", () => {
-  it("includes mandate_execution_failed_retryable", () => {
-    expect(CAUSE_LABELS).toContain("mandate_execution_failed_retryable");
+describe("CAUSE_LABELS — revenue-leakage taxonomy", () => {
+  it("includes all 7 recovery causes", () => {
+    expect(CAUSE_LABELS).toEqual(
+      expect.arrayContaining([
+        "cart_abandoned",
+        "invoice_overdue",
+        "invoice_disputed",
+        "mandate_requires_reauthorization",
+        "no_reason_signal",
+        "dnc",
+        "promise_broken",
+      ]),
+    );
+    expect(CAUSE_LABELS).toHaveLength(7);
   });
 
-  it("includes mandate_requires_reauthorization", () => {
-    expect(CAUSE_LABELS).toContain("mandate_requires_reauthorization");
-  });
-
-  it("does NOT include subscription_renewal_failed", () => {
-    expect(CAUSE_LABELS).not.toContain("subscription_renewal_failed");
+  it("does NOT include gateway-era payment-failure causes", () => {
+    expect(CAUSE_LABELS).not.toContain("expired_card");
+    expect(CAUSE_LABELS).not.toContain("insufficient_funds");
+    expect(CAUSE_LABELS).not.toContain("gateway_timeout");
+    expect(CAUSE_LABELS).not.toContain("price_friction");
+    expect(CAUSE_LABELS).not.toContain("mandate_execution_failed_retryable");
   });
 });
 
-// ── CAUSE_MAP Scoping Tests ───────────────────────────────────────────────────
-
-describe("MANDATE_CAUSE_MAP & PAYMENT_CAUSE_MAP separation (no collisions)", () => {
-  it("MANDATE_CAUSE_MAP maps mandate_cancelled to mandate_requires_reauthorization", () => {
-    expect(MANDATE_CAUSE_MAP["mandate_cancelled"]).toBe("mandate_requires_reauthorization");
-  });
-
-  it("MANDATE_CAUSE_MAP maps TPAP mandate_revoked, mandate_rejected, mandate_paused, mandate_expired to mandate_requires_reauthorization", () => {
-    expect(MANDATE_CAUSE_MAP["mandate_revoked"]).toBe("mandate_requires_reauthorization");
-    expect(MANDATE_CAUSE_MAP["mandate_rejected"]).toBe("mandate_requires_reauthorization");
-    expect(MANDATE_CAUSE_MAP["mandate_paused"]).toBe("mandate_requires_reauthorization");
-    expect(MANDATE_CAUSE_MAP["mandate_expired"]).toBe("mandate_requires_reauthorization");
-    expect(MANDATE_CAUSE_MAP["invalid_umn"]).toBe("mandate_requires_reauthorization");
-  });
-
-  it("MANDATE_CAUSE_MAP maps mandate_debit_failed and mandate_execution_failed to mandate_execution_failed_retryable", () => {
-    expect(MANDATE_CAUSE_MAP["mandate_debit_failed"]).toBe("mandate_execution_failed_retryable");
-    expect(MANDATE_CAUSE_MAP["mandate_execution_failed"]).toBe("mandate_execution_failed_retryable");
-  });
-
-  it("MANDATE_CAUSE_MAP maps mandate_creation_failed to mandate_requires_reauthorization", () => {
-    expect(MANDATE_CAUSE_MAP["mandate_creation_failed"]).toBe("mandate_requires_reauthorization");
-  });
-
-  it("MANDATE_CAUSE_MAP maps subscription_halted to mandate_requires_reauthorization", () => {
-    expect(MANDATE_CAUSE_MAP["subscription_halted"]).toBe("mandate_requires_reauthorization");
-  });
-
-  it("PAYMENT_CAUSE_MAP preserves standard gateway_technical_error -> gateway_timeout (no overwrite)", () => {
-    expect(PAYMENT_CAUSE_MAP["gateway_technical_error"]).toBe("gateway_timeout");
-    expect(PAYMENT_CAUSE_MAP["payment_failed"]).toBe("gateway_timeout");
+describe("REAUTH_REQUIRED_MANDATE_STATUSES", () => {
+  it("treats cancelled, halted, revoked, expired and paused as re-auth required", () => {
+    expect(REAUTH_REQUIRED_MANDATE_STATUSES).toEqual(
+      new Set(["cancelled", "halted", "revoked", "expired", "paused"]),
+    );
   });
 });
 
@@ -151,130 +135,129 @@ jest.mock("../src/services/retrievalService", () => ({
   findSimilarCases: jest.fn().mockResolvedValue([]),
 }));
 
-describe("diagnose() — SUBSCRIPTION_FAILED mandate routing", () => {
+describe("diagnose() — SUBSCRIPTION_MANDATE_CANCELLED mandate routing", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it("Test 1: subscription_status=halted → mandate_requires_reauthorization (RULE)", async () => {
-    const event = makeSubscriptionEvent({
-      rawPayload: { subscription_status: "halted" },
+  const history = { priorFailures: 0, lifetimeValue: 1000, tenureDays: 90 };
+
+  it("Test 1: mandate_status=cancelled → mandate_requires_reauthorization (RULE)", async () => {
+    const event = makeEvent({
+      entityType: "SUBSCRIPTION",
+      entityId: "sub-1",
+      eventType: "SUBSCRIPTION_MANDATE_CANCELLED",
+      amount: 999,
+      rawPayload: { mandate_status: "cancelled", mandate_ref: "rzp.abc123@bankpsp" },
     });
-    const result = await diagnose(event, {
-      priorFailures: 0,
-      lifetimeValue: 1000,
-      tenureDays: 90,
-    });
+    const result = await diagnose(event, history);
     expect(result.causeLabel).toBe("mandate_requires_reauthorization");
     expect(result.method).toBe("RULE");
     expect(result.confidence).toBe(1);
+    expect(result.reasoning).toContain("cancelled");
+    expect(result.reasoning).toContain("rzp.abc123@bankpsp");
   });
 
-  it("Test 2: mandate_status=cancelled / revoked with UMN → mandate_requires_reauthorization (RULE)", async () => {
-    const event = makeSubscriptionEvent({
-      rawPayload: {
-        mandate_status: "revoked",
-        umn: "XYZa977ccabb11e7abc4cec278b6b50a@mypsp",
-      },
+  it("Test 2: subscription_status=halted signal → mandate_requires_reauthorization (RULE)", async () => {
+    const event = makeEvent({
+      entityType: "SUBSCRIPTION",
+      eventType: "SUBSCRIPTION_MANDATE_CANCELLED",
+      rawPayload: { subscription_status: "halted" },
     });
-    const result = await diagnose(event, {
-      priorFailures: 0,
-      lifetimeValue: 1000,
-      tenureDays: 90,
-    });
-    expect(result.causeLabel).toBe("mandate_requires_reauthorization");
-    expect(result.method).toBe("RULE");
-    expect(result.reasoning).toContain("XYZa977ccabb11e7abc4cec278b6b50a@mypsp");
-  });
-
-  it("Test 3: errorReason=mandate_creation_failed → mandate_requires_reauthorization (RULE)", async () => {
-    const event = makeSubscriptionEvent({
-      errorReason: "mandate_creation_failed",
-    });
-    const result = await diagnose(event, {
-      priorFailures: 0,
-      lifetimeValue: 1000,
-      tenureDays: 90,
-    });
+    const result = await diagnose(event, history);
     expect(result.causeLabel).toBe("mandate_requires_reauthorization");
     expect(result.method).toBe("RULE");
   });
 
-  it("Test 4: subscription_status=pending + errorReason=mandate_debit_failed → mandate_execution_failed_retryable (RULE)", async () => {
-    const event = makeSubscriptionEvent({
-      errorReason: "mandate_debit_failed",
-      rawPayload: { subscription_status: "pending", umn: "rzp.test1234@bank" },
-    });
-    const result = await diagnose(event, {
-      priorFailures: 0,
-      lifetimeValue: 1000,
-      tenureDays: 90,
-    });
-    expect(result.causeLabel).toBe("mandate_execution_failed_retryable");
-    expect(result.method).toBe("RULE");
-  });
-
-  it("Test 5 (Card fallthrough): SUBSCRIPTION_FAILED + errorReason=insufficient_fund → falls through to non-mandate cause", async () => {
-    const { requestJson } = await import("../src/config/openai");
-    (requestJson as jest.Mock).mockResolvedValueOnce(
-      JSON.stringify({ cause_label: "insufficient_funds", confidence: 0.95, reasoning: "Card declined due to low balance on subscription renewal." })
-    );
-    const event = makeSubscriptionEvent({
-      errorReason: "insufficient_fund",
-      rawPayload: {},
-    });
-    const result = await diagnose(event, {
-      priorFailures: 1,
-      lifetimeValue: 2000,
-      tenureDays: 180,
-    });
-    expect(result.causeLabel).not.toBe("mandate_requires_reauthorization");
-    expect(result.causeLabel).not.toBe("mandate_execution_failed_retryable");
-  });
-
-  it("Test 6 (LLM fallthrough): SUBSCRIPTION_FAILED with no errorReason, no subscription_status → falls to LLM", async () => {
+  it("Test 3: unknown mandate status falls through to LLM", async () => {
     const { requestJson } = await import("../src/config/openai");
     (requestJson as jest.Mock).mockResolvedValueOnce(
       JSON.stringify({ cause_label: "no_reason_signal", confidence: 0.6, reasoning: "No clear signal." })
     );
-    const event = makeSubscriptionEvent({ rawPayload: {} });
-    const result = await diagnose(event, {
-      priorFailures: 0,
-      lifetimeValue: 500,
-      tenureDays: 30,
+    const event = makeEvent({
+      entityType: "SUBSCRIPTION",
+      eventType: "SUBSCRIPTION_MANDATE_CANCELLED",
+      rawPayload: {},
     });
+    const result = await diagnose(event, history);
     expect(result.method).toBe("LLM");
+  });
+});
+
+describe("diagnose() — INVOICE_OVERDUE routing", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const history = { priorFailures: 0, lifetimeValue: 1000, tenureDays: 90 };
+
+  it("Test 4: plain overdue invoice → invoice_overdue (RULE) with days overdue in reasoning", async () => {
+    const event = makeEvent({
+      rawPayload: { disputeFlag: false, daysOverdue: 12 },
+    });
+    const result = await diagnose(event, history);
+    expect(result.causeLabel).toBe("invoice_overdue");
+    expect(result.method).toBe("RULE");
+    expect(result.confidence).toBe(1);
+    expect(result.reasoning).toContain("12 day(s)");
+  });
+
+  it("Test 5: disputed invoice → invoice_disputed (RULE), never LLM", async () => {
+    const { requestJson } = await import("../src/config/openai");
+    const event = makeEvent({
+      rawPayload: { disputeFlag: true },
+    });
+    const result = await diagnose(event, history);
+    expect(result.causeLabel).toBe("invoice_disputed");
+    expect(result.method).toBe("RULE");
+    expect(requestJson).not.toHaveBeenCalled();
+  });
+});
+
+describe("diagnose() — CHECKOUT_ABANDONED routing", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const history = { priorFailures: 0, lifetimeValue: 1000, tenureDays: 90 };
+
+  it("Test 6: abandoned cart → cart_abandoned (RULE) with idle hours in reasoning", async () => {
+    const event = makeEvent({
+      entityType: "CART",
+      eventType: "CHECKOUT_ABANDONED",
+      amount: 2400,
+      rawPayload: { hoursSinceAbandon: 3, itemCount: 2 },
+    });
+    const result = await diagnose(event, history);
+    expect(result.causeLabel).toBe("cart_abandoned");
+    expect(result.method).toBe("RULE");
+    expect(result.reasoning).toContain("2 item(s)");
+    expect(result.reasoning).toContain("3h");
+  });
+});
+
+describe("diagnose() — promise_broken marker routing", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("Test 7: followUp marker promise_broken → promise_broken (RULE)", async () => {
+    const event = makeEvent({
+      rawPayload: { followUp: { type: "promise_broken" } },
+    });
+    const result = await diagnose(event, { priorFailures: 1, lifetimeValue: 1000, tenureDays: 90 });
+    expect(result.causeLabel).toBe("promise_broken");
+    expect(result.method).toBe("RULE");
+    expect(result.confidence).toBe(1);
   });
 });
 
 // ── Policy / Stopping Rule Tests ──────────────────────────────────────────────
 
-describe("Policy: mandate_execution_failed_retryable", () => {
-  beforeEach(() => _resetCache());
-
-  it("Test 7: attemptCount=1 — returns send_reminder_email, pause_subscription, and escalate_to_human", () => {
-    const actions = filterLegalActions(makeCtx({
-      causeLabel: "mandate_execution_failed_retryable",
-      attemptCount: 1,
-    }));
-    expect(actions).toContain("send_reminder_email");
-    expect(actions).toContain("pause_subscription");
-    expect(actions).toContain("escalate_to_human");
-  });
-
-  it("Test 8: attemptCount=3 (onMaxAction) — returns only send_reminder_email", () => {
-    const actions = filterLegalActions(makeCtx({
-      causeLabel: "mandate_execution_failed_retryable",
-      attemptCount: 3,
-    }));
-    expect(actions).toEqual(["send_reminder_email"]);
-  });
-});
-
 describe("Policy: mandate_requires_reauthorization", () => {
   beforeEach(() => _resetCache());
 
-  it("Test 9: attemptCount=0 — returns send_reminder_email, pause_subscription, and escalate_to_human, NO gateway retries", () => {
+  it("Test 8: attemptCount=0 — returns send_reminder_email, pause_subscription, and escalate_to_human", () => {
     const actions = filterLegalActions(makeCtx({
       causeLabel: "mandate_requires_reauthorization",
       attemptCount: 0,
@@ -284,7 +267,7 @@ describe("Policy: mandate_requires_reauthorization", () => {
     expect(actions).toContain("escalate_to_human");
   });
 
-  it("Test 10: daysOverdue=30 (hardStopDays) — returns only escalate_to_human", () => {
+  it("Test 9: daysOverdue=30 (hardStopDays) — returns only escalate_to_human", () => {
     const actions = filterLegalActions(makeCtx({
       causeLabel: "mandate_requires_reauthorization",
       attemptCount: 0,
@@ -299,11 +282,12 @@ describe("Policy: mandate_requires_reauthorization", () => {
 import { executeAction } from "../src/services/executorService";
 
 describe("Execution: pause_subscription on Subscription", () => {
-  it("Test 11: successfully pauses subscription for SUBSCRIPTION entity", async () => {
-    const event = makeSubscriptionEvent({
+  it("Test 10: successfully pauses subscription for SUBSCRIPTION entity", async () => {
+    const event = makeEvent({
       entityType: "SUBSCRIPTION",
       entityId: "sub-12345",
-      razorpayOrderId: undefined,
+      eventType: "SUBSCRIPTION_MANDATE_CANCELLED",
+      amount: 999,
       rawPayload: { subscription_id: "sub-12345" },
     });
 
@@ -311,8 +295,8 @@ describe("Execution: pause_subscription on Subscription", () => {
       {
         chosenAction: "pause_subscription",
         legalActions: ["send_reminder_email", "pause_subscription", "escalate_to_human"],
-        policyVersion: "1.0.0",
-        reasoning: "Pause subscription during mandate failure cooldown",
+        policyVersion: "2.1.0",
+        reasoning: "Pause subscription during mandate cancellation win-back window",
       },
       event,
     );

@@ -1,6 +1,6 @@
 import { requestJson } from "../config/openai";
 import { logError } from "../config/logger";
-import { getPolicyVersion } from "../domain/policy";
+import { getPolicyVersion, getRuleForCause } from "../domain/policy";
 import {
   BlockReason,
   evaluateLegalActions,
@@ -103,6 +103,24 @@ export async function decide(
     return { legalActions, chosenAction: "none", reasoning: reason, policyVersion };
   }
 
+  // Value-based escalation trigger from policy: high-value exposure skips the
+  // standard contact cadence and goes straight to human review.
+  const rule = getRuleForCause(diagnosis.causeLabel);
+  const escalateThreshold = rule?.escalateAboveAmount;
+  if (
+    escalateThreshold !== undefined &&
+    retrievalContext &&
+    retrievalContext.amount >= escalateThreshold &&
+    legalActions.includes("escalate_to_human")
+  ) {
+    return {
+      legalActions,
+      chosenAction: "escalate_to_human",
+      reasoning: `High-value exposure ₹${retrievalContext.amount.toLocaleString("en-IN")} meets the policy escalation threshold ₹${escalateThreshold.toLocaleString("en-IN")} — immediate human review.`,
+      policyVersion,
+    };
+  }
+
   if (entityContext.dueScheduledRetry && legalActions.length > 0) {
     return {
       legalActions,
@@ -114,10 +132,15 @@ export async function decide(
   }
 
   if (legalActions.length === 1) {
+    // When a restriction determined the single legal action, carry its block
+    // reason into the audit trail instead of the generic "only action" text.
+    const reason = blockedBy
+      ? BLOCK_REASON_MESSAGES[blockedBy]
+      : `Only legal action available: ${legalActions[0]}`;
     return {
       legalActions,
       chosenAction: legalActions[0],
-      reasoning: `Only legal action available: ${legalActions[0]}`,
+      reasoning: reason,
       policyVersion,
     };
   }

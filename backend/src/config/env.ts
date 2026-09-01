@@ -22,6 +22,9 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().min(1),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1),
 
+  // Partner ingestion — shared API key for POST /api/v1/events
+  PARTNER_API_KEY: z.string().min(1),
+
   // LLM via OpenRouter (OpenAI-compatible Chat Completions endpoint)
   LLM_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().default("openrouter/free"),

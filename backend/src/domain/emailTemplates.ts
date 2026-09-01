@@ -45,7 +45,7 @@ function getEntityRef(ctx: EmailTemplateContext): string {
   if (ctx.entityType === "INVOICE" || ctx.eventType === "INVOICE_OVERDUE") {
     return `Invoice #${shortId}`;
   }
-  if (ctx.entityType === "SUBSCRIPTION" || ctx.eventType === "SUBSCRIPTION_FAILED") {
+  if (ctx.entityType === "SUBSCRIPTION" || ctx.eventType === "SUBSCRIPTION_MANDATE_CANCELLED") {
     return `Subscription #${shortId}`;
   }
   if (ctx.entityType === "CART" || ctx.eventType === "CHECKOUT_ABANDONED") {
@@ -101,7 +101,7 @@ export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; 
     };
   }
 
-  // 4. Mandate Re-Authorization (UPI Autopay / e-NACH halted / cancelled)
+  // 1. Mandate Re-Authorization (UPI Autopay / e-NACH cancelled or halted)
   if (
     key.includes("mandate_requires_reauthorization") ||
     key.includes("mandate_cancelled") ||
@@ -118,25 +118,9 @@ export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; 
     };
   }
 
-  // 5. Mandate Retryable Failure
+  // 2. Abandoned Cart
   if (
-    key.includes("mandate_execution_failed_retryable") ||
-    key.includes("mandate_debit_failed")
-  ) {
-    return {
-      subject: `Payment Notification: Subscription renewal of ${formattedAmount}`,
-      paragraphs: [
-        `Hi ${ctx.customerName},`,
-        `We encountered a temporary processing delay with your auto-debit of ${formattedAmount} for ${entityRef}. Our system is automatically retrying shortly.`,
-        `If you prefer to clear it right away, you can complete the payment securely using the button below.`,
-        `Best regards,<br/>The RazorRecovery Team`,
-      ],
-    };
-  }
-
-  // 6. Abandoned Cart / Price Friction
-  if (
-    key.includes("price_friction") ||
+    key.includes("cart_abandoned") ||
     key.includes("checkout_abandoned") ||
     ctx.eventType === "CHECKOUT_ABANDONED"
   ) {
@@ -151,7 +135,7 @@ export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; 
     };
   }
 
-  // 7. Overdue B2B Invoice
+  // 3. Overdue B2B Invoice
   if (
     key.includes("invoice_overdue") ||
     ctx.eventType === "INVOICE_OVERDUE" ||
@@ -168,7 +152,7 @@ export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; 
     };
   }
 
-  // 8. Soft Chase Dunning
+  // 4. Soft Chase Dunning
   if (ctx.actionType === "send_soft_chase_email" || key.includes("soft_chase")) {
     return {
       subject: `Follow-up: Outstanding payment for ${entityRef} (${formattedAmount})`,
@@ -181,7 +165,7 @@ export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; 
     };
   }
 
-  // 9. Promise to Pay Follow-Up
+  // 5. Promise to Pay Follow-Up
   if (key.includes("promise_broken") || key.includes("promise_to_pay")) {
     return {
       subject: `Payment Follow-up: Promised commitment of ${formattedAmount}`,
@@ -194,7 +178,7 @@ export function getEmailTemplate(ctx: EmailTemplateContext): { subject: string; 
     };
   }
 
-  // 10. Default General Payment Issue
+  // 6. Default General Revenue Recovery
   return {
     subject: `Action Required: Pending payment of ${formattedAmount}`,
     paragraphs: [

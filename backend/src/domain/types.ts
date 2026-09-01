@@ -11,12 +11,11 @@ import { LedgerEntryType } from "@prisma/client";
 // ==========================================
 
 export type EventType =
-  | "PAYMENT_FAILED"
   | "CHECKOUT_ABANDONED"
   | "INVOICE_OVERDUE"
-  | "SUBSCRIPTION_FAILED";
+  | "SUBSCRIPTION_MANDATE_CANCELLED";
 
-export type EntityType = "CUSTOMER" | "CART" | "INVOICE" | "SUBSCRIPTION";
+export type EntityType = "CART" | "INVOICE" | "SUBSCRIPTION";
 
 export interface RawRevenueEvent {
   id: string;

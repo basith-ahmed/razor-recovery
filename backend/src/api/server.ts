@@ -10,6 +10,7 @@ import { auditRouter } from "./routes/audit";
 import { queryRouter } from "./routes/query";
 import { ticketsRouter } from "./routes/tickets";
 import { promisesRouter } from "./routes/promises";
+import { ingestRouter } from "./routes/ingest";
 import { razorpayWebhookRouter } from "./webhooks/razorpayWebhook";
 
 export const app = express();
@@ -45,6 +46,7 @@ app.use("/audit", auditRouter);
 app.use("/query", queryRouter);
 app.use("/tickets", ticketsRouter);
 app.use("/promises", promisesRouter);
+app.use("/api/v1", ingestRouter);
 app.use("/webhooks/razorpay", razorpayWebhookRouter);
 
 // Start the HTTP server and live dashboard stream.

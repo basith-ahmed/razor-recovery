@@ -33,9 +33,9 @@ describe("Tamper-Evident Audit Hash Chain Integration Tests", () => {
     const evt1 = await prisma.revenueEvent.create({
       data: {
         customerId: testCustomerId,
-        entityType: "CUSTOMER",
+        entityType: "INVOICE",
         entityId: testCustomerId,
-        eventType: "PAYMENT_FAILED",
+        eventType: "INVOICE_OVERDUE",
         amount: 1000,
         rawPayload: { test: true },
       },
@@ -45,9 +45,9 @@ describe("Tamper-Evident Audit Hash Chain Integration Tests", () => {
     const evt2 = await prisma.revenueEvent.create({
       data: {
         customerId: testCustomerId,
-        entityType: "CUSTOMER",
+        entityType: "INVOICE",
         entityId: testCustomerId,
-        eventType: "PAYMENT_FAILED",
+        eventType: "INVOICE_OVERDUE",
         amount: 2000,
         rawPayload: { test: true },
       },
@@ -57,9 +57,9 @@ describe("Tamper-Evident Audit Hash Chain Integration Tests", () => {
     const evt3 = await prisma.revenueEvent.create({
       data: {
         customerId: testCustomerId,
-        entityType: "CUSTOMER",
+        entityType: "INVOICE",
         entityId: testCustomerId,
-        eventType: "PAYMENT_FAILED",
+        eventType: "INVOICE_OVERDUE",
         amount: 3000,
         rawPayload: { test: true },
       },

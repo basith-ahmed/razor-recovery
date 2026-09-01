@@ -3,6 +3,7 @@ import { prisma } from "../config/prisma";
 import { eventWindowFilter } from "./metricsService";
 import { Window, ListEntitiesFilters, ListEntitiesPagination, EntitySummaryItem, EntityAuditDetailsResponse, DomainError, EnrichedRevenueEvent } from "../domain/types";
 import { deriveEventState } from "../domain/stateMachine";
+import { getPolicyVersion } from "../domain/policy";
 import { formatPromiseToPay } from "./promiseService";
 import { escalateToHuman } from "../integrations/ticketMock";
 import { recordAuditEntry } from "./auditService";
@@ -463,7 +464,7 @@ export async function escalateEntityToHuman(
       legalActions: ["escalate_to_human"],
       chosenAction: "escalate_to_human",
       reasoning: reason,
-      policyVersion: "1.0.0",
+      policyVersion: getPolicyVersion(),
     },
     action: actionResult,
   });

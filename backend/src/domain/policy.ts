@@ -20,6 +20,13 @@ export interface StoppingConfig {
 export interface PolicyRule {
   cause: string;
   actions: string[];
+  /**
+   * Value-based escalation trigger: when the exposure amount meets or exceeds
+   * this threshold and escalation is a legal action, the decision service
+   * short-circuits to escalate_to_human instead of running the standard
+   * contact cadence.
+   */
+  escalateAboveAmount?: number;
   stopping: StoppingConfig;
 }
 

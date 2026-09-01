@@ -9,17 +9,15 @@ datasource db {
 }
 
 enum EntityType {
-  CUSTOMER
   CART
   INVOICE
   SUBSCRIPTION
 }
 
 enum EventType {
-  PAYMENT_FAILED
   CHECKOUT_ABANDONED
   INVOICE_OVERDUE
-  SUBSCRIPTION_FAILED
+  SUBSCRIPTION_MANDATE_CANCELLED
 }
 
 enum WorkflowState {
@@ -47,7 +45,7 @@ enum ActionIntegration {
 model Customer {
   id            String    @id @default(uuid())
   name          String
-  email         String
+  email         String    @unique
   phone         String?
   dncFlag       Boolean   @default(false)
   riskTier      String    @default("standard")

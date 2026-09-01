@@ -92,20 +92,15 @@ export function EntityTable({
               className="w-full bg-white border border-hairline-input rounded-[4px] px-2.5 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
             >
               <option value="">All Causes</option>
-              <option value="expired_card">Expired Card</option>
-              <option value="insufficient_funds">Insufficient Funds</option>
-              <option value="gateway_timeout">Gateway Timeout</option>
-              <option value="price_friction">Price Friction</option>
-              <option value="no_reason_signal">No Reason Signal</option>
-              <option value="mandate_execution_failed_retryable">
-                Mandate: Retryable Failure
-              </option>
+              <option value="cart_abandoned">Cart Abandoned</option>
+              <option value="invoice_overdue">Invoice Overdue</option>
+              <option value="invoice_disputed">Invoice Disputed</option>
               <option value="mandate_requires_reauthorization">
                 Mandate: Re-auth Required
               </option>
-              <option value="invoice_overdue">Invoice Overdue</option>
-              <option value="invoice_disputed">Invoice Disputed</option>
+              <option value="no_reason_signal">No Reason Signal</option>
               <option value="dnc">Do Not Contact</option>
+              <option value="promise_broken">Promise Broken</option>
             </select>
           </div>
 
@@ -119,10 +114,11 @@ export function EntityTable({
               className="w-full bg-white border border-hairline-input rounded-[4px] px-2.5 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:shadow-notion-soft transition-all"
             >
               <option value="">All Event Types</option>
-              <option value="PAYMENT_FAILED">PAYMENT_FAILED</option>
-              <option value="SUBSCRIPTION_FAILED">SUBSCRIPTION_FAILED</option>
-              <option value="INVOICE_OVERDUE">INVOICE_OVERDUE</option>
               <option value="CHECKOUT_ABANDONED">CHECKOUT_ABANDONED</option>
+              <option value="INVOICE_OVERDUE">INVOICE_OVERDUE</option>
+              <option value="SUBSCRIPTION_MANDATE_CANCELLED">
+                SUBSCRIPTION_MANDATE_CANCELLED
+              </option>
             </select>
           </div>
 

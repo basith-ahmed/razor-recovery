@@ -34,11 +34,7 @@ export async function publish(
   key: string,
   message: unknown,
 ): Promise<void> {
-  if (!connected) {
-    throw new Error(
-      "Kafka producer is not connected. Call connectProducer() at startup.",
-    );
-  }
+  await connectProducer();
   await producer.send({
     topic,
     messages: [

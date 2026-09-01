@@ -81,16 +81,13 @@ export function formatEntityRef(type?: string | null, id?: string | null): strin
 }
 
 export const CAUSE_DISPLAY_NAMES: Record<string, string> = {
-  expired_card: "Expired Card",
-  insufficient_funds: "Insufficient Funds",
-  gateway_timeout: "Gateway Timeout",
-  price_friction: "Price Friction",
-  no_reason_signal: "No Reason Signal",
-  mandate_execution_failed_retryable: "Mandate: Retryable Failure",
-  mandate_requires_reauthorization: "Mandate: Re-auth Required",
+  cart_abandoned: "Cart Abandoned",
   invoice_overdue: "Invoice Overdue",
   invoice_disputed: "Invoice Disputed",
+  mandate_requires_reauthorization: "Mandate: Re-auth Required",
+  no_reason_signal: "No Reason Signal",
   dnc: "DNC / Consent Block",
+  promise_broken: "Promise Broken",
 };
 
 export function formatCauseLabel(cause?: string | null): string {

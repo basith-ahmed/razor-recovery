@@ -77,28 +77,30 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 async function main() {
   await connectProducer();
 
-  // Start all five pipeline consumers once, at process boot, and run them
-  await Promise.all([
+  // Bind the HTTP API first: dashboard availability must not depend on
+  // consumer-group rebalancing, which can take a while after restarts.
+  server.listen(env.PORT, () => {
+    console.log(
+      `RazorRecovery backend server running on http://localhost:${env.PORT} (CORS_ORIGIN=${env.CORS_ORIGIN})`,
+    );
+  });
+
+  // Start all five pipeline consumers once, at process boot, and run them.
+  // Kicked off without blocking the API: they drain their topics as they join.
+  void Promise.all([
     startDetectionConsumer(),
     startDiagnosisConsumer(),
     startDecisionConsumer(),
     startExecutorConsumer(),
     startAuditConsumer(),
     startEmbeddingConsumer(),
-  ]);
+  ]).then(() => {
+    console.log("Pipeline is live: all Kafka consumers are connected and waiting on their topics.");
+  });
 
   // Clock-driven follow-ups: re-inject synthesized events onto EVENTS_RAW
   // when cooldowns lapse or no-response windows elapse on open arcs.
   await startFollowUpScheduler();
-
-  server.listen(env.PORT, () => {
-    console.log(
-      `RazorRecovery backend server running on http://localhost:${env.PORT} (CORS_ORIGIN=${env.CORS_ORIGIN})`,
-    );
-    console.log(
-      "Pipeline is live: all five Kafka consumers are connected and waiting on their topics.",
-    );
-  });
 }
 
 main().catch((err) => {

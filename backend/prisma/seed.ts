@@ -2,14 +2,16 @@ import { prisma } from "../src/config/prisma";
 import { seedEntities } from "../src/simulator/seedEntities";
 import { GENESIS_HASH } from "../src/domain/hashChain";
 
+const SEED_CUSTOMER_COUNT = 20;
+
 async function main(): Promise<void> {
   await prisma.auditChainHead.upsert({
     where: { id: 1 },
     create: { id: 1, hash: GENESIS_HASH },
     update: {},
   });
-  await seedEntities({ customers: 50 });
-  console.log("Seeded 50 simulator customers with related entities and initialized AuditChainHead.");
+  await seedEntities({ customers: SEED_CUSTOMER_COUNT });
+  console.log(`Seeded ${SEED_CUSTOMER_COUNT} demo customers and initialized AuditChainHead.`);
 }
 
 main()

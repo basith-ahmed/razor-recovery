@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { EntityType, EventType } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { redis } from "../config/redis";
 import { logError } from "../config/logger";
@@ -426,12 +427,27 @@ export async function scanAndProcessPromises(now: Date): Promise<void> {
     });
 
     if (!event) {
+      // No prior event for this entity — derive the entity/event types from
+      // whichever business-object table owns this entityId, so the synthetic
+      // follow-up never mislabels an entity.
+      const [invoice, cart, subscription] = await Promise.all([
+        prisma.invoice.findUnique({ where: { id: promise.entityId }, select: { id: true } }),
+        prisma.cart.findUnique({ where: { id: promise.entityId }, select: { id: true } }),
+        prisma.subscription.findUnique({ where: { id: promise.entityId }, select: { id: true } }),
+      ]);
+      const entityType: EntityType = invoice ? "INVOICE" : cart ? "CART" : "SUBSCRIPTION";
+      const eventType: EventType = invoice
+        ? "INVOICE_OVERDUE"
+        : cart
+          ? "CHECKOUT_ABANDONED"
+          : "SUBSCRIPTION_MANDATE_CANCELLED";
+
       event = {
         id: randomUUID(),
-        entityType: "INVOICE",
+        entityType,
         entityId: promise.entityId,
         customerId: promise.customerId,
-        eventType: "INVOICE_OVERDUE",
+        eventType,
         amount: promise.promisedAmount,
         currency: promise.currency,
         occurredAt: now.toISOString(),

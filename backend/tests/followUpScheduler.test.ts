@@ -43,7 +43,7 @@ describe("followUpScheduler selection", () => {
       [arc("e1", "RETRYING")],
       [
         // gateway_timeout: maxAttempts 2 — 1 attempt used, cooldown ended 10m ago
-        cause("e1", "gateway_timeout", {
+        cause("e1", "cart_abandoned", {
           attemptCount: 1,
           lastContactedAt: new Date(NOW.getTime() - 2 * H),
           cooldownUntil: new Date(NOW.getTime() - 10 * 60_000),
@@ -52,7 +52,7 @@ describe("followUpScheduler selection", () => {
       NOW,
     );
     const expected: DueFollowUp[] = [
-      { entityId: "e1", causeLabel: "gateway_timeout", type: "cooldown_expired" },
+      { entityId: "e1", causeLabel: "cart_abandoned", type: "cooldown_expired" },
     ];
     expect(due).toEqual(expected);
   });
@@ -61,7 +61,7 @@ describe("followUpScheduler selection", () => {
     const due = selectDueFollowUps(
       [arc("e1", "COOLING_DOWN")],
       [
-        cause("e1", "gateway_timeout", {
+        cause("e1", "cart_abandoned", {
           attemptCount: 1,
           lastContactedAt: new Date(NOW.getTime() - 0.5 * H),
           cooldownUntil: new Date(NOW.getTime() + 30 * 60_000),
@@ -78,7 +78,7 @@ describe("followUpScheduler selection", () => {
       [
         // gateway_timeout at max (2/2): escalation/write-off is the policy
         // outcome — the scheduler must never re-contact beyond the budget
-        cause("e1", "gateway_timeout", {
+        cause("e1", "cart_abandoned", {
           attemptCount: 2,
           lastContactedAt: new Date(NOW.getTime() - 5 * H),
           cooldownUntil: new Date(NOW.getTime() - H),
@@ -93,7 +93,7 @@ describe("followUpScheduler selection", () => {
     const due = selectDueFollowUps(
       [arc("e1", "ESCALATED")],
       [
-        cause("e1", "expired_card", {
+        cause("e1", "invoice_overdue", {
           attemptCount: 1,
           lastContactedAt: new Date(NOW.getTime() - 8 * 24 * H),
           cooldownUntil: new Date(NOW.getTime() - H),
@@ -112,17 +112,17 @@ describe("followUpScheduler selection", () => {
         arc("e3", "DO_NOT_CONTACT"),
       ],
       [
-        cause("e1", "gateway_timeout", {
+        cause("e1", "cart_abandoned", {
           attemptCount: 1,
           lastContactedAt: new Date(NOW.getTime() - 5 * H),
           cooldownUntil: new Date(NOW.getTime() - H),
         }),
-        cause("e2", "expired_card", {
+        cause("e2", "invoice_overdue", {
           attemptCount: 1,
           lastContactedAt: new Date(NOW.getTime() - 5 * H),
           cooldownUntil: new Date(NOW.getTime() - H),
         }),
-        cause("e3", "insufficient_funds", {
+        cause("e3", "mandate_requires_reauthorization", {
           attemptCount: 1,
           lastContactedAt: new Date(NOW.getTime() - 5 * H),
           cooldownUntil: new Date(NOW.getTime() - H),
@@ -245,7 +245,7 @@ describe("scheduled retry decisions", () => {
       [{ entityId: "e1", state: "RETRYING", attemptCount: 3 }],
       [
         // This specific cause has 0 attempts recorded locally, but entity total is 3 (exceeding maxAttempts 3)
-        cause("e1", "insufficient_funds", {
+        cause("e1", "mandate_requires_reauthorization", {
           attemptCount: 0,
           lastContactedAt: new Date(NOW.getTime() - 5 * H),
           cooldownUntil: new Date(NOW.getTime() - H),
@@ -259,19 +259,19 @@ describe("scheduled retry decisions", () => {
 
 describe("suppressPendingScheduledRetries", () => {
   const due: DueFollowUp[] = [
-    { entityId: "e1", causeLabel: "gateway_timeout", type: "cooldown_expired" },
-    { entityId: "e1", causeLabel: "expired_card", type: "cooldown_expired" },
+    { entityId: "e1", causeLabel: "cart_abandoned", type: "cooldown_expired" },
+    { entityId: "e1", causeLabel: "invoice_overdue", type: "cooldown_expired" },
     { entityId: "e2", causeLabel: "no_reason_signal", type: "no_response_timeout" },
   ];
 
   it("suppresses cooldown follow-ups for causes with a pending deferred retry", () => {
     const filtered = suppressPendingScheduledRetries(due, [
-      { entityId: "e1", causeLabel: "gateway_timeout" },
+      { entityId: "e1", causeLabel: "cart_abandoned" },
     ]);
     // gateway_timeout has a scheduled retry — it is that cause's next contact;
     // expired_card and the no-response timeout are untouched.
     expect(filtered).toEqual([
-      { entityId: "e1", causeLabel: "expired_card", type: "cooldown_expired" },
+      { entityId: "e1", causeLabel: "invoice_overdue", type: "cooldown_expired" },
       { entityId: "e2", causeLabel: "no_reason_signal", type: "no_response_timeout" },
     ]);
   });

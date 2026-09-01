@@ -10,10 +10,10 @@ function makeEvent(
 ): RawRevenueEvent {
   return {
     id: "evt-1",
-    entityType: "CUSTOMER",
-    entityId: "ent-1",
+    entityType: "INVOICE",
+    entityId: "inv-1",
     customerId: "cust-1",
-    eventType: "PAYMENT_FAILED",
+    eventType: "INVOICE_OVERDUE",
     amount: 1000,
     currency: "INR",
     occurredAt: new Date().toISOString(),
@@ -34,36 +34,36 @@ function makeHistory(
 }
 
 describe("computeRiskScore", () => {
-  it("max-amount event scores near 1.0 for the amount component", () => {
+  it("max-amount INVOICE_OVERDUE event scores the documented total", () => {
     // Event amount equals recentMaxAmount → normAmount = 1.0
     const event = makeEvent({ amount: 10000 });
     const history = makeHistory();
-    const result = computeRiskScore(event, history, 10000);
+    const result = computeRiskScore(event, history, 10000, 15);
 
     // amount component = 0.35 * 1.0 = 0.35
-    // severity component = 0.25 * 0.8 = 0.20  (PAYMENT_FAILED)
+    // severity component = 0.25 * 0.6 = 0.15  (INVOICE_OVERDUE)
     // history component = 0.15 * 0.0 = 0.00   (0 priorFailures)
-    // urgency component = 0.25 * 0.5 = 0.125  (default urgency for PAYMENT_FAILED)
-    // total = 0.675
-    expect(result.riskScore).toBeCloseTo(0.675, 3);
+    // urgency component = 0.25 * 0.5 = 0.125  (daysOverdue=15 → 0.5)
+    // total = 0.625
+    expect(result.riskScore).toBeCloseTo(0.625, 3);
     expect(result.revenueAtRisk).toBe(10000);
   });
 
   it("event exceeding recentMaxAmount caps normAmount at 1.0", () => {
     const event = makeEvent({ amount: 20000 });
-    const result = computeRiskScore(event, makeHistory(), 10000);
+    const result = computeRiskScore(event, makeHistory(), 10000, 15);
 
     // normAmount = min(20000/10000, 1) = 1.0 (capped)
-    expect(result.riskScore).toBeCloseTo(0.675, 3);
+    expect(result.riskScore).toBeCloseTo(0.625, 3);
   });
 
   it("recentMaxAmount of 0 yields normAmount of 0", () => {
     const event = makeEvent({ amount: 5000 });
-    const result = computeRiskScore(event, makeHistory(), 0);
+    const result = computeRiskScore(event, makeHistory(), 0, 15);
 
     // amount component = 0
-    // total = 0.25*0.8 + 0.15*0 + 0.25*0.5 = 0.325
-    expect(result.riskScore).toBeCloseTo(0.325, 3);
+    // total = 0.25*0.6 + 0.15*0 + 0.25*0.5 = 0.275
+    expect(result.riskScore).toBeCloseTo(0.275, 3);
   });
 
   it("CHECKOUT_ABANDONED at hoursSinceAbandon=48 has urgency=0", () => {
@@ -119,49 +119,56 @@ describe("computeRiskScore", () => {
     expect(result.urgency).toBe(0.5);
   });
 
+  it("SUBSCRIPTION_MANDATE_CANCELLED without a time signal has urgency=0.5", () => {
+    const event = makeEvent({ eventType: "SUBSCRIPTION_MANDATE_CANCELLED" });
+    const result = computeRiskScore(event, makeHistory(), 10000);
+
+    expect(result.urgency).toBe(0.5);
+  });
+
   it("repeat-offender (priorFailures=10) caps historyRisk at 1, not above", () => {
     const history = makeHistory({ priorFailures: 10 });
     const event = makeEvent();
-    const result = computeRiskScore(event, history, 10000);
+    const result = computeRiskScore(event, history, 10000, 15);
 
     // historyRisk = min(10/5, 1) = 1.0 (capped)
     // amount = 0.35 * (1000/10000) = 0.035
-    // severity = 0.25 * 0.8 = 0.20
+    // severity = 0.25 * 0.6 = 0.15
     // history = 0.15 * 1.0 = 0.15
     // urgency = 0.25 * 0.5 = 0.125
-    // total = 0.51
-    expect(result.riskScore).toBeCloseTo(0.51, 3);
+    // total = 0.46
+    expect(result.riskScore).toBeCloseTo(0.46, 3);
   });
 
   it("priorFailures=5 yields historyRisk=1.0 (exactly at cap)", () => {
     const history = makeHistory({ priorFailures: 5 });
     const event = makeEvent();
-    const result = computeRiskScore(event, history, 10000);
+    const result = computeRiskScore(event, history, 10000, 15);
 
     // Same as priorFailures=10 case since both cap at 1.0
-    expect(result.riskScore).toBeCloseTo(0.51, 3);
+    expect(result.riskScore).toBeCloseTo(0.46, 3);
   });
 
-  it("PAYMENT_FAILED and SUBSCRIPTION_FAILED have different severities", () => {
+  it("SUBSCRIPTION_MANDATE_CANCELLED has a higher severity than INVOICE_OVERDUE", () => {
     const history = makeHistory();
-    const paymentFailed = computeRiskScore(
-      makeEvent({ eventType: "PAYMENT_FAILED", amount: 5000 }),
+    const mandate = computeRiskScore(
+      makeEvent({ eventType: "SUBSCRIPTION_MANDATE_CANCELLED", amount: 5000 }),
       history,
       10000
     );
-    const subFailed = computeRiskScore(
-      makeEvent({ eventType: "SUBSCRIPTION_FAILED", amount: 5000 }),
+    const overdue = computeRiskScore(
+      makeEvent({ eventType: "INVOICE_OVERDUE", amount: 5000 }),
       history,
       10000
     );
 
-    // PAYMENT_FAILED severity=0.8, SUBSCRIPTION_FAILED severity=0.75
-    expect(paymentFailed.riskScore).toBeGreaterThan(subFailed.riskScore);
+    // MANDATE severity=0.7, INVOICE_OVERDUE severity=0.6
+    expect(mandate.riskScore).toBeGreaterThan(overdue.riskScore);
   });
 
   it("returns the event amount as revenueAtRisk", () => {
     const event = makeEvent({ amount: 42000 });
-    const result = computeRiskScore(event, makeHistory(), 100000);
+    const result = computeRiskScore(event, makeHistory(), 100000, 15);
 
     expect(result.revenueAtRisk).toBe(42000);
   });

@@ -111,7 +111,6 @@ import {
 import { executeAction, draftRecoveryEmail } from "../src/services/executorService";
 import { recordAuditEntry } from "../src/services/auditService";
 import { computeLiveMetrics, recoveryFunnel } from "../src/services/metricsService";
-import { injectFailure } from "../src/simulator/injectFailure";
 import { computeRiskScore } from "../src/domain/riskScoring";
 import { diagnose } from "../src/services/diagnosisService";
 import { filterLegalActions, FilterContext } from "../src/domain/stoppingRules";
@@ -132,15 +131,11 @@ function makeEvent(overrides: Partial<EnrichedRevenueEvent> = {}): EnrichedReven
     entityType: "INVOICE",
     entityId: "entity-1",
     customerId: "customer-1",
-    eventType: "PAYMENT_FAILED",
+    eventType: "INVOICE_OVERDUE",
     amount: 5000,
     currency: "INR",
     occurredAt: "2026-08-23T00:00:00.000Z",
-    razorpayPaymentId: "pay_sim_abc",
-    razorpayOrderId: "order_sim_xyz",
-    errorCode: "BAD_REQUEST_ERROR",
-    errorReason: "card_expired",
-    rawPayload: { simulator: true },
+    rawPayload: { source: "partner_ingest", disputeFlag: false, daysOverdue: 5 },
     riskScore: 0.8,
     urgency: 0.7,
     ...overrides,
@@ -149,7 +144,7 @@ function makeEvent(overrides: Partial<EnrichedRevenueEvent> = {}): EnrichedReven
 
 function makeDiagnosis(overrides: Partial<DiagnosisResult> = {}): DiagnosisResult {
   return {
-    causeLabel: "expired_card",
+    causeLabel: "invoice_overdue",
     confidence: 1,
     method: "RULE",
     ...overrides,
@@ -158,10 +153,10 @@ function makeDiagnosis(overrides: Partial<DiagnosisResult> = {}): DiagnosisResul
 
 function makeDecision(overrides: Partial<DecisionResult> = {}): DecisionResult {
   return {
-    legalActions: ["send_reminder_email", "escalate_to_human"],
+    legalActions: ["send_reminder_email", "send_soft_chase_email", "escalate_to_human"],
     chosenAction: "send_reminder_email",
-    reasoning: "Customer has an expired card; reminder is the safest first action.",
-    policyVersion: "1.0.0",
+    reasoning: "Invoice is freshly overdue; a friendly reminder is the safest first action.",
+    policyVersion: "2.1.0",
     ...overrides,
   };
 }
@@ -194,37 +189,37 @@ describe("executorService", () => {
   });
 
   describe("draftRecoveryEmail", () => {
-    it("generates deterministic parameterized email for expired_card", async () => {
+    it("generates deterministic parameterized email for invoice_overdue", async () => {
       const result = await draftRecoveryEmail(
-        makeEvent({ amount: 5000, errorReason: "card_expired", errorCode: "BAD_REQUEST_ERROR" }),
+        makeEvent({ amount: 5000 }),
         "Aarav Sharma",
-        "expired_card",
+        "invoice_overdue",
         "https://rzp.io/i/plink_123"
       );
 
-      expect(result.subject).toContain("Update card details");
+      expect(result.subject).toContain("Overdue");
       expect(result.subject).toContain("5,000");
       expect(result.html).toContain("Aarav Sharma");
-      expect(result.html).toContain("card on file has expired");
+      expect(result.html).toContain("past its payment due date");
       expect(result.html).toContain("https://rzp.io/i/plink_123");
     });
 
-    it("generates deterministic email for insufficient_funds", async () => {
+    it("generates deterministic email for cart_abandoned", async () => {
       const result = await draftRecoveryEmail(
-        makeEvent({ amount: 3000 }),
+        makeEvent({ eventType: "CHECKOUT_ABANDONED", entityType: "CART", amount: 3000 }),
         "Priya Patel",
-        "insufficient_funds"
+        "cart_abandoned"
       );
 
-      expect(result.subject).toContain("Payment Unsuccessful");
+      expect(result.subject).toContain("Complete your checkout");
       expect(result.subject).toContain("3,000");
       expect(result.html).toContain("Priya Patel");
-      expect(result.html).toContain("insufficient balance");
+      expect(result.html).toContain("left items in your cart");
     });
 
     it("generates deterministic email for mandate re-authorization", async () => {
       const result = await draftRecoveryEmail(
-        makeEvent({ eventType: "SUBSCRIPTION_FAILED", entityType: "SUBSCRIPTION", amount: 1999 }),
+        makeEvent({ eventType: "SUBSCRIPTION_MANDATE_CANCELLED", entityType: "SUBSCRIPTION", amount: 1999 }),
         "Rohan Gupta",
         "mandate_requires_reauthorization"
       );
@@ -246,7 +241,7 @@ describe("executorService", () => {
       );
 
       expect(mockedMailer.sendMail).toHaveBeenCalledTimes(1);
-      expect(mockedMailer.sendMail.mock.calls[0][0].subject).toContain("Update card details");
+      expect(mockedMailer.sendMail.mock.calls[0][0].subject).toContain("Overdue");
       expect(mockedMailer.sendMail.mock.calls[0][0].html).toContain("Hi Aarav Sharma");
       expect(result.result).toBe("success");
       expect(result.integration).toBe("EMAIL");
@@ -373,7 +368,7 @@ describe("auditService", () => {
 
   it("upserts EntityCauseState (per-cause attempt + cooldown) for an executed action", async () => {
     const event = makeEvent();
-    const diagnosis = makeDiagnosis({ causeLabel: "gateway_timeout" });
+    const diagnosis = makeDiagnosis({ causeLabel: "cart_abandoned" });
     const decision = makeDecision();
     const action: ActionResult = {
       actionType: "send_reminder_email",
@@ -387,7 +382,7 @@ describe("auditService", () => {
     const upsertCall = (mockedPrisma.entityCauseState.upsert as jest.Mock).mock
       .calls[0][0];
     expect(upsertCall.where).toEqual({
-      entityId_causeLabel: { entityId: "entity-1", causeLabel: "gateway_timeout" },
+      entityId_causeLabel: { entityId: "entity-1", causeLabel: "cart_abandoned" },
     });
     // Successful attempt consumes this cause's budget and starts its cooldown
     expect(upsertCall.create.attemptCount).toBe(1);
@@ -433,7 +428,7 @@ describe("auditService", () => {
     });
 
     const event = makeEvent();
-    const diagnosis = makeDiagnosis({ causeLabel: "insufficient_funds" });
+    const diagnosis = makeDiagnosis({ causeLabel: "invoice_overdue" });
     const decision = makeDecision();
     const action: ActionResult = {
       actionType: "send_reminder_email",
@@ -462,11 +457,11 @@ describe("auditService", () => {
     });
 
     const event = makeEvent();
-    const diagnosis = makeDiagnosis({ causeLabel: "mandate_execution_failed_retryable" });
+    const diagnosis = makeDiagnosis({ causeLabel: "mandate_requires_reauthorization" });
     const decision = makeDecision({
       legalActions: ["send_reminder_email", "pause_subscription", "escalate_to_human"],
       chosenAction: "pause_subscription",
-      reasoning: "Subscription paused during mandate recovery cooldown.",
+      reasoning: "Subscription paused during the mandate win-back window.",
     });
     const action: ActionResult = {
       actionType: "pause_subscription",
@@ -539,12 +534,12 @@ describe("per-cause attempt/cooldown scoping", () => {
   });
 
   it("does not bleed attempt budgets across causes for the same entity", async () => {
-    // gateway_timeout already exhausted its budget (2/2 attempts); an
-    // unrelated insufficient_funds diagnosis must start from a clean slate.
+    // cart_abandoned already exhausted its budget (2/2 attempts); an
+    // unrelated invoice_overdue diagnosis must start from a clean slate.
     const entityId = "entity-multi-cause";
-    const newCause = "insufficient_funds";
+    const newCause = "invoice_overdue";
 
-    // The per-cause lookup targets the NEW cause's row, not gateway_timeout's
+    // The per-cause lookup targets the NEW cause's row, not cart_abandoned's
     const causeState = await lookupCauseState(entityId, newCause);
     expect(mockedPrisma.entityCauseState.findUnique).toHaveBeenCalledWith({
       where: { entityId_causeLabel: { entityId, causeLabel: newCause } },
@@ -553,26 +548,27 @@ describe("per-cause attempt/cooldown scoping", () => {
     const ctx = buildFilterCtx(newCause, causeState);
     const legalActions = filterLegalActions(ctx);
 
-    // Full action list for insufficient_funds — NOT escalation-only, because
-    // this cause's attemptCount is 0 regardless of gateway_timeout's 2.
+    // Full action list for invoice_overdue — NOT escalation-only, because
+    // this cause's attemptCount is 0 regardless of cart_abandoned's 2.
     expect(legalActions).toEqual([
       "send_reminder_email",
+      "send_soft_chase_email",
       "escalate_to_human",
     ]);
   });
 
   it("cooldown on one cause does not block an unrelated cause", async () => {
-    // gateway_timeout is actively in cooldown; insufficient_funds must not
+    // cart_abandoned is actively in cooldown; invoice_overdue must not
     // inherit it.
     const entityId = "entity-cooldown";
 
-    // Sanity: the gateway_timeout cause itself IS blocked by its own cooldown
-    const blockedCtx = buildFilterCtx("gateway_timeout", {
+    // Sanity: the cart_abandoned cause itself IS blocked by its own cooldown
+    const blockedCtx = buildFilterCtx("cart_abandoned", {
       cooldownUntil: new Date(Date.now() + 30 * 60 * 1000),
     });
     expect(filterLegalActions(blockedCtx)).toEqual([]);
 
-    const newCause = "insufficient_funds";
+    const newCause = "invoice_overdue";
     const causeState = await lookupCauseState(entityId, newCause);
     expect(mockedPrisma.entityCauseState.findUnique).toHaveBeenCalledWith({
       where: { entityId_causeLabel: { entityId, causeLabel: newCause } },
@@ -585,7 +581,7 @@ describe("per-cause attempt/cooldown scoping", () => {
 
   it("arc closure wipes ALL per-cause rows, not just the resolving one", async () => {
     // Entity has two open per-cause budgets accumulated while RETRYING:
-    // gateway_timeout @ 1 attempt, insufficient_funds @ 2 attempts.
+    // cart_abandoned @ 1 attempt, invoice_overdue @ 2 attempts.
     (mockedPrisma.entityWorkflowState.findUnique as jest.Mock).mockResolvedValueOnce({
       entityId: "entity-two-causes",
       state: "RETRYING",
@@ -643,7 +639,7 @@ describe("metricsService", () => {
           id: "ev-1",
           amount: 5000,
           occurredAt: oneHourAgo,
-          diagnosis: { causeLabel: "expired_card" },
+          diagnosis: { causeLabel: "invoice_overdue" },
           action: { integration: "RAZORPAY", executedAt: now },
           auditEntries: [{ outcome: "recovered", timestamp: now }],
         },
@@ -712,7 +708,7 @@ describe("metricsService", () => {
       // byCause breakdown
       expect(summary.byCause).toEqual(
         expect.arrayContaining([
-          { cause: "expired_card", recovered: 5000, atRisk: 5000 },
+          { cause: "invoice_overdue", recovered: 5000, atRisk: 5000 },
           { cause: "invoice_disputed", recovered: 0, atRisk: 3000 },
           { cause: "dnc", recovered: 0, atRisk: 2000 },
         ]),
@@ -801,7 +797,7 @@ describe("Definition of Done — Full Pipeline", () => {
     // Mock customer lookup
     (mockedPrisma.customer.findUnique as jest.Mock).mockResolvedValue(mockCustomer);
 
-    // Mock invoice lookup for injectFailure
+    // Mock invoice lookup used by the pipeline walk fixture
     (mockedPrisma.invoice.findFirst as jest.Mock).mockResolvedValue({
       id: "inv-1",
       customerId: "customer-1",
@@ -842,20 +838,20 @@ describe("Definition of Done — Full Pipeline", () => {
     mockedMailer.sendMail.mockResolvedValue({ messageId: "msg-test-123" });
   });
 
-  it("walks an event directly in sequence: injectFailure (Phase 3) → computeRiskScore (Phase 2) → diagnose (Phase 5) → filterLegalActions + decide (Phase 2/5) → executeAction (6.1) → recordAuditEntry (6.2)", async () => {
-    // 1. injectFailure (Phase 3)
-    const rawEvent = await injectFailure("payment_failed", "customer-1");
-    expect(rawEvent.eventType).toBe("PAYMENT_FAILED");
+  it("walks an event directly in sequence: partner envelope (Phase 3) → computeRiskScore (Phase 2) → diagnose (Phase 5) → filterLegalActions + decide (Phase 2/5) → executeAction (6.1) → recordAuditEntry (6.2)", async () => {
+    // 1. Partner envelope → normalized raw event (the ingest path builds this)
+    const rawEvent = makeEvent();
+    expect(rawEvent.eventType).toBe("INVOICE_OVERDUE");
 
     // 2. computeRiskScore (Phase 2)
     const history = { priorFailures: 1, lifetimeValue: 25000, tenureDays: 90 };
-    const { riskScore, urgency } = computeRiskScore(rawEvent, history, 10000);
+    const { riskScore, urgency } = computeRiskScore(rawEvent, history, 10000, 5);
     const enrichedEvent: EnrichedRevenueEvent = { ...rawEvent, riskScore, urgency };
     expect(enrichedEvent.riskScore).toBeGreaterThan(0);
 
     // 3. diagnose (Phase 5)
     const diagnosisResult = await diagnose(enrichedEvent, history);
-    expect(diagnosisResult.causeLabel).toBeDefined();
+    expect(diagnosisResult.causeLabel).toBe("invoice_overdue");
 
     // 4. filterLegalActions + decide (Phase 2/5)
     const filterCtx: FilterContext = {
@@ -878,12 +874,6 @@ describe("Definition of Done — Full Pipeline", () => {
     expect(decisionResult.chosenAction).toBeDefined();
 
     // 5. executeAction (6.1)
-    if (enrichedEvent.razorpayOrderId) {
-      mockedRazorpay.orders.fetch.mockResolvedValueOnce({
-        id: enrichedEvent.razorpayOrderId,
-        status: "created",
-      });
-    }
     const actionResult = await executeAction(decisionResult, enrichedEvent);
     expect(actionResult.result).toBeDefined();
 
@@ -962,7 +952,7 @@ describe("Definition of Done — DNC Compliance", () => {
       const result = await draftRecoveryEmail(
         makeEvent({ amount: 1000, entityId: "inv_123456", entityType: "INVOICE" }),
         "Alice",
-        "expired_card"
+        "invoice_overdue"
       );
       expect(result.subject).toContain("1,000");
       expect(result.html).toContain("<p");
@@ -974,7 +964,7 @@ describe("Definition of Done — DNC Compliance", () => {
       const result = await draftRecoveryEmail(
         makeEvent({ amount: 500 }),
         "Bob",
-        "insufficient_funds",
+        "invoice_overdue",
         "https://rzp.io/i/testlink"
       );
       expect(result.subject).toContain("500");
@@ -986,8 +976,8 @@ describe("Definition of Done — DNC Compliance", () => {
   describe("Unified Entity-Level Attempt Counter & Cross-Cause Stopping Rules", () => {
     it("increments the entity attempt counter across different cause events", async () => {
       const entityId = "entity-multi-cause-1";
-      const event1 = makeEvent({ entityId, eventType: "PAYMENT_FAILED" });
-      const diag1 = makeDiagnosis({ causeLabel: "insufficient_funds" });
+      const event1 = makeEvent({ entityId, eventType: "INVOICE_OVERDUE" });
+      const diag1 = makeDiagnosis({ causeLabel: "cart_abandoned" });
       const dec1 = makeDecision({ chosenAction: "send_reminder_email" });
       const action1: ActionResult = {
         actionType: "send_reminder_email",
@@ -995,7 +985,7 @@ describe("Definition of Done — DNC Compliance", () => {
         integration: "EMAIL",
       };
 
-      // 1st Attempt: insufficient_funds
+      // 1st Attempt: cart_abandoned
       await recordAuditEntry({ event: event1, diagnosis: diag1, decision: dec1, action: action1 });
       expect(mockedPrisma.entityWorkflowState.upsert).toHaveBeenCalledWith(
         expect.objectContaining({

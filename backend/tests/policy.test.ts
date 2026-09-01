@@ -17,7 +17,7 @@ import {
 
 function makeCtx(overrides: Partial<FilterContext> = {}): FilterContext {
   return {
-    causeLabel: "expired_card",
+    causeLabel: "invoice_overdue",
     customerId: "cust-1",
     isDnc: false,
     isDisputed: false,
@@ -32,21 +32,32 @@ describe("policy.ts", () => {
     _resetCache();
   });
 
-  it("loadPolicy returns a valid PolicyConfig", () => {
+  it("loadPolicy returns the v2 revenue-leakage policy", () => {
     const policy = loadPolicy();
-    expect(policy.version).toBe("1.0.0");
-    expect(policy.rules).toHaveLength(9);
+    expect(policy.version).toBe("2.1.0");
+    expect(policy.rules).toHaveLength(5);
   });
 
   it("getPolicyVersion returns the version string", () => {
-    expect(getPolicyVersion()).toBe("1.0.0");
+    expect(getPolicyVersion()).toBe("2.1.0");
   });
 
   it("getRuleForCause returns the correct rule", () => {
-    const rule = getRuleForCause("expired_card");
+    const rule = getRuleForCause("cart_abandoned");
     expect(rule).toBeDefined();
-    expect(rule!.cause).toBe("expired_card");
+    expect(rule!.cause).toBe("cart_abandoned");
     expect(rule!.actions).toContain("send_reminder_email");
+    expect(rule!.escalateAboveAmount).toBe(10000);
+  });
+
+  it("mandate rule carries the same value-escalation threshold as carts", () => {
+    const rule = getRuleForCause("mandate_requires_reauthorization");
+    expect(rule).toBeDefined();
+    expect(rule!.actions).toEqual(
+      expect.arrayContaining(["send_reminder_email", "pause_subscription", "escalate_to_human"])
+    );
+    expect(rule!.escalateAboveAmount).toBe(10000);
+    expect(rule!.stopping.hardStopDays).toBe(30);
   });
 
   it("getRuleForCause returns undefined for unknown cause", () => {
@@ -58,6 +69,18 @@ describe("policy.ts", () => {
     const second = loadPolicy();
     expect(first).toBe(second);
   });
+
+  it("gateway-era causes have no rules anymore", () => {
+    for (const cause of [
+      "expired_card",
+      "insufficient_funds",
+      "gateway_timeout",
+      "price_friction",
+      "mandate_execution_failed_retryable",
+    ]) {
+      expect(getRuleForCause(cause)).toBeUndefined();
+    }
+  });
 });
 
 describe("filterLegalActions", () => {
@@ -65,19 +88,16 @@ describe("filterLegalActions", () => {
     _resetCache();
   });
 
-  // --- DNC and Dispute overrides ---
+  // --- Global overrides ---
 
   it("DNC customer always gets [] regardless of cause", () => {
     const causes = [
-      "expired_card",
-      "insufficient_funds",
-      "gateway_timeout",
-      "price_friction",
-      "no_reason_signal",
-      "mandate_execution_failed_retryable",
-      "mandate_requires_reauthorization",
+      "cart_abandoned",
       "invoice_overdue",
       "invoice_disputed",
+      "mandate_requires_reauthorization",
+      "no_reason_signal",
+      "promise_broken",
     ];
 
     for (const cause of causes) {
@@ -90,11 +110,10 @@ describe("filterLegalActions", () => {
 
   it("disputed invoice always gets exactly ['escalate_to_human']", () => {
     const causes = [
-      "expired_card",
-      "insufficient_funds",
-      "gateway_timeout",
-      "price_friction",
+      "cart_abandoned",
       "invoice_overdue",
+      "no_reason_signal",
+      "mandate_requires_reauthorization",
     ];
 
     for (const cause of causes) {
@@ -107,14 +126,10 @@ describe("filterLegalActions", () => {
 
   it("already recovered entity always gets [] regardless of cause", () => {
     const causes = [
-      "expired_card",
-      "insufficient_funds",
-      "gateway_timeout",
-      "price_friction",
-      "no_reason_signal",
-      "mandate_execution_failed_retryable",
-      "mandate_requires_reauthorization",
+      "cart_abandoned",
       "invoice_overdue",
+      "mandate_requires_reauthorization",
+      "no_reason_signal",
     ];
 
     for (const cause of causes) {
@@ -127,14 +142,10 @@ describe("filterLegalActions", () => {
 
   it("returns [] for any cause when entity is already isEscalated", () => {
     const causes = [
-      "expired_card",
-      "insufficient_funds",
-      "gateway_timeout",
-      "price_friction",
-      "no_reason_signal",
-      "mandate_execution_failed_retryable",
-      "mandate_requires_reauthorization",
+      "cart_abandoned",
       "invoice_overdue",
+      "mandate_requires_reauthorization",
+      "no_reason_signal",
     ];
 
     for (const cause of causes) {
@@ -147,7 +158,7 @@ describe("filterLegalActions", () => {
 
   it("returns [] when customer has active unbroken promise to pay", () => {
     const result = filterLegalActions(
-      makeCtx({ causeLabel: "insufficient_funds", hasActivePromise: true })
+      makeCtx({ causeLabel: "invoice_overdue", hasActivePromise: true })
     );
     expect(result).toEqual([]);
   });
@@ -161,81 +172,74 @@ describe("filterLegalActions", () => {
 
   // --- Per-rule tests ---
 
-  describe("expired_card", () => {
-    it("returns all actions when under maxAttempts", () => {
+  describe("cart_abandoned", () => {
+    it("returns reminder, payment link, and escalation when under maxAttempts", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "expired_card", attemptCount: 0 })
+        makeCtx({ causeLabel: "cart_abandoned", attemptCount: 0 })
       );
       expect(result).toEqual([
         "send_reminder_email",
+        "send_payment_link",
         "escalate_to_human",
       ]);
     });
 
-    it("entity at attemptCount === maxAttempts gets escalation-only, not retry", () => {
+    it("escalates at maxAttempts (2)", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "expired_card", attemptCount: 3 })
+        makeCtx({ causeLabel: "cart_abandoned", attemptCount: 2 })
       );
       expect(result).toEqual(["escalate_to_human"]);
     });
 
     it("returns [] when in cooldown", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "expired_card", isInCooldown: true })
+        makeCtx({ causeLabel: "cart_abandoned", isInCooldown: true })
       );
       expect(result).toEqual([]);
     });
   });
 
-  describe("insufficient_funds", () => {
-    it("returns all actions when under maxAttempts", () => {
+  describe("invoice_overdue", () => {
+    it("returns the dunning ladder when under maxAttempts", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "insufficient_funds", attemptCount: 1 })
+        makeCtx({ causeLabel: "invoice_overdue", attemptCount: 1 })
       );
       expect(result).toEqual([
         "send_reminder_email",
+        "send_soft_chase_email",
         "escalate_to_human",
       ]);
     });
 
-    it("escalates at maxAttempts", () => {
+    it("escalates at maxAttempts (3)", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "insufficient_funds", attemptCount: 3 })
+        makeCtx({ causeLabel: "invoice_overdue", attemptCount: 3 })
       );
       expect(result).toEqual(["escalate_to_human"]);
     });
   });
 
-  describe("gateway_timeout", () => {
-    it("returns email and escalation actions when under maxAttempts", () => {
+  describe("mandate_requires_reauthorization", () => {
+    it("returns re-auth flow actions when under hardStopDays", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "gateway_timeout", attemptCount: 0 })
+        makeCtx({
+          causeLabel: "mandate_requires_reauthorization",
+          daysOverdue: 5,
+        })
       );
       expect(result).toEqual([
         "send_reminder_email",
+        "pause_subscription",
         "escalate_to_human",
       ]);
     });
 
-    it("returns escalate_to_human at maxAttempts", () => {
+    it("returns escalate_to_human when past hardStopDays", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "gateway_timeout", attemptCount: 2 })
-      );
-      expect(result).toEqual(["escalate_to_human"]);
-    });
-  });
-
-  describe("price_friction", () => {
-    it("returns send_reminder_email when under maxAttempts", () => {
-      const result = filterLegalActions(
-        makeCtx({ causeLabel: "price_friction", attemptCount: 0 })
-      );
-      expect(result).toEqual(["send_reminder_email"]);
-    });
-
-    it("escalates when maxAttempts reached", () => {
-      const result = filterLegalActions(
-        makeCtx({ causeLabel: "price_friction", attemptCount: 2 })
+        makeCtx({
+          causeLabel: "mandate_requires_reauthorization",
+          daysOverdue: 30,
+        })
       );
       expect(result).toEqual(["escalate_to_human"]);
     });
@@ -263,93 +267,19 @@ describe("filterLegalActions", () => {
     });
   });
 
-  describe("mandate_execution_failed_retryable", () => {
-    it("returns send_reminder_email, pause_subscription, and escalate_to_human when under maxAttempts", () => {
+  describe("promise_broken", () => {
+    it("returns only escalate_to_human", () => {
       const result = filterLegalActions(
-        makeCtx({
-          causeLabel: "mandate_execution_failed_retryable",
-          attemptCount: 1,
-        })
-      );
-      expect(result).toEqual([
-        "send_reminder_email",
-        "pause_subscription",
-        "escalate_to_human",
-      ]);
-    });
-
-    it("returns send_reminder_email when at maxAttempts", () => {
-      const result = filterLegalActions(
-        makeCtx({
-          causeLabel: "mandate_execution_failed_retryable",
-          attemptCount: 3,
-        })
-      );
-      expect(result).toEqual(["send_reminder_email"]);
-    });
-  });
-
-  describe("mandate_requires_reauthorization", () => {
-    it("returns send_reminder_email, pause_subscription, and escalate_to_human without retries when under hardStopDays", () => {
-      const result = filterLegalActions(
-        makeCtx({
-          causeLabel: "mandate_requires_reauthorization",
-          daysOverdue: 5,
-        })
-      );
-      expect(result).toEqual([
-        "send_reminder_email",
-        "pause_subscription",
-        "escalate_to_human",
-      ]);
-    });
-
-    it("returns escalate_to_human when past hardStopDays", () => {
-      const result = filterLegalActions(
-        makeCtx({
-          causeLabel: "mandate_requires_reauthorization",
-          daysOverdue: 30,
-        })
+        makeCtx({ causeLabel: "promise_broken", attemptCount: 0 })
       );
       expect(result).toEqual(["escalate_to_human"]);
     });
-  });
 
-  describe("invoice_overdue", () => {
-    it("returns all actions for overdue invoice", () => {
+    it("returns escalate_to_human even at maxAttempts", () => {
       const result = filterLegalActions(
-        makeCtx({ causeLabel: "invoice_overdue", daysOverdue: 10 })
-      );
-      expect(result).toEqual([
-        "send_reminder_email",
-        "send_soft_chase_email",
-        "escalate_to_human",
-      ]);
-    });
-
-    it("includes escalate_to_human (already in actions list)", () => {
-      const result = filterLegalActions(
-        makeCtx({ causeLabel: "invoice_overdue", daysOverdue: 35 })
-      );
-      expect(result).toContain("escalate_to_human");
-    });
-  });
-
-  describe("invoice_disputed", () => {
-    it("returns only escalate_to_human when isDisputed is true", () => {
-      const result = filterLegalActions(
-        makeCtx({ causeLabel: "some_cause", isDisputed: true })
+        makeCtx({ causeLabel: "promise_broken", attemptCount: 1 })
       );
       expect(result).toEqual(["escalate_to_human"]);
-    });
-  });
-
-  describe("dnc rule", () => {
-    it("returns [] when customer is DNC", () => {
-      const result = filterLegalActions(
-        makeCtx({ causeLabel: "some_cause", isDnc: true })
-      );
-      expect(result).toEqual([]);
     });
   });
 
@@ -383,7 +313,7 @@ describe("evaluateLegalActions", () => {
     ).toBe("unknown_cause");
   });
 
-  it("reports the escalated_to_human restriction alongside its trigger", () => {
+  it("reports the escalate_to_human restriction alongside its trigger", () => {
     const disputed = evaluateLegalActions(makeCtx({ isDisputed: true }));
     expect(disputed.actions).toEqual(["escalate_to_human"]);
     expect(disputed.blockedBy).toBe("disputed");
@@ -395,7 +325,7 @@ describe("evaluateLegalActions", () => {
 
   it("reports which stopping condition fired", () => {
     const maxed = evaluateLegalActions(
-      makeCtx({ causeLabel: "expired_card", attemptCount: 3 })
+      makeCtx({ causeLabel: "cart_abandoned", attemptCount: 2 })
     );
     expect(maxed.actions).toEqual(["escalate_to_human"]);
     expect(maxed.blockedBy).toBe("max_attempts");
@@ -414,17 +344,21 @@ describe("evaluateLegalActions", () => {
   });
 
   it("omits blockedBy when the cause's default action list applies", () => {
-    const result = evaluateLegalActions(makeCtx());
-    expect(result.actions).toEqual(["send_reminder_email", "escalate_to_human"]);
+    const result = evaluateLegalActions(makeCtx({ causeLabel: "cart_abandoned" }));
+    expect(result.actions).toEqual([
+      "send_reminder_email",
+      "send_payment_link",
+      "escalate_to_human",
+    ]);
     expect(result.blockedBy).toBeUndefined();
   });
 
   it("filterLegalActions stays equivalent to evaluateLegalActions().actions", () => {
     for (const ctx of [
-      makeCtx(),
-      makeCtx({ isDnc: true }),
-      makeCtx({ isInCooldown: true }),
-      makeCtx({ causeLabel: "gateway_timeout", attemptCount: 2 }),
+      makeCtx({ causeLabel: "cart_abandoned" }),
+      makeCtx({ causeLabel: "invoice_overdue", isDnc: true }),
+      makeCtx({ causeLabel: "cart_abandoned", isInCooldown: true }),
+      makeCtx({ causeLabel: "invoice_overdue", attemptCount: 3 }),
       makeCtx({ causeLabel: "totally_unknown" }),
     ]) {
       expect(filterLegalActions(ctx)).toEqual(evaluateLegalActions(ctx).actions);

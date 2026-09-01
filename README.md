@@ -383,21 +383,22 @@ razorrecovery/
 │   │   │   ├── hashChain.ts        # Cryptographic SHA-256 hash chain and canonicalization engine
 │   │   │   ├── redaction.ts        # Recursive PII redaction and masking utility
 │   │   │   ├── riskScoring.ts      # Pure risk score calculation formula
-│   │   │   ├── policy.json         # Declarative policy catalog and stopping rules (9 active rules)
-│   │   │   ├── policy.ts           # Policy cache loader and cause rule lookup
+│   │   │   ├── policy.json         # Declarative policy catalog and stopping rules (v2, 5 active rules)
+│   │   │   ├── policy.ts           # Policy cache loader and cause rule lookup (incl. escalateAboveAmount)
 │   │   │   ├── stoppingRules.ts    # Deterministic legal action filter engine with Promise & Mandate guards
 │   │   │   ├── emailTemplates.ts   # Parameterized branded HTML email generators for all recovery causes
+│   │   │   ├── eventEnvelope.ts    # Partner ingestion envelope types + pure field-level validators
 │   │   │   └── stateMachine.ts     # Pure workflow state transition table and validator
 │   │   ├── simulator/
-│   │   │   ├── razorpayErrorReasons.ts # Official Razorpay payment & UPI Autopay mandate error vocabulary
-│   │   │   ├── seedEntities.ts     # Customer, Invoice, Cart, and Subscription seed generator
-│   │   │   └── injectFailure.ts    # Webhook-shaped synthetic failure event generator
+│   │   │   ├── seedEntities.ts     # Realistic demo customer seed generator
+│   │   │   └── partnerEvents.ts    # Partner-shaped envelope factories + real-ingest-path simulator
 │   │   ├── integrations/
 │   │   │   ├── razorpayIntegration.ts # Razorpay Orders & Payment Links API adapter
 │   │   │   ├── emailIntegration.ts    # Nodemailer email delivery adapter
 │   │   │   └── ticketMock.ts          # Human escalation ticket persistence adapter
 │   │   ├── services/
 │   │   │   ├── customerService.ts  # Customer lookups, failure counting, and tenure calculations
+│   │   │   ├── ingestService.ts    # Unified partner ingestion: validation, idempotency, upserts, publish
 │   │   │   ├── entityService.ts    # Entity queries, state derivation, and audit detail responses
 │   │   │   ├── diagnosisService.ts # Hybrid Tier 1 (RULE) / Tier 2 (LLM) diagnosis service
 │   │   │   ├── decisionService.ts  # Policy-bounded recovery decision engine with RAG case retrieval
@@ -445,16 +446,12 @@ razorrecovery/
 │   │   └── scripts/
 │   │       ├── cleanDb.ts          # Fast database table truncate script
 │   │       ├── createTopics.ts     # Kafka admin script to provision all 6 topics
-│   │       ├── directPublishTest.ts# Raw Kafka message publishing verification script
-│   │       ├── escalateActiveEntity.ts # Script to select/create an active entity and escalate to human ticket
 │   │       ├── healthcheck.ts      # Multi-service connectivity verification (PG, Redis, Kafka, SMTP)
-│   │       ├── seedDemoStream.ts   # Curated narrative stream injector for live demos
-│   │       ├── seedDemoStreamInteractive.ts # Step-by-step interactive demo injector
+│   │       ├── runDemo.ts          # Interactive beat-by-beat demo driver over the real ingest API
 │   │       ├── simulatePromisePayment.ts # Simulates payment webhook specifically for Promise-to-Pay
-│   │       ├── simulateWebhookPayment.ts # Standalone Razorpay payment webhook simulation script
+│   │       ├── simulateWebhookPayment.ts # Signed Razorpay payment webhook simulation (CLI + reusable fn)
 │   │       ├── startConsumers.ts   # Standalone consumer starter
-│   │       ├── testIntegrations.ts # Manual integration test script for external APIs
-│   │       └── testPipeline.ts     # End-to-end multi-event pipeline integration test
+│   │       └── testIntegrations.ts # Manual integration test script for external APIs
 │   └── tests/                      # Jest test suites (21 suites, 242 passing tests)
 │       ├── hashChain.test.ts       # Unit tests for canonicalization and hash chain determinism
 │       ├── redaction.test.ts       # Unit tests for recursive PII masking and field preservation
@@ -557,17 +554,15 @@ datasource db {
 }
 
 enum EntityType {
-  CUSTOMER
   CART
   INVOICE
   SUBSCRIPTION
 }
 
 enum EventType {
-  PAYMENT_FAILED
   CHECKOUT_ABANDONED
   INVOICE_OVERDUE
-  SUBSCRIPTION_FAILED
+  SUBSCRIPTION_MANDATE_CANCELLED
 }
 
 enum WorkflowState {
@@ -1028,54 +1023,29 @@ The entire action space is bound to this declarative rule catalog:
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "2.1.0",
   "rules": [
     {
-      "cause": "expired_card",
-      "actions": ["retry_payment_immediate", "send_reminder_email", "escalate_to_human"],
-      "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxAction": "escalate_to_human" }
-    },
-    {
-      "cause": "insufficient_funds",
-      "actions": ["retry_payment_immediate", "send_reminder_email", "escalate_to_human"],
-      "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxAction": "escalate_to_human" }
-    },
-    {
-      "cause": "gateway_timeout",
-      "actions": ["retry_payment_immediate", "retry_payment_delayed"],
-      "stopping": { "maxAttempts": 2, "windowHours": 1, "onMaxAction": "hard_decline" }
-    },
-    {
-      "cause": "price_friction",
-      "actions": ["send_reminder_email"],
+      "cause": "cart_abandoned",
+      "actions": ["send_reminder_email", "send_payment_link", "escalate_to_human"],
+      "escalateAboveAmount": 10000,
       "stopping": { "maxAttempts": 2, "windowDays": 7, "onMaxAction": "escalate_to_human" }
+    },
+    {
+      "cause": "invoice_overdue",
+      "actions": ["send_reminder_email", "send_soft_chase_email", "escalate_to_human"],
+      "stopping": { "maxAttempts": 3, "windowDays": 7, "onMaxAction": "escalate_to_human" }
+    },
+    {
+      "cause": "mandate_requires_reauthorization",
+      "actions": ["send_reminder_email", "pause_subscription", "escalate_to_human"],
+      "escalateAboveAmount": 10000,
+      "stopping": { "hardStopDays": 30, "onHardStopAction": "escalate_to_human" }
     },
     {
       "cause": "no_reason_signal",
       "actions": ["send_reminder_email"],
       "stopping": { "noResponseWithinHours": 48 }
-    },
-    {
-      "cause": "mandate_execution_failed_retryable",
-      "actions": ["retry_payment_delayed", "send_reminder_email"],
-      "stopping": {
-        "maxAttempts": 3,
-        "windowDays": 7,
-        "onMaxAction": "send_reminder_email"
-      }
-    },
-    {
-      "cause": "mandate_requires_reauthorization",
-      "actions": ["send_reminder_email", "escalate_to_human"],
-      "stopping": {
-        "hardStopDays": 30,
-        "onHardStopAction": "escalate_to_human"
-      }
-    },
-    {
-      "cause": "invoice_overdue",
-      "actions": ["send_reminder_email", "send_soft_chase_email", "escalate_to_human"],
-      "stopping": {}
     },
     {
       "cause": "promise_broken",
@@ -1085,6 +1055,10 @@ The entire action space is bound to this declarative rule catalog:
   ]
 }
 ```
+
+`escalateAboveAmount` is the value-based escalation knob: exposure at or above the
+threshold skips the standard contact cadence and goes straight to human review
+(e.g. a high-value abandoned cart escalates on its first event).
 
 ---
 
@@ -1115,17 +1089,21 @@ The legal action filter prunes the catalog down to an unambiguous list of valid 
 
 ---
 
-### 5.4 Two-Tier Root Cause Diagnosis (`backend/src/services/diagnosisService.ts`)
+### 5.4 Deterministic-First Root Cause Diagnosis (`backend/src/services/diagnosisService.ts`)
 
 ```mermaid
 flowchart TD
-    Start([Enriched Revenue Event]) --> CheckEvent{Is PAYMENT_FAILED & has errorReason?}
-    CheckEvent -->|Yes| MapLookup[Lookup in CAUSE_MAP]
-    MapLookup --> FoundInMap{Found in CAUSE_MAP?}
-    FoundInMap -->|Yes| ReturnRule[Return: method='RULE', confidence=1.0]
-    FoundInMap -->|No| LLMCall
-    CheckEvent -->|No| LLMCall[Call LLM Messages API]
-    
+    Start([Enriched Revenue Event]) --> Promise{Promise-broken marker?}
+    Promise -->|Yes| ReturnPromise[Return: promise_broken, method='RULE', confidence=1.0]
+    Promise -->|No| Mandate{SUBSCRIPTION_MANDATE_CANCELLED with mandate/subscription status?}
+    Mandate -->|Yes| ReturnMandate[Return: mandate_requires_reauthorization, method='RULE', confidence=1.0]
+    Mandate -->|No| Invoice{INVOICE event?}
+    Invoice -->|disputeFlag=true| ReturnDisputed[Return: invoice_disputed, method='RULE', confidence=1.0]
+    Invoice -->|disputeFlag=false| ReturnOverdue[Return: invoice_overdue, method='RULE', confidence=1.0]
+    Invoice -->|not an invoice| Cart{CHECKOUT_ABANDONED?}
+    Cart -->|Yes| ReturnCart[Return: cart_abandoned, method='RULE', confidence=1.0]
+    Cart -->|No| LLMCall[Call LLM Messages API — only for payloads without recognizable rule signals]
+
     LLMCall --> ParseJson[Parse Structured JSON]
     ParseJson --> ValidLabel{cause_label in allowed enum?}
     ValidLabel -->|Yes| ReturnLLM[Return: method='LLM', confidence, reasoning]
@@ -1135,36 +1113,31 @@ flowchart TD
     RetryValid -->|No / Error| Fallback[Fallback: cause='no_reason_signal' or 'unknown']
 ```
 
-#### Deterministic Error Reason Map (`CAUSE_MAP`):
-```typescript
-export const CAUSE_MAP: Readonly<Record<string, CauseLabel>> = {
-  insufficient_fund: "insufficient_funds",
-  payment_timed_out: "gateway_timeout",
-  card_expired: "expired_card",
-  incorrect_card_details: "no_reason_signal",
-  incorrect_otp: "no_reason_signal",
-  payment_cancelled: "no_reason_signal",
-  payment_declined: "gateway_timeout",
-  invalid_vpa: "no_reason_signal",
-  payment_risk_check_failed: "gateway_timeout",
-  payment_failed: "gateway_timeout",
-  gateway_technical_error: "gateway_timeout",
-};
-```
+The engine's scope is revenue leakage, not payment failures: partner systems own their
+gateways and only report carts left unchecked out, invoices gone overdue, and subscription
+mandates cancelled or halted. Gateway-side causes (expired cards, insufficient funds,
+timeouts, retryable mandate debit failures) were removed with the ingestion-v2 migration —
+the engine never sees a payment attempt fail. The LLM path remains as the arbiter for
+payloads that lack their expected partner signals.
+
+Allowed cause labels:
+`cart_abandoned`, `invoice_overdue`, `invoice_disputed`, `mandate_requires_reauthorization`,
+`no_reason_signal`, `dnc`, `promise_broken`.
 
 ---
 
 ### 5.5 Bounded Decision Arbitrator with RAG Case Retrieval (`backend/src/services/decisionService.ts`)
 
 The decision engine chooses an action strictly within the pre-filtered legal actions, augmented by historical similar-case retrieval:
-1. **Zero Legal Actions**: Short-circuit immediately. Return `{ chosenAction: "none", legalActions: [], reasoning: "Blocked by policy (DNC, dispute, cooldown, or stopping condition)", policyVersion }`. No LLM call is made.
-2. **Follow-Up Scheduled Retry**: If `entityContext.dueScheduledRetry === true` and an immediate retry action (`"retry_payment_immediate"` or `"retry_payment"`) is legal, short-circuit and choose it directly.
-3. **Exactly One Legal Action**: Short-circuit immediately. Return `{ chosenAction: legalActions[0], legalActions, reasoning: "Only legal action available: ...", policyVersion }`. No LLM call is made.
-4. **Multiple Legal Actions (2+)**: 
+1. **Zero Legal Actions**: Short-circuit immediately. Return `{ chosenAction: "none", legalActions: [], reasoning: "Blocked by policy (...)", policyVersion }`. No LLM call is made.
+2. **Value-Based Escalation Trigger**: If the cause's policy rule defines `escalateAboveAmount` and the exposure amount meets or exceeds the threshold while escalation is a legal action, short-circuit to `escalate_to_human` (high-value carts skip the standard contact cadence). No LLM call is made.
+3. **Follow-Up Scheduled Retry**: If `entityContext.dueScheduledRetry === true`, short-circuit and choose the first legal action directly.
+4. **Exactly One Legal Action**: Short-circuit immediately. When a policy restriction (dispute, broken promise, max attempts) determined the single action, the reasoning carries that block reason (e.g. `"Blocked by policy (Invoice is disputed)"`); otherwise `"Only legal action available: ..."`. No LLM call is made.
+5. **Multiple Legal Actions (2+)**: 
    - Queries `findSimilarCases(diagnosis.causeLabel, retrievalContext.entityType, retrievalContext.amount)` via Voyage AI & pgvector.
    - Formats similar past cases (`cause`, `action`, `outcome`, `days_to_recover`) into `similarCasesPrompt`.
    - Calls LLM with `DECISION_PROMPT` passing `{ diagnosis, legal_actions: legalActions, entity_context, similar_past_cases }`.
-5. **Enforce Membership Re-validation**:
+6. **Enforce Membership Re-validation**:
    If the LLM returns a `chosen_action` that is **not** present in `legalActions`, log an error and deterministically fall back to `legalActions[0]`.
 
 ---
@@ -1252,7 +1225,7 @@ The platform enforces double-entry precision with an immutable, append-only `Led
 When an audit entry reaches a terminal outcome (`recovered`, `written_off`, `escalated`), the asynchronous **Embedding Consumer** vectorizes the completed case:
 1. **Structured Case Representation (`buildCaseSummaryText`)**:
    Formats the case into a concise keyword string:
-   `cause=expired_card, entity_type=INVOICE, amount_bucket=2000_to_10000, action=send_payment_link, outcome=recovered, days_to_recover=2`
+   `cause=invoice_overdue, entity_type=INVOICE, amount_bucket=2000_to_10000, action=send_payment_link, outcome=recovered, days_to_recover=2`
    Where `amount_bucket` is categorized into `under_500`, `500_to_2000`, `2000_to_10000`, or `over_10000`.
 2. **Voyage AI Client (`backend/src/config/voyage.ts`)**:
    Calls Voyage's embedding API (`POST https://api.voyageai.com/v1/embeddings`) with model `voyage-3` and `input_type: "document"`, returning a 1024-dimensional normalized vector.
@@ -1407,14 +1380,14 @@ Base URL: `http://localhost:4000`
         "customerId": "cust-987",
         "customerName": "Aarav Sharma",
         "customerEmail": "aarav.sharma@example.test",
-        "eventType": "PAYMENT_FAILED",
+        "eventType": "INVOICE_OVERDUE",
         "amount": 5400.0,
         "currency": "INR",
         "occurredAt": "2026-08-27T12:00:00.000Z",
         "riskScore": 0.675,
         "state": "CONTACTED",
         "stage": "EXECUTED",
-        "causeLabel": "expired_card",
+        "causeLabel": "invoice_overdue",
         "diagnosisMethod": "RULE",
         "actionType": "send_payment_link",
         "actionResult": "success",
@@ -1458,7 +1431,7 @@ Base URL: `http://localhost:4000`
         "actor": "system",
         "outcome": "pending",
         "inputSnapshot": { "id": "...", "amount": 5400, "riskScore": 0.675 },
-        "diagnosisSnapshot": { "causeLabel": "expired_card", "confidence": 1, "method": "RULE" },
+        "diagnosisSnapshot": { "causeLabel": "invoice_overdue", "confidence": 1, "method": "RULE" },
         "decisionSnapshot": { "chosenAction": "send_payment_link", "legalActions": ["retry_payment", "send_payment_link"], "reasoning": "..." },
         "actionSnapshot": { "actionType": "send_payment_link", "result": "success", "integration": "RAZORPAY", "paymentLinkShortUrl": "https://rzp.io/l/xyz" },
         "timestamp": "2026-08-27T12:00:06.000Z",
@@ -1489,7 +1462,7 @@ Base URL: `http://localhost:4000`
       { "stage": "recovered", "count": 28 }
     ],
     "byCause": [
-      { "cause": "expired_card", "recovered": 45000.0, "atRisk": 50000.0 }
+      { "cause": "invoice_overdue", "recovered": 45000.0, "atRisk": 50000.0 }
     ],
     "byChannel": [
       { "channel": "razorpay", "count": 25, "recoveredCount": 20, "recoveredAmount": 65000.0 },
@@ -1820,7 +1793,7 @@ graph TD
 1. Create `backend/prisma/schema.prisma` with all models (`AuditEmbedding`, `LedgerEntry`, `AuditChainHead`, `EntityWorkflowState`, etc.).
 2. Run migrations: `npx prisma migrate dev --name init`.
 3. Apply SQL rules for append-only `LedgerEntry` table and IVFFlat index on `AuditEmbedding`.
-4. Create `backend/prisma/seed.ts` seeding `AuditChainHead` with `GENESIS_HASH` and calling `seedEntities({ customers: 50 })`.
+4. Create `backend/prisma/seed.ts` seeding `AuditChainHead` with `GENESIS_HASH` and calling `seedEntities({ customers: 20 })`.
 
 #### Step 4: Implement Backend Configuration Modules
 1. `src/config/env.ts`: Zod schema validating all environment variables (including `VOYAGE_API_KEY`).
@@ -1837,28 +1810,30 @@ graph TD
 1. `src/domain/types.ts`: Shared interfaces, enums, `DomainError`.
 2. `src/domain/hashChain.ts`: Cryptographic hash chain engine (`GENESIS_HASH`, `canonicalize`, `computeEntryHash`).
 3. `src/domain/redaction.ts`: Recursive PII masking (`redactPII`, `maskEmail`, `maskPhone`).
-4. `src/domain/policy.json`: Declarative 9-rule catalog and stopping conditions.
+4. `src/domain/policy.json`: Declarative v2 catalog and stopping conditions (5 revenue-leakage rules, value-based escalation knob).
 5. `src/domain/policy.ts`: Policy loader and cached lookup functions.
 6. `src/domain/riskScoring.ts`: Pure risk score formula implementation.
 7. `src/domain/stoppingRules.ts`: Pure `filterLegalActions` function.
 8. `src/domain/stateMachine.ts`: Guard table and `nextState` transition mapper.
+9. `src/domain/eventEnvelope.ts`: Partner ingestion envelope types + pure field-level validators.
 
 #### Step 6: Implement Simulator, Integrations & Financial Ledger
-1. `src/simulator/razorpayErrorReasons.ts`: Official Razorpay error reasons lookup table.
-2. `src/simulator/seedEntities.ts`: Database entity seed generator (with 5% DNC and 5% dispute fixtures).
-3. `src/simulator/injectFailure.ts`: Factory creating webhook-shaped failure payloads.
-4. `src/services/ledgerService.ts`: `writeLedgerEntry` with idempotency and amount validation.
-5. `src/integrations/razorpayIntegration.ts`: Razorpay payment link creation and order retry fetcher.
-6. `src/integrations/emailIntegration.ts`: Nodemailer send helper.
-7. `src/integrations/ticketMock.ts`: Escalation ticket database persistence.
+1. `src/services/ingestService.ts`: Unified partner ingestion — envelope validation, idempotency (Redis marker + key-reuse conflict detection), customer/entity upserts, Kafka publish.
+2. `src/api/routes/ingest.ts`: `POST /api/v1/events` with shared API-key auth (constant-time digest compare) and typed HTTP error mapping.
+3. `src/simulator/partnerEvents.ts`: Partner-shaped envelope factories with realistic distributions, driving the real ingestion path.
+4. `src/simulator/seedEntities.ts`: Demo customer seed generator (with ~4% DNC fixtures).
+5. `src/services/ledgerService.ts`: `writeLedgerEntry` with idempotency and amount validation.
+6. `src/integrations/razorpayIntegration.ts`: Razorpay payment link creation and order retry fetcher.
+7. `src/integrations/emailIntegration.ts`: Nodemailer send helper.
+8. `src/integrations/ticketMock.ts`: Escalation ticket database persistence.
 
 #### Step 7: Implement Core Intelligence, RAG & Business Services
-1. `src/services/diagnosisService.ts`: Hybrid Tier 1 (`CAUSE_MAP`) + Tier 2 (LLM) classifier.
+1. `src/services/diagnosisService.ts`: Deterministic-first rule classifier (partner-owned facts) with the LLM as fallback for payloads lacking expected signals.
 2. `src/services/embeddingService.ts`: Case summary text builder (`buildCaseSummaryText`) and `indexAuditEntry`.
 3. `src/services/retrievalService.ts`: Cosine similarity pgvector query service (`findSimilarCases`).
-4. `src/services/decisionService.ts`: Bounded decision arbitrator with RAG case retrieval and membership re-validation.
+4. `src/services/decisionService.ts`: Bounded decision arbitrator with RAG case retrieval, the `escalateAboveAmount` policy trigger, and membership re-validation.
 5. `src/services/executorService.ts`: Action dispatcher, LLM-based `draftRecoveryEmail`, and Action row persistence.
-6. `src/services/auditService.ts`: Hash-chained audit writer (`writeChainedAuditEntry`), verification engine (`verifyChain`), state transitions, and per-cause `EntityCauseState` tracking.
+6. `src/services/auditService.ts`: Hash-chained audit writer (`writeChainedAuditEntry`), verification engine (`verifyChain`), state transitions, per-cause `EntityCauseState` tracking, and the shared `announceAuditEntry` post-commit fan-out.
 7. `src/services/queryService.ts`: Natural-language audit query assistant with citation grounding (`queryAuditTrail`).
 8. `src/services/metricsService.ts`: Rolling window metrics aggregation directly over `LedgerEntry` rows, funnel counts, and Redis caching.
 
@@ -1902,7 +1877,7 @@ graph TD
 2. Seed base database: `cd backend && npm run seed`.
 3. Start backend: `cd backend && npm run dev`.
 4. Start frontend: `cd frontend && npm run dev`.
-5. Run demo stream: `cd backend && npm run seedDemoStream` (or interactive mode: `npm run seedDemoStreamInteractive`).
+5. Run the interactive demo driver (all showcase beats over the real ingest API): `cd backend && npm run demo`.
 6. Test payment webhook: `cd backend && npm run test:webhook`.
 7. Verify live updates, RAG-guided decisions, and grounded audit queries at `http://localhost:3000`.
 
@@ -1930,9 +1905,11 @@ graph TD
 | `backend/src/domain/policy.ts` | Domain | Cached policy loader | `policy.json` | Runtime |
 | `backend/src/domain/stoppingRules.ts` | Domain | Pure deterministic legal action filter | `policy.ts` | Runtime |
 | `backend/src/domain/stateMachine.ts` | Domain | Pure state transition guard table and validator | `types.ts` | Runtime |
-| `backend/src/simulator/razorpayErrorReasons.ts` | Simulator | Official Razorpay error taxonomy | Pure TS | Runtime |
-| `backend/src/simulator/seedEntities.ts` | Simulator | Generator for customers, invoices, carts, subscriptions | Prisma | Development |
-| `backend/src/simulator/injectFailure.ts` | Simulator | Webhook-shaped synthetic event generator | Prisma, `razorpayErrorReasons.ts` | Runtime |
+| `backend/src/domain/eventEnvelope.ts` | Domain | Partner ingestion envelope types & pure validators | Pure TS | Runtime |
+| `backend/src/simulator/seedEntities.ts` | Simulator | Realistic demo customer seed generator | Prisma | Development |
+| `backend/src/simulator/partnerEvents.ts` | Simulator | Partner-shaped envelope factories driving the real ingest path | `eventEnvelope.ts`, `ingestService.ts` | Runtime |
+| `backend/src/services/ingestService.ts` | Ingestion | Unified partner ingestion: validation, idempotency, upserts, publish | `eventEnvelope.ts`, `redis.ts`, `producer.ts` | Runtime |
+| `backend/src/api/routes/ingest.ts` | API | `POST /api/v1/events` with API-key auth & typed error mapping | Express, `ingestService.ts` | Runtime |
 | `backend/src/integrations/razorpayIntegration.ts` | Integration | Razorpay Payment Link creation & Order retry | `razorpay.ts` | Runtime |
 | `backend/src/integrations/emailIntegration.ts` | Integration | Nodemailer email delivery | `mailer.ts` | Runtime |
 | `backend/src/integrations/ticketMock.ts` | Integration | Escalation ticket database persistence | `prisma.ts` | Runtime |
@@ -1940,10 +1917,10 @@ graph TD
 | `backend/src/services/embeddingService.ts` | RAG | Terminal case summary formatter & vector indexer | `prisma.ts`, `voyage.ts` | Runtime |
 | `backend/src/services/retrievalService.ts` | RAG | Cosine similarity pgvector query service | `prisma.ts`, `voyage.ts` | Runtime |
 | `backend/src/services/queryService.ts` | Assistant | Citation-grounded natural-language audit Q&A | `prisma.ts`, `openai.ts`, `voyage.ts` | Runtime |
-| `backend/src/services/diagnosisService.ts` | Intelligence | Hybrid Tier 1 (RULE) / Tier 2 (LLM) diagnosis | `openai.ts`, `types.ts` | Runtime |
-| `backend/src/services/decisionService.ts` | Intelligence | Policy-bounded LLM action selection with RAG context | `openai.ts`, `retrievalService.ts` | Runtime |
+| `backend/src/services/diagnosisService.ts` | Intelligence | Deterministic-first rule diagnosis with LLM fallback | `openai.ts`, `types.ts` | Runtime |
+| `backend/src/services/decisionService.ts` | Intelligence | Policy-bounded LLM action selection with RAG context & value-based escalation | `openai.ts`, `retrievalService.ts` | Runtime |
 | `backend/src/services/executorService.ts` | Execution | Action dispatching & LLM email drafting | Integrations, `openai.ts` | Runtime |
-| `backend/src/services/auditService.ts` | Audit | Hash-chained audit writer, verifyChain, state transitions | `prisma.ts`, `hashChain.ts` | Runtime |
+| `backend/src/services/auditService.ts` | Audit | Hash-chained audit writer, verifyChain, state transitions, announce fan-out | `prisma.ts`, `hashChain.ts` | Runtime |
 | `backend/src/services/metricsService.ts` | Analytics | Rolling window metrics aggregation & ledger aggregation | `prisma.ts`, `redis.ts` | Runtime |
 | `backend/src/scheduler/followUpScheduler.ts` | Scheduler | 30s loop for cooldowns, timeouts, deferred retries | `prisma.ts`, `redis.ts`, `producer.ts` | Runtime |
 | `backend/src/kafka/topics.ts` | Messaging | Kafka topic name constants (6 topics) | Pure TS | Runtime |
@@ -1966,8 +1943,7 @@ graph TD
 | `backend/src/scripts/cleanDb.ts` | Script | Fast database table truncate script | `prisma.ts` | Maintenance |
 | `backend/src/scripts/createTopics.ts` | Script | Kafka topic provisioning script | `kafkajs`, `topics.ts` | Setup |
 | `backend/src/scripts/healthcheck.ts` | Script | Infrastructure connectivity verification script | All clients | Testing |
-| `backend/src/scripts/seedDemoStream.ts` | Script | Curated demo narrative stream injector | Pipeline modules | Demo |
-| `backend/src/scripts/seedDemoStreamInteractive.ts` | Script | Interactive step-by-step narrative injector | Pipeline modules, `readline` | Demo |
+| `backend/src/scripts/runDemo.ts` | Script | Interactive beat-by-beat demo driver (ingest, escalation, payment beats) | `fetch`, `partnerevents`, `readline` | Demo |
 | `backend/src/scripts/simulateWebhookPayment.ts` | Script | Razorpay payment webhook simulation script | `fetch`, `crypto`, `prisma.ts` | Testing |
 | `frontend/lib/api.ts` | Frontend | Axios client functions | `axios`, `types` | Runtime |
 | `frontend/lib/socket.ts` | Frontend | Socket.IO connection & `useLiveStream` hook | `socket.io-client` | Runtime |
@@ -2006,11 +1982,9 @@ cd ../frontend
 npm install
 npm run dev                   # Runs Next.js on http://localhost:3000
 
-# 5. Optional: Inject curated demo stream
+# 5. Optional: Run the curated demo beats (requires backend + consumers running)
 cd ../backend
-npm run seedDemoStream        # Automated stream
-# or
-npm run seedDemoStreamInteractive # Step-by-step interactive stream
+npm run demo
 
 # 6. Optional: Simulate incoming Razorpay payment webhook
 npm run test:webhook

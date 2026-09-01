@@ -23,23 +23,24 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
     // Direct DB setup: these tests exercise the HTTP layer, not ingestion.
     const customers = await prisma.customer.findMany({ take: 5 });
     const eventTypes = [
-      "PAYMENT_FAILED",
       "CHECKOUT_ABANDONED",
       "INVOICE_OVERDUE",
-      "SUBSCRIPTION_FAILED",
-      "PAYMENT_FAILED",
+      "SUBSCRIPTION_MANDATE_CANCELLED",
+      "INVOICE_OVERDUE",
+      "CHECKOUT_ABANDONED",
     ] as const;
+    const entityTypes = ["CART", "INVOICE", "SUBSCRIPTION", "INVOICE", "CART"] as const;
     for (let i = 0; i < customers.length; i++) {
       await prisma.revenueEvent.create({
         data: {
-          entityType: "CUSTOMER",
-          entityId: customers[i].id,
+          entityType: entityTypes[i],
+          entityId: `fixture_${entityTypes[i].toLowerCase()}_${i}`,
           customerId: customers[i].id,
           eventType: eventTypes[i],
           amount: 1000 + i,
           currency: "INR",
           occurredAt: new Date(),
-          rawPayload: { event: "test.fixture", index: i },
+          rawPayload: { source: "test.fixture", index: i },
         },
       });
     }
@@ -96,12 +97,12 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
 
       it("supports filtering by eventType, search term, and window", async () => {
         const res = await fetch(
-          `${baseUrl}/entities?eventType=PAYMENT_FAILED&window=all`,
+          `${baseUrl}/entities?eventType=CHECKOUT_ABANDONED&window=all`,
         );
         expect(res.status).toBe(200);
         const data = (await res.json()) as { items: Array<{ eventType: string }> };
         expect(Array.isArray(data.items)).toBe(true);
-        data.items.forEach((e) => expect(e.eventType).toBe("PAYMENT_FAILED"));
+        data.items.forEach((e) => expect(e.eventType).toBe("CHECKOUT_ABANDONED"));
       });
 
       it("returns ordered audit entries and event history for an entity", async () => {
@@ -252,12 +253,14 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
           entityType: "INVOICE",
           entityId,
           customerId: customer.id,
-          eventType: "PAYMENT_FAILED",
+          eventType: "INVOICE_OVERDUE",
           amount: 999,
           currency: "INR",
           occurredAt: new Date(),
+          // The webhook matches this payment id back to the entity — it
+          // simulates the capture of a payment link the pipeline sent.
           razorpayPaymentId: paymentId,
-          rawPayload: { event: "payment.failed" },
+          rawPayload: { source: "partner_ingest", daysOverdue: 3 },
         },
       });
       await prisma.action.create({
@@ -278,7 +281,7 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       await prisma.entityCauseState.create({
         data: {
           entityId,
-          causeLabel: "gateway_timeout",
+          causeLabel: "cart_abandoned",
           attemptCount: 2,
           lastContactedAt: new Date(),
           cooldownUntil: new Date(Date.now() + 3600 * 1000),
@@ -287,7 +290,7 @@ describe("Phase 8 — API Layer: REST + WebSocket Server", () => {
       await prisma.entityCauseState.create({
         data: {
           entityId,
-          causeLabel: "insufficient_funds",
+          causeLabel: "invoice_overdue",
           attemptCount: 1,
           lastContactedAt: new Date(),
         },

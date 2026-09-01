@@ -12,8 +12,7 @@ export interface CustomerHistory {
 }
 
 const EVENT_SEVERITY: Record<RawRevenueEvent["eventType"], number> = {
-  PAYMENT_FAILED: 0.8,
-  SUBSCRIPTION_FAILED: 0.75,
+  SUBSCRIPTION_MANDATE_CANCELLED: 0.7,
   INVOICE_OVERDUE: 0.6,
   CHECKOUT_ABANDONED: 0.4,
 };
