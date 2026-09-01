@@ -228,6 +228,23 @@ describe("executorService", () => {
       expect(result.html).toContain("Rohan Gupta");
       expect(result.html).toContain("UPI Autopay / e-NACH mandate");
     });
+
+    it("generates the winback offer email when actionType is send_winback_offer", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ eventType: "SUBSCRIPTION_MANDATE_CANCELLED", entityType: "SUBSCRIPTION", amount: 14999 }),
+        "Meera Nair",
+        "mandate_requires_reauthorization",
+        "https://rzp.io/i/plink_winback",
+        20,
+        "send_winback_offer"
+      );
+
+      expect(result.subject).toContain("20% off");
+      expect(result.html).toContain("Meera Nair");
+      expect(result.html).toContain("20% discount");
+      expect(result.html).toContain("11,999");
+      expect(result.html).toContain("https://rzp.io/i/plink_winback");
+    });
   });
 
   describe("executeAction", () => {
@@ -246,6 +263,23 @@ describe("executorService", () => {
       expect(result.result).toBe("success");
       expect(result.integration).toBe("EMAIL");
       expect(result.actionType).toBe("send_reminder_email");
+    });
+
+    it("renders the winback offer template for send_winback_offer actions", async () => {
+      (mockedPrisma.customer.findUnique as jest.Mock).mockResolvedValueOnce(mockCustomer);
+      mockedMailer.sendMail.mockResolvedValueOnce({ messageId: "msg-winback" });
+
+      const result = await executeAction(
+        makeDecision({ chosenAction: "send_winback_offer" }),
+        makeEvent({ eventType: "SUBSCRIPTION_MANDATE_CANCELLED", entityType: "SUBSCRIPTION", amount: 14999 }),
+        "mandate_requires_reauthorization"
+      );
+
+      expect(mockedMailer.sendMail).toHaveBeenCalledTimes(1);
+      expect(mockedMailer.sendMail.mock.calls[0][0].subject).toContain("20% off");
+      expect(mockedMailer.sendMail.mock.calls[0][0].html).toContain("11,999");
+      expect(result.result).toBe("success");
+      expect(result.actionType).toBe("send_winback_offer");
     });
 
     it("routes escalate_to_human to ticketMock", async () => {

@@ -34,6 +34,7 @@ export async function draftRecoveryEmail(
   cause: string,
   paymentLinkUrl?: string,
   winbackDiscountPercent?: number,
+  actionType?: string,
 ): Promise<{ subject: string; html: string }> {
   return generateRecoveryEmail({
     customerName,
@@ -47,6 +48,7 @@ export async function draftRecoveryEmail(
     cause,
     paymentLinkUrl,
     winbackDiscountPercent,
+    actionType,
   });
 }
 
@@ -91,9 +93,10 @@ export async function executeAction(
     const { subject, html } = await draftRecoveryEmail(
       event,
       customer.name,
-      event.errorReason ?? "payment issue",
+      causeLabel ?? event.errorReason ?? "payment issue",
       paymentLinkUrl,
       causeLabel ? getRuleForCause(causeLabel)?.winback?.discountPercent : undefined,
+      chosenAction
     );
     actionResult = await emailIntegration.sendRecoveryEmail({
       to: customer.email,

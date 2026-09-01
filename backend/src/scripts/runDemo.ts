@@ -4,8 +4,9 @@
  * Linear, Enter-driven demo driver for the revenue-leakage engine. Every
  * event is pushed through the REAL production ingestion path —
  * POST /api/v1/events with the partner API key — exactly like a connected
- * cart / invoice / subscription service would. Manual escalation and
- * payments also go over the wire (entities API / signed Razorpay webhook).
+ * cart / invoice / subscription service would. Manual escalation is done by
+ * the operator via the frontend UI at the script's checkpoint; payment
+ * confirmations go over the wire as signed Razorpay webhooks.
  *
  * Press Enter to fire the next step; Ctrl+C to quit at any point.
  *
@@ -90,22 +91,6 @@ async function ingestOverHttp(envelope: EventEnvelope): Promise<IngestResult> {
   return body as IngestResult;
 }
 
-async function escalateOverHttp(
-  entityId: string,
-  reason: string
-): Promise<{ ticketId: string | null }> {
-  const res = await fetch(`${API_BASE}/api/v1/entities/${entityId}/escalate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reason, agentName: "Demo Operator" }),
-  });
-  const body = (await res.json()) as { ticketId?: string };
-  if (res.status !== 200) {
-    throw new Error(`Escalation failed (HTTP ${res.status}): ${JSON.stringify(body)}`);
-  }
-  return { ticketId: body.ticketId ?? null };
-}
-
 /** Waits until the executor has persisted an action row for the event. */
 async function waitForPipeline(eventId: string, timeoutMs = 30000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
@@ -113,6 +98,17 @@ async function waitForPipeline(eventId: string, timeoutMs = 30000): Promise<bool
     const action = await prisma.action.findUnique({ where: { eventId } });
     if (action) return true;
     await new Promise((r) => setTimeout(r, 400));
+  }
+  return false;
+}
+
+/** Waits until the operator escalates the entity via the UI (workflow state ESCALATED). */
+async function waitForEscalated(entityId: string, timeoutMs = 180000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const wf = await prisma.entityWorkflowState.findUnique({ where: { entityId } });
+    if (wf?.state === "ESCALATED") return true;
+    await new Promise((r) => setTimeout(r, 1000));
   }
   return false;
 }
@@ -276,20 +272,27 @@ const steps: Array<{ title: string; run: () => Promise<StepResult | void> }> = [
         true
       );
       summary.push(`6    ${r.line}`);
-      nextHint("operator manually escalates the DNC entity through the API");
+      nextHint("escalate the DNC entity yourself via the frontend UI — the next step waits for you");
     },
   },
   {
-    title: "Step 7 — Operator manually escalates the DNC entity (API call)",
+    title: "Step 7 — Operator escalates the DNC entity (your turn — do it in the UI)",
     run: async () => {
-      header("Step 7 — Operator manually escalates the DNC entity");
-      const escalation = await escalateOverHttp(
-        REFS.dnc,
-        "Compliance-approved manual outreach: agent will make a supervised recovery call."
-      );
-      console.log(`  → ticket ${escalation.ticketId} | workflow state: ESCALATED`);
-      console.log("  → chained audit entry written with cause dnc_manual_override");
-      summary.push(`7    ${REFS.dnc} manually escalated → ESCALATED (ticket ${escalation.ticketId})`);
+      header("Step 7 — Manual escalation (your turn)");
+      console.log(`  → Escalate entity ${REFS.dnc} from the frontend (Entity detail → Escalate).`);
+      console.log("  → Waiting for the workflow state to become ESCALATED (up to 3 minutes)…");
+      const escalated = await waitForEscalated(REFS.dnc);
+      if (escalated) {
+        const ticket = await prisma.ticket.findFirst({
+          where: { entityId: REFS.dnc },
+          orderBy: { createdAt: "desc" },
+        });
+        console.log(`  → ESCALATED confirmed${ticket ? ` | ticket ${ticket.id}` : ""}`);
+        summary.push(`7    ${REFS.dnc} escalated by operator → ESCALATED`);
+      } else {
+        console.log("  ⚠ No ESCALATED state detected — continuing anyway.");
+        summary.push(`7    ${REFS.dnc} escalation not detected`);
+      }
       nextHint("partner re-reports the same DNC invoice → expect skip, entity stays ESCALATED");
     },
   },
