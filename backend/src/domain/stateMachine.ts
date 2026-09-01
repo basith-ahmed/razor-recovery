@@ -177,6 +177,9 @@ export function deriveEventState(
   if (outcome === "pending") return "CONTACTED";
   if (outcome === "skipped") {
     if (reasoning?.includes("cooldown")) return "COOLING_DOWN";
+    if (reasoning?.includes("escalat")) return "ESCALATED";
+    if (reasoning?.includes("RECOVERED") || reasoning?.includes("recovered")) return "RECOVERED";
+    if (reasoning?.includes("Promise") || reasoning?.includes("promise")) return "CONTACTED";
     if (reasoning?.includes("DNC") || actionType === "dnc") return "DO_NOT_CONTACT";
     return "DO_NOT_CONTACT";
   }

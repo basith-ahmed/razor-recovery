@@ -124,6 +124,33 @@ describe("filterLegalActions", () => {
     }
   });
 
+  it("returns [] for any cause when entity is already isEscalated", () => {
+    const causes = [
+      "expired_card",
+      "insufficient_funds",
+      "gateway_timeout",
+      "price_friction",
+      "no_reason_signal",
+      "mandate_execution_failed_retryable",
+      "mandate_requires_reauthorization",
+      "invoice_overdue",
+    ];
+
+    for (const cause of causes) {
+      const result = filterLegalActions(
+        makeCtx({ causeLabel: cause, isEscalated: true })
+      );
+      expect(result).toEqual([]);
+    }
+  });
+
+  it("returns [] when customer has active unbroken promise to pay", () => {
+    const result = filterLegalActions(
+      makeCtx({ causeLabel: "insufficient_funds", hasActivePromise: true })
+    );
+    expect(result).toEqual([]);
+  });
+
   it("DNC takes priority over dispute", () => {
     const result = filterLegalActions(
       makeCtx({ isDnc: true, isDisputed: true })

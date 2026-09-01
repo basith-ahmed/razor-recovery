@@ -6,14 +6,6 @@ dotenv.config({
   override: true,
 });
 
-// console.log({
-//   cwd: process.cwd(),
-//   hasKey: !!process.env.LLM_API_KEY,
-//   keyPrefix: process.env.LLM_API_KEY?.slice(0, 10),
-//   baseUrl: process.env.LLM_BASE_URL,
-//   model: process.env.LLM_MODEL,
-// });
-
 const envSchema = z.object({
   // Database
   DATABASE_URL: z.string().url(),

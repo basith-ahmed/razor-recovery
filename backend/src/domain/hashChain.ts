@@ -38,7 +38,7 @@ export interface HashableEntry {
   decisionSnapshot?: unknown;
   actionSnapshot?: unknown;
   outcome: string;
-  timestamp: string; // ISO string — always serialize Date -> toISOString() before calling this
+  timestamp: string; 
 }
 
 export function computeEntryHash(prevHash: string, entry: HashableEntry): string {

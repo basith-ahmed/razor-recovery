@@ -103,6 +103,15 @@ export async function startDecisionConsumer(): Promise<void> {
         const isRecoveredInRedis = await isEntityRecovered(event.entityId);
         const isRecovered = isRecoveredInRedis || workflowState?.state === "RECOVERED";
 
+        const openTicket = await prisma.ticket.findFirst({
+          where: {
+            entityId: event.entityId,
+            status: { in: ["open", "in_progress"] },
+          },
+          select: { id: true },
+        });
+        const isEscalated = workflowState?.state === "ESCALATED" || Boolean(openTicket);
+
         const redisCooldownUntil = await getEntityCooldown(event.entityId);
 
         const cooldownUntil = redisCooldownUntil ?? workflowState?.cooldownUntil ?? causeState?.cooldownUntil;
@@ -137,6 +146,7 @@ export async function startDecisionConsumer(): Promise<void> {
           isDnc,
           isDisputed,
           isRecovered,
+          isEscalated,
           hasActivePromise,
           attemptCount,
           isInCooldown,

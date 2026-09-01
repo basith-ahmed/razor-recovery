@@ -29,7 +29,6 @@ function statusOf(err: unknown): number | undefined {
 function messageOf(err: unknown): string {
   const raw =
     err instanceof Error ? err.message : String((err as { message?: unknown }) ?? "");
-  // Some SDK/router errors bury the HTTP status inside the message text
   const match = raw.match(/\b(4\d\d|5\d\d)\b/);
   return match ? `${raw} [http ${match[1]}]` : raw;
 }

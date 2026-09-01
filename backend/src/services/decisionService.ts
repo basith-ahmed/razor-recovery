@@ -79,6 +79,7 @@ export async function decide(
   if (legalActions.length === 0) {
     let reason = "Blocked by policy";
     if (filterCtx.isRecovered) reason = "Blocked by policy (Entity payment already RECOVERED)";
+    else if (filterCtx.isEscalated) reason = "Blocked by policy (Entity is actively escalated to human agent)";
     else if (filterCtx.isDnc || filterCtx.causeLabel === "dnc") reason = "Blocked by policy (Customer is DNC)";
     else if (filterCtx.isDisputed || filterCtx.causeLabel === "invoice_disputed") reason = "Blocked by policy (Invoice is disputed)";
     else if (filterCtx.hasActivePromise) reason = "Blocked by policy (Active Promise-to-Pay commitment pending)";

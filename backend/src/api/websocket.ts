@@ -20,7 +20,6 @@ export function initWebSocket(server: http.Server): Server {
   ioInstance.on("connection", (socket) => {
     // console.log(`[websocket] Client connected: ${socket.id}`);
 
-    // Push an initial metrics snapshot so the dashboard renders immediately
     computeLiveMetrics("all")
       .then((metrics) => socket.emit("metrics:update", metrics))
       .catch((err) =>

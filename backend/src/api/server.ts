@@ -45,7 +45,6 @@ app.use("/audit", auditRouter);
 app.use("/query", queryRouter);
 app.use("/tickets", ticketsRouter);
 app.use("/promises", promisesRouter);
-app.use("/api/promises", promisesRouter);
 app.use("/webhooks/razorpay", razorpayWebhookRouter);
 
 // Start the HTTP server and live dashboard stream.

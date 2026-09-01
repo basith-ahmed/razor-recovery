@@ -12,6 +12,7 @@ export interface FilterContext {
   isDnc: boolean;
   isDisputed: boolean;
   isRecovered?: boolean;
+  isEscalated?: boolean;
   hasActivePromise?: boolean;
   attemptCount: number;
   isInCooldown: boolean;
@@ -24,6 +25,11 @@ export interface FilterContext {
 export function filterLegalActions(ctx: FilterContext): string[] {
   // 0. Recovered entities are closed — no further recovery action is legal → return []
   if (ctx.isRecovered) {
+    return [];
+  }
+
+  // 0b. Escalated entities are under active human review — pause automated recovery → return []
+  if (ctx.isEscalated) {
     return [];
   }
 
@@ -52,9 +58,6 @@ export function filterLegalActions(ctx: FilterContext): string[] {
   // 4. Apply stopping conditions to prune the action list.
   //
   // NOTE: mandate_requires_reauthorization enforcement works purely through
-  // policy.json — retry_payment_delayed is simply
-  // absent from that rule's actions array. No special-case code is needed here.
-  // "Policy is data" — the omission IS the hard gate.
   return applyStoppingConditions(rule, ctx);
 }
 
