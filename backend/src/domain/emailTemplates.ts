@@ -159,7 +159,21 @@ export function getEmailTemplate(ctx: EmailTemplateContext): {
     };
   }
 
-  // 3. Overdue B2B Invoice
+  // 3. Soft Chase Dunning (attempt 2 — must be checked before cause templates
+  //    so the dunning ladder's escalation tone actually reaches the customer)
+  if (ctx.actionType === "send_soft_chase_email" || key.includes("soft_chase")) {
+    return {
+      subject: `Follow-up: Outstanding payment for ${entityRef} (${formattedAmount})`,
+      paragraphs: [
+        `Hi ${ctx.customerName},`,
+        `We are following up on our previous notice regarding outstanding ${entityRef} for ${formattedAmount}.`,
+        `To ensure uninterrupted service and account standing, please process the payment via the secure link below.`,
+        `Best regards,<br/>The RazorRecovery Team`,
+      ],
+    };
+  }
+
+  // 4. Overdue B2B Invoice / first reminder
   if (
     key.includes("invoice_overdue") ||
     ctx.eventType === "INVOICE_OVERDUE" ||
@@ -171,19 +185,6 @@ export function getEmailTemplate(ctx: EmailTemplateContext): {
         `Hi ${ctx.customerName},`,
         `This is a friendly reminder that ${entityRef} for ${formattedAmount} is currently past its payment due date.`,
         `Please review and process the invoice payment using the button below.`,
-        `Best regards,<br/>The RazorRecovery Team`,
-      ],
-    };
-  }
-
-  // 4. Soft Chase Dunning
-  if (ctx.actionType === "send_soft_chase_email" || key.includes("soft_chase")) {
-    return {
-      subject: `Follow-up: Outstanding payment for ${entityRef} (${formattedAmount})`,
-      paragraphs: [
-        `Hi ${ctx.customerName},`,
-        `We are following up on our previous notice regarding outstanding ${entityRef} for ${formattedAmount}.`,
-        `To ensure uninterrupted service and account standing, please process the payment via the secure link below.`,
         `Best regards,<br/>The RazorRecovery Team`,
       ],
     };

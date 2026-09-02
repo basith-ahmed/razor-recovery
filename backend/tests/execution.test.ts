@@ -245,6 +245,37 @@ describe("executorService", () => {
       expect(result.html).toContain("Pay ₹11,999 Now");
       expect(result.html).toContain("https://rzp.io/i/plink_winback");
     });
+
+    it("renders the soft-chase follow-up template (not the friendly reminder) for attempt 2 on an overdue invoice", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ amount: 5000 }),
+        "Aarav Sharma",
+        "invoice_overdue",
+        "https://rzp.io/i/plink_456",
+        undefined,
+        "send_soft_chase_email"
+      );
+
+      expect(result.subject).toContain("Follow-up: Outstanding payment");
+      expect(result.subject).not.toContain("Friendly Reminder");
+      expect(result.html).toContain("following up on our previous notice");
+      expect(result.html).toContain("https://rzp.io/i/plink_456");
+    });
+
+    it("keeps the friendly reminder template for the first reminder on an overdue invoice", async () => {
+      const result = await draftRecoveryEmail(
+        makeEvent({ amount: 5000 }),
+        "Aarav Sharma",
+        "invoice_overdue",
+        undefined,
+        undefined,
+        "send_reminder_email"
+      );
+
+      expect(result.subject).toContain("Friendly Reminder");
+      expect(result.subject).not.toContain("Follow-up: Outstanding payment");
+      expect(result.html).toContain("past its payment due date");
+    });
   });
 
   describe("executeAction", () => {

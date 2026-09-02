@@ -8,7 +8,8 @@
  *
  * Prerequisites:
  *   1. Infra up (docker compose) + backend running:   npm run dev
- *   2. Demo customers seeded:                         npm run reset
+ *   2. Clean starting state (recommended):            npm run reset
+ *      (the demo upserts its own named customer fixtures on demand)
  *
  * Usage:  npx tsx src/scripts/runDemo.ts   (or: npm run demo)
  */
@@ -43,24 +44,57 @@ const REFS = {
   subHigh: `demo_sub_high_${RUN}`,
 };
 
-async function pickCustomer(requireDnc: boolean): Promise<Customer> {
-  // Only seeded demo customers (@example.test domain) — keeps out any
-  // hand-created or test-fixture customers that may sit in the dev database.
-  const customers = await prisma.customer.findMany({
-    where: { email: { endsWith: "@example.test" } },
-    orderBy: { createdAt: "asc" },
-  });
-  const match = customers.find((c) => c.dncFlag === requireDnc);
-  if (!match) {
-    throw new Error(
-      requireDnc
-        ? "No DNC customer found — run `npm run reset` to seed demo customers first."
-        : "No customers found — run `npm run reset` first."
-    );
-  }
-  return match;
+/**
+ * The demo owns its customer fixtures: deterministic names and lifetime values
+ * so every scenario demonstrates the exact LTV contrast it is meant to show
+ * (low-LTV customers ride the automated ladder; high-LTV customers give the
+ * decision LLM room to justify deviations). Upsert-by-email keeps runs
+ * idempotent, and ingest's customer upsert only touches name/phone on update,
+ * so the lifetimeValue set here survives ingestion.
+ */
+interface DemoProfile {
+  name: string;
+  email: string;
+  lifetimeValue: number;
+  dncFlag?: boolean;
 }
 
+type DemoProfileKey = "ladder" | "cartLow" | "cartHigh" | "dnc" | "subLow" | "subHigh";
+
+const DEMO_PROFILES: Record<DemoProfileKey, DemoProfile> = {
+  ladder: { name: "Vikram Malhotra", email: "demo.ladder@example.test", lifetimeValue: 85000 },
+  cartLow: { name: "Sneha Kulkarni", email: "demo.cart.low@example.test", lifetimeValue: 4800 },
+  cartHigh: { name: "Rajesh Iyer", email: "demo.cart.high@example.test", lifetimeValue: 940000 },
+  dnc: { name: "Pooja Desai", email: "demo.dnc@example.test", lifetimeValue: 110000, dncFlag: true },
+  subLow: { name: "Karthik Menon", email: "demo.sub.low@example.test", lifetimeValue: 3900 },
+  subHigh: { name: "Ananya Rao", email: "demo.sub.high@example.test", lifetimeValue: 870000 },
+};
+
+const customerCache = new Map<DemoProfileKey, Customer>();
+
+async function demoCustomer(key: DemoProfileKey): Promise<Customer> {
+  const cached = customerCache.get(key);
+  if (cached) return cached;
+  const profile = DEMO_PROFILES[key];
+  const customer = await prisma.customer.upsert({
+    where: { email: profile.email },
+    update: {
+      name: profile.name,
+      dncFlag: profile.dncFlag ?? false,
+      lifetimeValue: profile.lifetimeValue,
+    },
+    create: {
+      name: profile.name,
+      email: profile.email,
+      phone: `+91${Math.floor(6000000000 + Math.random() * 3999999999)}`,
+      dncFlag: profile.dncFlag ?? false,
+      riskTier: "standard",
+      lifetimeValue: profile.lifetimeValue,
+    },
+  });
+  customerCache.set(key, customer);
+  return customer;
+}
 async function ingestOverHttp(envelope: EventEnvelope): Promise<IngestResult> {
   const res = await fetch(`${API_BASE}/api/v1/events`, {
     method: "POST",
@@ -79,10 +113,10 @@ async function ingestOverHttp(envelope: EventEnvelope): Promise<IngestResult> {
 
 /** Injects one event into the pipeline — fire and forget. */
 async function pushEvent(
-  build: (customer: Customer) => EventEnvelope,
-  requireDncCustomer = false
+  profileKey: DemoProfileKey,
+  build: (customer: Customer) => EventEnvelope
 ): Promise<void> {
-  const customer = await pickCustomer(requireDncCustomer);
+  const customer = await demoCustomer(profileKey);
   await ingestOverHttp(build(customer));
 }
 
@@ -127,51 +161,67 @@ async function preflight(): Promise<boolean> {
 
 const steps: Array<{ title: string; run: () => Promise<void> }> = [
   {
-    title: `Step 1 — Invoice overdue ₹32,000 (${REFS.ladder})`,
-    run: () => pushEvent((c) => buildInvoiceEnvelope(c, { ref: REFS.ladder, amount: 32000, age: 9 })),
+    title: `Step 1 — Invoice overdue ₹32,000 — Vikram Malhotra (${REFS.ladder})`,
+    run: () =>
+      pushEvent("ladder", (c) =>
+        buildInvoiceEnvelope(c, { ref: REFS.ladder, amount: 32000, age: 9, disputeFlag: false })
+      ),
   },
   {
     title: `Step 2 — Same invoice re-reported (${REFS.ladder})`,
-    run: () => pushEvent((c) => buildInvoiceEnvelope(c, { ref: REFS.ladder, amount: 32000, age: 10 })),
+    run: () =>
+      pushEvent("ladder", (c) =>
+        buildInvoiceEnvelope(c, { ref: REFS.ladder, amount: 32000, age: 10, disputeFlag: false })
+      ),
   },
   {
-    title: `Step 3 — Cooldown lapses, same invoice re-reported (${REFS.ladder})`,
+    title: `Step 3 — Cooldown lapses; scheduler re-injects the invoice within 30s (${REFS.ladder})`,
     run: async () => {
       await advanceCooldown(REFS.ladder);
-      await pushEvent((c) => buildInvoiceEnvelope(c, { ref: REFS.ladder, amount: 32000, age: 16 }));
     },
   },
   {
     title: `Step 4 — Same invoice re-reported after payment (${REFS.ladder})`,
-    run: () => pushEvent((c) => buildInvoiceEnvelope(c, { ref: REFS.ladder, amount: 32000, age: 17 })),
+    run: () =>
+      pushEvent("ladder", (c) =>
+        buildInvoiceEnvelope(c, { ref: REFS.ladder, amount: 32000, age: 17, disputeFlag: false })
+      ),
   },
   {
-    title: `Step 5 — Low-value cart abandoned ₹1,899 (${REFS.cartLow})`,
-    run: () => pushEvent((c) => buildCartEnvelope(c, { ref: REFS.cartLow, amount: 1899, age: 5 })),
+    title: `Step 5 — Low-value cart ₹1,899 — Sneha Kulkarni, low LTV (${REFS.cartLow})`,
+    run: () =>
+      pushEvent("cartLow", (c) => buildCartEnvelope(c, { ref: REFS.cartLow, amount: 1899, age: 5 })),
   },
   {
-    title: `Step 6 — High-value cart abandoned ₹18,400 (${REFS.cartHigh})`,
-    run: () => pushEvent((c) => buildCartEnvelope(c, { ref: REFS.cartHigh, amount: 18400, age: 6 })),
+    title: `Step 6 — High-value cart ₹18,400 — Rajesh Iyer, high LTV (${REFS.cartHigh})`,
+    run: () =>
+      pushEvent("cartHigh", (c) => buildCartEnvelope(c, { ref: REFS.cartHigh, amount: 18400, age: 6 })),
   },
   {
-    title: `Step 7 — DNC customer invoice ₹32,000 (${REFS.dnc})`,
-    run: () => pushEvent((c) => buildInvoiceEnvelope(c, { ref: REFS.dnc, amount: 32000, age: 12 }), true),
+    title: `Step 7 — DNC customer invoice ₹32,000 — Pooja Desai (${REFS.dnc})`,
+    run: () =>
+      pushEvent("dnc", (c) =>
+        buildInvoiceEnvelope(c, { ref: REFS.dnc, amount: 32000, age: 12, disputeFlag: false })
+      ),
   },
   {
     title: `Step 8 — Same DNC invoice again (${REFS.dnc})`,
-    run: () => pushEvent((c) => buildInvoiceEnvelope(c, { ref: REFS.dnc, amount: 32000, age: 13 }), true),
+    run: () =>
+      pushEvent("dnc", (c) =>
+        buildInvoiceEnvelope(c, { ref: REFS.dnc, amount: 32000, age: 13, disputeFlag: false })
+      ),
   },
   {
-    title: `Step 9 — Low-value subscription mandate cancelled ₹1,499 (${REFS.subLow})`,
+    title: `Step 9 — Low-value subscription mandate cancelled ₹1,499 — Karthik Menon, low LTV (${REFS.subLow})`,
     run: () =>
-      pushEvent((c) =>
+      pushEvent("subLow", (c) =>
         buildSubscriptionEnvelope(c, { ref: REFS.subLow, amount: 1499, mandateStatus: "cancelled" })
       ),
   },
   {
-    title: `Step 10 — High-value subscription mandate cancelled ₹14,999 (${REFS.subHigh})`,
+    title: `Step 10 — High-value subscription mandate cancelled ₹14,999 — Ananya Rao, high LTV (${REFS.subHigh})`,
     run: () =>
-      pushEvent((c) =>
+      pushEvent("subHigh", (c) =>
         buildSubscriptionEnvelope(c, { ref: REFS.subHigh, amount: 14999, mandateStatus: "cancelled" })
       ),
   },
