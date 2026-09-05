@@ -2,7 +2,7 @@
 
 #### A Short Human Written Overview
 
-RazorRecovery is a drop-in revenue recovery engine designed to integrate with existing company ecosystems without requiring changes to their already established core business services.
+RazorRecovery is a drop in revenue recovery engine designed to integrate with existing company ecosystems without requiring changes to their already established core business services.
 
 ![RazorRecovery Architecture](docs/images/arch-1.png)
 
@@ -10,12 +10,13 @@ When a partner service detects a revenue leakage event, such as an abandoned car
 
 For each event, the system uses the customer context and historical behavior, assesses the risk and urgency of the case, diagnoses the likely cause, and determines the most appropriate recovery action. Deterministic business policies and stopping rules provide safety and compliance guardrails, while AI and historical customer data are used when decisions require contextual judgment.
 
-Recovery actions include automated payment reminders, soft-chase emails, winback offers, promise-to-pay tracking, subscription actions, and escalation to human agents. Followups are automatically scheduled based on the state and history of each recovery case, removing the need for manual tracking.
+Recovery actions include automated payment reminders, soft chase emails, winback offers, promise to pay tracking, subscription actions, and escalation to human agents. Followups are automatically scheduled based on the state and history of each recovery case, removing the need for manual tracking.
 
 Razorpay payment events are also ingested through webhooks and correlated with recovery cases. Every stage of the recovery lifecycle including incoming events, diagnoses, decisions, actions, failures, and payment outcomes are recorded in a tamper evident, hash chained audit trail, providing a verifiable history of how each entity moved through the recovery pipeline.
 
 In summary, RazorRecovery acts as an autonomous recovery layer between a company's existing services and its payment infrastructure, partner systems report revenue leakage, and RazorRecovery diagnoses, decides, acts, follows up, and tries to recover it.
 
+video link: [click here](https://youtu.be/7U0NI4edSkI?si=YGLM8KKkzlii3t_N)
 
 **Contents:**
 
@@ -180,8 +181,37 @@ Unknown actions are recorded as failures and generate an audit entry.
 
 - **Does:** Runs every 30 seconds and checks ongoing recovery cases. When a cooldown or waiting period expires, it creates a follow-up event and sends it back through the beginning of the pipeline.
   This allows the system to reconsider the case using the latest state and elapsed time. It also handles scheduled retries and promise-to-pay reminders. Redis is used to prevent duplicate follow-ups.
-
 - **Dependencies:** Postgres, Redis, Kafka, SMTP.
+
+### 2.8 Risk & urgency scoring
+
+Computed deterministically in Detection by a pure function (`domain/riskScoring.ts`), no
+I/O, no LLM. Both scores are stamped onto the enriched event and surfaced in the dashboard.
+
+```
+riskScore = 0.35·normAmount + 0.25·severity + 0.15·historyRisk + 0.25·urgency   (rounded to 3 decimals)
+```
+
+| Component | Formula | Notes |
+|---|---|---|
+| `normAmount` | `min(amount / recentMaxAmount, 1)` | Relative: `recentMaxAmount` is the rolling max event amount over the last 24 h, kept in Redis (`razorrecovery:riskNorm:recentMaxAmount`, 24 h TTL). Missing key falls back to the event's own amount, so the scale self calibrates to the partner's exposure instead of a hardcoded rupee threshold |
+| `severity` | fixed per event type | `SUBSCRIPTION_MANDATE_CANCELLED` 0.7 · `INVOICE_OVERDUE` 0.6 · `CHECKOUT_ABANDONED` 0.4 — a prior on how damaging each failure class is |
+| `historyRisk` | `min(priorFailures / 5, 1)` | Customer's prior failed-payment events, saturating at 5 |
+| `urgency` | time-decayed, per event type | See below |
+
+Urgency is event type specific:
+
+| Event type | Urgency | Intuition |
+|---|---|---|
+| `INVOICE_OVERDUE` | `min(daysOverdue / 30, 1)` | Ramps to 1.0 at 30 days overdue |
+| `CHECKOUT_ABANDONED` | `max(0, 1 − hoursSinceAbandon / 48)` | Decays from 1.0 to 0 across 48 h — stale carts deprioritize themselves |
+| `SUBSCRIPTION_MANDATE_CANCELLED` | `0.5` flat | No time signal in the payload |
+
+Worked example: an invoice ₹32,000 overdue 45 days (rolling max = 32,000, first failure)
+scores `0.35·1.0 + 0.25·0.6 + 0.15·0 + 0.25·1.0 = 0.75`; a ₹1,899 cart abandoned 2 h ago
+against that same rolling max scores ≈ `0.36`. Severity sets a floor per failure class, and
+the rolling amount denominator is what makes a ₹2,000 cart and a ₹80,000 invoice comparable.
+
 ---
 
 ## 3. Data contracts between stages
